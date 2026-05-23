@@ -1,43 +1,7 @@
-// Yahoo Finance chart endpoint (no crumb required)
-// 여러 심볼은 Promise.allSettled로 병렬 호출
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+import { tdQuote, normalizeQuote, getCached, setCache } from './_lib.js';
 
-async function fetchQuote(symbol) {
-  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
-  const r = await fetch(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } });
-  if (!r.ok) throw new Error(`Yahoo ${r.status}`);
-  const data = await r.json();
-  const result = data?.chart?.result?.[0];
-  if (!result) throw new Error('No chart data');
-  const meta = result.meta || {};
-
-  // prevClose: meta에 chartPreviousClose가 있거나, quotes 배열의 마지막에서 두 번째 close
-  let prevClose = meta.chartPreviousClose ?? meta.previousClose;
-  const closes = result.indicators?.quote?.[0]?.close || [];
-  const validCloses = closes.filter(c => c != null);
-  if (prevClose == null && validCloses.length >= 2) {
-    prevClose = validCloses[validCloses.length - 2];
-  }
-
-  const price = meta.regularMarketPrice;
-  const change = (price != null && prevClose != null) ? price - prevClose : null;
-  const changePct = (change != null && prevClose) ? (change / prevClose) * 100 : null;
-
-  return {
-    symbol: meta.symbol || symbol,
-    name: meta.shortName || meta.longName || meta.symbol || symbol,
-    price,
-    prevClose,
-    change,
-    changePct,
-    volume: meta.regularMarketVolume ?? null,
-    high52w: meta.fiftyTwoWeekHigh ?? null,
-    low52w: meta.fiftyTwoWeekLow ?? null,
-    currency: meta.currency || null,
-    marketState: null,
-    lastUpdated: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
-  };
-}
+const CACHE_TTL_MS = 3 * 60 * 1000;       // 3분 캐시
+const KR_SUFFIX = /\.(KS|KQ|KRX)$/i;       // 한국주 감지
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -45,16 +9,46 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const symbols = req.query.symbols || '000660.KS,005930.KS,329180.KS,034020.KS,042700.KS,064350.KS,012450.KS,RKLB';
-  const symbolList = symbols.split(',').map(s => s.trim()).filter(Boolean);
+  const raw = req.query.symbols || 'RKLB';
+  const requested = raw.split(',').map(s => s.trim()).filter(Boolean);
+
+  // 한국주는 무료 플랜에서 지원 안 함 — 분리
+  const krSymbols  = requested.filter(s => KR_SUFFIX.test(s));
+  const usSymbols  = requested.filter(s => !KR_SUFFIX.test(s));
 
   try {
-    const settled = await Promise.allSettled(symbolList.map(fetchQuote));
-    const quotes = [];
+    let quotes = [];
     const errors = [];
-    settled.forEach((r, i) => {
-      if (r.status === 'fulfilled') quotes.push(r.value);
-      else errors.push({ symbol: symbolList[i], error: r.reason?.message || String(r.reason) });
+
+    if (usSymbols.length > 0) {
+      const cacheKey = `q:${usSymbols.sort().join(',')}`;
+      let cached = getCached(cacheKey, CACHE_TTL_MS);
+
+      if (!cached) {
+        const data = await tdQuote(usSymbols);
+        // 단일 vs 다중 응답 정규화
+        const arr = (usSymbols.length === 1)
+          ? [normalizeQuote(data, usSymbols[0])]
+          : usSymbols.map(sym => {
+              const row = data?.[sym];
+              if (!row || row.code) {
+                errors.push({ symbol: sym, error: row?.message || 'No data' });
+                return null;
+              }
+              return normalizeQuote(row, sym);
+            }).filter(Boolean);
+        cached = arr;
+        setCache(cacheKey, arr);
+      }
+      quotes = quotes.concat(cached);
+    }
+
+    // 한국주는 별도 안내
+    krSymbols.forEach(sym => {
+      errors.push({
+        symbol: sym,
+        error: '한국주 자동 갱신 미지원 (무료 플랜). 직접 입력하거나 외부 사이트 참고.',
+      });
     });
 
     return res.status(200).json({
@@ -63,6 +57,7 @@ export default async function handler(req, res) {
       count: quotes.length,
       quotes,
       ...(errors.length ? { errors } : {}),
+      source: 'twelvedata',
     });
   } catch (e) {
     return res.status(500).json({
