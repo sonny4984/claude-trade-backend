@@ -1,3 +1,7 @@
+import YahooFinance from 'yahoo-finance2';
+
+const yf = new YahooFinance();
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -8,17 +12,10 @@ export default async function handler(req, res) {
   const symbolList = symbols.split(',').map(s => s.trim()).filter(Boolean);
 
   try {
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbolList.join(','))}`;
-    const yahooRes = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-      },
-    });
-    if (!yahooRes.ok) throw new Error(`Yahoo API ${yahooRes.status}`);
-    const data = await yahooRes.json();
-    const quotes = data?.quoteResponse?.result || [];
-    const formatted = quotes.map(q => ({
+    const quotes = await yf.quote(symbolList, {}, { validateResult: false });
+    const list = Array.isArray(quotes) ? quotes : [quotes];
+
+    const formatted = list.map(q => ({
       symbol: q.symbol,
       name: q.longName || q.shortName || q.symbol,
       price: q.regularMarketPrice,
@@ -30,8 +27,9 @@ export default async function handler(req, res) {
       low52w: q.fiftyTwoWeekLow,
       currency: q.currency,
       marketState: q.marketState,
-      lastUpdated: q.regularMarketTime ? new Date(q.regularMarketTime * 1000).toISOString() : null,
+      lastUpdated: q.regularMarketTime ? new Date(q.regularMarketTime).toISOString() : null,
     }));
+
     return res.status(200).json({
       success: true,
       fetchedAt: new Date().toISOString(),
@@ -41,7 +39,7 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({
       success: false,
-      error: e.message,
+      error: e.message || String(e),
       fetchedAt: new Date().toISOString(),
     });
   }
