@@ -1,6 +1,43 @@
-import YahooFinance from 'yahoo-finance2';
+// Yahoo Finance chart endpoint (no crumb required)
+// 여러 심볼은 Promise.allSettled로 병렬 호출
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-const yf = new YahooFinance();
+async function fetchQuote(symbol) {
+  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+  const r = await fetch(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } });
+  if (!r.ok) throw new Error(`Yahoo ${r.status}`);
+  const data = await r.json();
+  const result = data?.chart?.result?.[0];
+  if (!result) throw new Error('No chart data');
+  const meta = result.meta || {};
+
+  // prevClose: meta에 chartPreviousClose가 있거나, quotes 배열의 마지막에서 두 번째 close
+  let prevClose = meta.chartPreviousClose ?? meta.previousClose;
+  const closes = result.indicators?.quote?.[0]?.close || [];
+  const validCloses = closes.filter(c => c != null);
+  if (prevClose == null && validCloses.length >= 2) {
+    prevClose = validCloses[validCloses.length - 2];
+  }
+
+  const price = meta.regularMarketPrice;
+  const change = (price != null && prevClose != null) ? price - prevClose : null;
+  const changePct = (change != null && prevClose) ? (change / prevClose) * 100 : null;
+
+  return {
+    symbol: meta.symbol || symbol,
+    name: meta.shortName || meta.longName || meta.symbol || symbol,
+    price,
+    prevClose,
+    change,
+    changePct,
+    volume: meta.regularMarketVolume ?? null,
+    high52w: meta.fiftyTwoWeekHigh ?? null,
+    low52w: meta.fiftyTwoWeekLow ?? null,
+    currency: meta.currency || null,
+    marketState: null,
+    lastUpdated: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
+  };
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,29 +49,20 @@ export default async function handler(req, res) {
   const symbolList = symbols.split(',').map(s => s.trim()).filter(Boolean);
 
   try {
-    const quotes = await yf.quote(symbolList, {}, { validateResult: false });
-    const list = Array.isArray(quotes) ? quotes : [quotes];
-
-    const formatted = list.map(q => ({
-      symbol: q.symbol,
-      name: q.longName || q.shortName || q.symbol,
-      price: q.regularMarketPrice,
-      prevClose: q.regularMarketPreviousClose,
-      change: q.regularMarketChange,
-      changePct: q.regularMarketChangePercent,
-      volume: q.regularMarketVolume,
-      high52w: q.fiftyTwoWeekHigh,
-      low52w: q.fiftyTwoWeekLow,
-      currency: q.currency,
-      marketState: q.marketState,
-      lastUpdated: q.regularMarketTime ? new Date(q.regularMarketTime).toISOString() : null,
-    }));
+    const settled = await Promise.allSettled(symbolList.map(fetchQuote));
+    const quotes = [];
+    const errors = [];
+    settled.forEach((r, i) => {
+      if (r.status === 'fulfilled') quotes.push(r.value);
+      else errors.push({ symbol: symbolList[i], error: r.reason?.message || String(r.reason) });
+    });
 
     return res.status(200).json({
-      success: true,
+      success: quotes.length > 0,
       fetchedAt: new Date().toISOString(),
-      count: formatted.length,
-      quotes: formatted,
+      count: quotes.length,
+      quotes,
+      ...(errors.length ? { errors } : {}),
     });
   } catch (e) {
     return res.status(500).json({
