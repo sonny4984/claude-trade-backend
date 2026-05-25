@@ -51,33 +51,20 @@ async function fetchYahoo() {
   return items;
 }
 
-// 한국경제 (한국어) — 번역 불필요
-async function fetchHankyung() {
-  const r = await fetch('https://www.hankyung.com/feed/economy', {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
+// 구글 뉴스 한국어 RSS (여러 언론사 집계, 번역 불필요)
+async function fetchGoogleKo(query, max) {
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ko&gl=KR&ceid=KR:ko`;
+  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  if (!r.ok) throw new Error(`GoogleNews ${r.status}`);
+  const items = parseRss(await r.text(), '구글뉴스', max);
+  items.forEach(it => {
+    // 구글뉴스 title은 "제목 - 언론사" 형식 → 언론사 분리
+    const m = it.title.match(/^(.*?)\s*-\s*([^-]+)$/);
+    if (m) { it.title = m[1].trim(); it.src = m[2].trim(); }
+    it.titleKo = it.title;
+    it.lang = 'ko';
   });
-  if (!r.ok) throw new Error(`Hankyung ${r.status}`);
-  const items = parseRss(await r.text(), '한국경제', 12);
-  items.forEach(it => { it.titleKo = it.title; it.lang = 'ko'; });
   return items;
-}
-
-// 네이버 금융 주요뉴스 (한국어, JSON)
-async function fetchNaver() {
-  const r = await fetch('https://m.stock.naver.com/front-api/news/mainNews?pageSize=12&page=1', {
-    headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15', 'Referer': 'https://m.stock.naver.com/' },
-  });
-  if (!r.ok) throw new Error(`Naver ${r.status}`);
-  const d = await r.json();
-  const list = d?.result?.list || d?.result?.newsList || d?.list || [];
-  return list.slice(0, 12).map(n => ({
-    title: (n.title || '').replace(/<[^>]+>/g, '').trim().slice(0, 200),
-    titleKo: (n.title || '').replace(/<[^>]+>/g, '').trim().slice(0, 200),
-    link: n.linkUrl || n.url || (n.officeId && n.articleId ? `https://n.news.naver.com/article/${n.officeId}/${n.articleId}` : ''),
-    date: n.datetime || n.dateTime || '',
-    summary: (n.body || n.summary || '').replace(/<[^>]+>/g, '').trim().slice(0, 200),
-    src: '네이버', lang: 'ko',
-  })).filter(x => x.title);
 }
 
 export default async function handler(req, res) {
@@ -87,15 +74,23 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const settled = await Promise.allSettled([fetchHankyung(), fetchYahoo(), fetchNaver()]);
+    const settled = await Promise.allSettled([
+      fetchGoogleKo('증시 주식', 10),
+      fetchGoogleKo('코스피 코스닥', 8),
+      fetchGoogleKo('미국증시 나스닥', 6),
+      fetchYahoo(),
+    ]);
     let news = [];
-    const sources = [];
+    const sources = new Set();
     const errors = [];
-    const srcNames = ['한국경제', 'Yahoo', '네이버'];
+    const srcNames = ['구글뉴스(증시)', '구글뉴스(코스피)', '구글뉴스(미국)', 'Yahoo'];
     settled.forEach((s, i) => {
-      if (s.status === 'fulfilled') { news.push(...s.value); sources.push(srcNames[i]); }
+      if (s.status === 'fulfilled') { news.push(...s.value); sources.add(srcNames[i]); }
       else errors.push({ src: srcNames[i], error: s.reason?.message || String(s.reason) });
     });
+    // 제목 중복 제거
+    const seen = new Set();
+    news = news.filter(n => { const k = n.title.slice(0, 30); if (seen.has(k)) return false; seen.add(k); return true; });
 
     // 날짜 내림차순 정렬 (파싱 실패 시 원순서 유지)
     news.sort((a, b) => {
@@ -108,7 +103,7 @@ export default async function handler(req, res) {
       success: news.length > 0,
       fetchedAt: new Date().toISOString(),
       count: news.length,
-      sources,
+      sources: [...sources],
       ...(errors.length ? { errors } : {}),
       news,
     });
