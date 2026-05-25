@@ -65,8 +65,8 @@ export default async function handler(req, res) {
     if (!quotes) {
       // 미국 80% (나스닥 110 + NYSE 40 = 150), 한국 20% (코스피 30 + 코스닥 10 = 40)
       const tasks = [
-        ['NASDAQ', () => fetchUS('NASDAQ', 110)],
-        ['NYSE', () => fetchUS('NYSE', 40)],
+        ['NASDAQ', () => fetchUS('NASDAQ', 100)],
+        ['NYSE', () => fetchUS('NYSE', 50)],
         ['KOSPI', () => fetchKR('KOSPI', 30)],
         ['KOSDAQ', () => fetchKR('KOSDAQ', 10)],
       ];
