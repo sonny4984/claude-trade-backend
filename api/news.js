@@ -90,9 +90,11 @@ export default async function handler(req, res) {
     const settled = await Promise.allSettled([fetchHankyung(), fetchYahoo(), fetchNaver()]);
     let news = [];
     const sources = [];
+    const errors = [];
     const srcNames = ['한국경제', 'Yahoo', '네이버'];
     settled.forEach((s, i) => {
       if (s.status === 'fulfilled') { news.push(...s.value); sources.push(srcNames[i]); }
+      else errors.push({ src: srcNames[i], error: s.reason?.message || String(s.reason) });
     });
 
     // 날짜 내림차순 정렬 (파싱 실패 시 원순서 유지)
@@ -107,6 +109,7 @@ export default async function handler(req, res) {
       fetchedAt: new Date().toISOString(),
       count: news.length,
       sources,
+      ...(errors.length ? { errors } : {}),
       news,
     });
   } catch (e) {
