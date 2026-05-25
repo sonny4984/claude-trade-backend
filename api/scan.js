@@ -32,8 +32,8 @@ async function fetchKR(market, pageSize) {
 }
 
 // 해외 시총 랭킹 (NASDAQ / NYSE)
-async function fetchUS(exchange, pageSize) {
-  const url = `https://api.stock.naver.com/stock/exchange/${exchange}/marketValue?page=1&pageSize=${pageSize}`;
+async function fetchUS(exchange, pageSize, page = 1) {
+  const url = `https://api.stock.naver.com/stock/exchange/${exchange}/marketValue?page=${page}&pageSize=${pageSize}`;
   const r = await fetch(url, { headers: { 'User-Agent': UA, 'Referer': 'https://m.stock.naver.com/' } });
   if (!r.ok) throw new Error(`${exchange} ${r.status}`);
   const data = await r.json();
@@ -65,10 +65,11 @@ export default async function handler(req, res) {
     if (!quotes) {
       // 미국 80% (나스닥 110 + NYSE 40 = 150), 한국 20% (코스피 30 + 코스닥 10 = 40)
       const tasks = [
-        ['NASDAQ', () => fetchUS('NASDAQ', 100)],
-        ['NYSE', () => fetchUS('NYSE', 50)],
+        ['NASDAQ1', () => fetchUS('NASDAQ', 50, 1)],
+        ['NASDAQ2', () => fetchUS('NASDAQ', 50, 2)],
+        ['NYSE', () => fetchUS('NYSE', 50, 1)],
         ['KOSPI', () => fetchKR('KOSPI', 30)],
-        ['KOSDAQ', () => fetchKR('KOSDAQ', 10)],
+        ['KOSDAQ', () => fetchKR('KOSDAQ', 8)],
       ];
       const settled = await Promise.allSettled(tasks.map(t => t[1]()));
       quotes = [];
