@@ -12,24 +12,22 @@ async function translateKo(text) {
   } catch { return text; }
 }
 
-const RX = {
-  item: /<item[^>]*>([\s\S]*?)<\/item>/g,
-  title: /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/,
-  link: /<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/,
-  date: /<pubDate>([\s\S]*?)<\/pubDate>/,
-  desc: /<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/,
-};
 function parseRss(xml, src, max) {
+  // 정규식은 함수 내 지역 생성 (병렬 호출 시 lastIndex 충돌 방지)
+  const itemRx = /<item[^>]*>([\s\S]*?)<\/item>/g;
+  const titleRx = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/;
+  const linkRx = /<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/;
+  const dateRx = /<pubDate>([\s\S]*?)<\/pubDate>/;
+  const descRx = /<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/;
   const out = [];
   let m, i = 0;
-  RX.item.lastIndex = 0;
-  while ((m = RX.item.exec(xml)) !== null && i < max) {
+  while ((m = itemRx.exec(xml)) !== null && i < max) {
     const b = m[1];
-    const t = RX.title.exec(b);
+    const t = titleRx.exec(b);
     if (!t) continue;
-    const l = RX.link.exec(b);
-    const d = RX.date.exec(b);
-    const desc = RX.desc.exec(b);
+    const l = linkRx.exec(b);
+    const d = dateRx.exec(b);
+    const desc = descRx.exec(b);
     out.push({
       title: t[1].trim().slice(0, 200),
       link: l ? l[1].trim() : '',
