@@ -1,3 +1,18 @@
+// Google 번역 (비공식, 무료) — 영어 → 한국어
+async function translateKo(text) {
+  if (!text) return '';
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q=${encodeURIComponent(text)}`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!r.ok) return text;
+    const d = await r.json();
+    // d[0] = [[translatedSeg, origSeg, ...], ...]
+    return (d?.[0] || []).map(seg => seg[0]).join('') || text;
+  } catch {
+    return text;
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -40,6 +55,11 @@ export default async function handler(req, res) {
       }
     }
 
+    // 제목 한국어 번역 (병렬)
+    await Promise.all(items.map(async it => {
+      it.titleKo = await translateKo(it.title);
+    }));
+
     return res.status(200).json({
       success: true,
       fetchedAt: new Date().toISOString(),
@@ -54,3 +74,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
