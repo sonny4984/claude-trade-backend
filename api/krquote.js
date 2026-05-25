@@ -12,26 +12,31 @@ async function fetchNaver(code) {
   const d = data?.datas?.[0];
   if (!d) throw new Error('No datas in response');
 
-  // 네이버 필드: nv=현재가, cv=전일대비, cr=등락률, pcv/sv=전일종가, aq=거래량, nm=종목명
-  const toNum = (v) => v == null ? null : parseFloat(String(v).replace(/,/g, ''));
-  const price     = toNum(d.nv);
-  const prevClose = toNum(d.pcv ?? d.sv);
-  const change    = toNum(d.cv);
-  // rf: "2"=상승, "5"=하락 등. change 부호 보정
-  const signedChange = (d.rf === '5' || d.rf === '4') && change != null ? -Math.abs(change) : change;
-  const changePct = toNum(d.cr);
-  const signedPct = (d.rf === '5' || d.rf === '4') && changePct != null ? -Math.abs(changePct) : changePct;
+  const toNum = (v) => v == null ? null : parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+  // compareToPreviousPrice.code: "2"/"1"=상승, "5"/"4"=하락
+  const dir = d.compareToPreviousPrice?.code;
+  const falling = dir === '5' || dir === '4';
+
+  const price     = toNum(d.closePrice);
+  const changeAbs = toNum(d.compareToPreviousClosePrice);
+  const pctAbs    = toNum(d.fluctuationsRatio);
+  const change    = changeAbs == null ? null : (falling ? -Math.abs(changeAbs) : Math.abs(changeAbs));
+  const changePct = pctAbs == null ? null : (falling ? -Math.abs(pctAbs) : Math.abs(pctAbs));
+  const prevClose = (price != null && change != null) ? price - change : null;
 
   return {
     symbol: code,
-    name: d.nm || code,
+    name: d.stockName || code,
     price,
     prevClose,
-    change: signedChange,
-    changePct: signedPct,
-    volume: toNum(d.aq),
+    change,
+    changePct,
+    open: toNum(d.openPrice),
+    high: toNum(d.highPrice),
+    low: toNum(d.lowPrice),
+    volume: toNum(d.accumulatedTradingVolume),
     currency: 'KRW',
-    marketState: d.ms || null,
+    marketState: d.marketStatus || null,
   };
 }
 
