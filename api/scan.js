@@ -46,7 +46,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const debug = req.query.debug === '1';
-  const cacheKey = 'scan:rank:v2';
+  const nocache = req.query.nocache === '1';
+  const cacheKey = 'scan:rank:v3';
 
   // 디버그: 시총 API raw 구조 확인
   if (debug) {
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    let quotes = getCached(cacheKey, CACHE_TTL_MS);
+    let quotes = nocache ? null : getCached(cacheKey, CACHE_TTL_MS);
     let cached = !!quotes;
     const errors = [];
     if (!quotes) {
