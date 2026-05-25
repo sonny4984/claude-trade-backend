@@ -61,14 +61,17 @@ export default async function handler(req, res) {
   try {
     let quotes = getCached(cacheKey, CACHE_TTL_MS);
     let cached = !!quotes;
+    const errors = [];
     if (!quotes) {
       const [kospi, kosdaq] = await Promise.allSettled([
-        fetchRanking('KOSPI', 150),
+        fetchRanking('KOSPI', 100),
         fetchRanking('KOSDAQ', 80),
       ]);
       quotes = [];
       if (kospi.status === 'fulfilled') quotes.push(...kospi.value);
+      else errors.push({ market:'KOSPI', error: kospi.reason?.message || String(kospi.reason) });
       if (kosdaq.status === 'fulfilled') quotes.push(...kosdaq.value);
+      else errors.push({ market:'KOSDAQ', error: kosdaq.reason?.message || String(kosdaq.reason) });
       if (quotes.length) setCache(cacheKey, quotes);
     }
     return res.status(200).json({
@@ -77,6 +80,7 @@ export default async function handler(req, res) {
       count: quotes.length,
       cached,
       quotes,
+      ...(errors.length ? { errors } : {}),
       source: 'naver-ranking',
     });
   } catch (e) {
