@@ -52,21 +52,11 @@ export default async function handler(req, res) {
   // 디버그: 시총 API raw 구조 확인
   if (debug) {
     try {
-      const tries = [
-        'https://m.stock.naver.com/api/stocks/marketValue/NASDAQ?page=1&pageSize=3',
-        'https://api.stock.naver.com/stock/exchange/NASDAQ/marketValue?page=1&pageSize=3',
-        'https://m.stock.naver.com/api/stocks/marketValue/NYSE?page=1&pageSize=3',
-        'https://polling.finance.naver.com/api/realtime/worldstock/stock/AAPL.O',
-        'https://api.stock.naver.com/stock/AAPL.O/basic',
-      ];
-      const out = [];
-      for (const u of tries) {
-        try {
-          const r = await fetch(u, { headers: { 'User-Agent': UA, 'Referer': 'https://m.stock.naver.com/' } });
-          out.push({ u, status: r.status, body: (await r.text()).slice(0, 250) });
-        } catch (e) { out.push({ u, err: e.message }); }
-      }
-      return res.status(200).json({ debug: true, tries: out });
+      const r = await fetch('https://api.stock.naver.com/stock/exchange/NASDAQ/marketValue?page=1&pageSize=2', {
+        headers: { 'User-Agent': UA, 'Referer': 'https://m.stock.naver.com/' },
+      });
+      const j = await r.json();
+      return res.status(200).json({ debug: true, status: r.status, firstStock: j?.stocks?.[0] || j });
     } catch (e) { return res.status(200).json({ debug: true, error: e.message }); }
   }
 
