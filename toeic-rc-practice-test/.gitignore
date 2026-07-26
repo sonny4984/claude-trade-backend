@@ -1,0 +1,5 @@
+# build intermediates
+src/_problem.html
+src/_answer.html
+src/__pycache__/
+*.pyc
