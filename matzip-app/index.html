@@ -1,0 +1,838 @@
+<title>찐맛 — 검증된 맛집만</title>
+<style>
+:root{
+  --bg:#f4f4f2; --app:#ffffff; --card:#ffffff; --line:#ececea; --line2:#e2e2df;
+  --ink:#1a1917; --sub:#6f6c66; --faint:#9b978f;
+  --accent:#e8442e; --accent-soft:#fdeeea; --accent-ink:#c2331f;
+  --star:#f5a623; --open:#12a150; --open-soft:#e7f6ee; --warn:#c77700; --warn-soft:#fdf3e3;
+  --chipbg:#f3f2ef; --field:#f3f2ef; --sheet:#ffffff; --shadow:0 1px 2px rgba(20,18,15,.05),0 8px 24px rgba(20,18,15,.06);
+  --skel1:#eeedeb; --skel2:#f7f6f4;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0c0d0e; --app:#131416; --card:#1b1d1f; --line:#26282b; --line2:#303236;
+    --ink:#f2f0ec; --sub:#a5a29b; --faint:#7b786f;
+    --accent:#ff6a47; --accent-soft:#33201b; --accent-ink:#ff8266;
+    --star:#f5a623; --open:#3ecf83; --open-soft:#16301f; --warn:#f0a93c; --warn-soft:#332711;
+    --chipbg:#222427; --field:#222427; --sheet:#1b1d1f; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+    --skel1:#222427; --skel2:#2a2c30;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c0d0e; --app:#131416; --card:#1b1d1f; --line:#26282b; --line2:#303236;
+  --ink:#f2f0ec; --sub:#a5a29b; --faint:#7b786f;
+  --accent:#ff6a47; --accent-soft:#33201b; --accent-ink:#ff8266;
+  --star:#f5a623; --open:#3ecf83; --open-soft:#16301f; --warn:#f0a93c; --warn-soft:#332711;
+  --chipbg:#222427; --field:#222427; --sheet:#1b1d1f; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  --skel1:#222427; --skel2:#2a2c30;
+}
+:root[data-theme="light"]{
+  --bg:#f4f4f2; --app:#ffffff; --card:#ffffff; --line:#ececea; --line2:#e2e2df;
+  --ink:#1a1917; --sub:#6f6c66; --faint:#9b978f;
+  --accent:#e8442e; --accent-soft:#fdeeea; --accent-ink:#c2331f;
+  --star:#f5a623; --open:#12a150; --open-soft:#e7f6ee; --warn:#c77700; --warn-soft:#fdf3e3;
+  --chipbg:#f3f2ef; --field:#f3f2ef; --sheet:#ffffff; --shadow:0 1px 2px rgba(20,18,15,.05),0 8px 24px rgba(20,18,15,.06);
+  --skel1:#eeedeb; --skel2:#f7f6f4;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{background:var(--bg);}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard Variable",Pretendard,"Noto Sans KR","Malgun Gothic",sans-serif;
+  color:var(--ink); font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;}
+input{font:inherit;color:inherit;}
+#app{max-width:520px;margin:0 auto;background:var(--app);min-height:100vh;min-height:100dvh;position:relative;
+  box-shadow:0 0 0 1px var(--line);}
+.hide{display:none !important;}
+
+/* ---------- header ---------- */
+.hdr{position:sticky;top:0;z-index:30;background:var(--app);padding:14px 16px 10px;border-bottom:1px solid var(--line);}
+.hdr-top{display:flex;align-items:center;gap:8px;}
+.loc-btn{display:flex;align-items:center;gap:5px;font-weight:800;font-size:18px;letter-spacing:-.3px;padding:4px 2px;border-radius:8px;}
+.loc-btn svg{flex:none;}
+.loc-btn .chev{color:var(--faint);}
+.hdr-sp{flex:1;}
+.icon-btn{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--ink);}
+.icon-btn:active{background:var(--chipbg);}
+.searchbar{margin-top:10px;display:flex;align-items:center;gap:8px;background:var(--field);border-radius:12px;padding:10px 12px;color:var(--faint);}
+.searchbar input{flex:1;border:none;outline:none;background:transparent;color:var(--ink);font-size:15px;}
+.searchbar input::placeholder{color:var(--faint);}
+.trust{display:flex;align-items:center;gap:7px;margin-top:10px;font-size:12px;color:var(--sub);
+  background:var(--accent-soft);border-radius:10px;padding:8px 11px;}
+.trust b{color:var(--accent-ink);font-weight:700;}
+.trust svg{flex:none;color:var(--accent);}
+
+/* ---------- category chips ---------- */
+.chips{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 4px;scrollbar-width:none;}
+.chips::-webkit-scrollbar{display:none;}
+.chip{flex:none;display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:20px;background:var(--chipbg);
+  font-size:13.5px;font-weight:600;color:var(--sub);border:1px solid transparent;}
+.chip.on{background:var(--ink);color:var(--app);}
+.chip .e{font-size:15px;}
+
+/* ---------- list section ---------- */
+.sect{display:flex;align-items:center;padding:14px 16px 6px;}
+.sect h2{font-size:15px;font-weight:800;letter-spacing:-.2px;}
+.sect .n{color:var(--accent);margin-left:4px;}
+.sect .sp{flex:1;}
+.sort-btn{display:flex;align-items:center;gap:4px;font-size:13px;color:var(--sub);padding:6px 10px;border-radius:8px;background:var(--chipbg);font-weight:600;}
+.list{padding:4px 16px 110px;display:flex;flex-direction:column;}
+.card{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);align-items:flex-start;text-align:left;width:100%;}
+.card:last-child{border-bottom:none;}
+.thumb{flex:none;width:92px;height:92px;border-radius:14px;position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;}
+.thumb .e{font-size:38px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.25));}
+.thumb::after{content:"";position:absolute;inset:0;background:
+  radial-gradient(120% 90% at 20% 10%,rgba(255,255,255,.28),transparent 55%),
+  repeating-linear-gradient(135deg,rgba(255,255,255,.05) 0 8px,transparent 8px 16px);}
+.body{flex:1;min-width:0;}
+.row1{display:flex;align-items:flex-start;gap:8px;}
+.name{font-weight:700;font-size:16px;letter-spacing:-.3px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.heart{flex:none;width:30px;height:30px;margin:-4px -4px 0 0;display:flex;align-items:center;justify-content:center;color:var(--faint);}
+.heart.on{color:var(--accent);}
+.rate{display:flex;align-items:center;gap:4px;margin-top:2px;font-size:13.5px;color:var(--sub);}
+.rate .star{color:var(--star);font-size:13px;}
+.rate b{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums;}
+.rate .rc{font-variant-numeric:tabular-nums;}
+.meta{margin-top:3px;font-size:13px;color:var(--faint);display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.meta .dot{width:2.5px;height:2.5px;border-radius:50%;background:var(--line2);}
+.meta .dist{font-variant-numeric:tabular-nums;}
+.badges{margin-top:7px;display:flex;gap:5px;flex-wrap:wrap;}
+.bdg{font-size:11.5px;padding:3px 8px;border-radius:6px;background:var(--chipbg);color:var(--sub);font-weight:600;}
+.bdg.open{background:var(--open-soft);color:var(--open);}
+.bdg.warn{background:var(--warn-soft);color:var(--warn);}
+.excl{padding:14px 16px 0;font-size:12px;color:var(--faint);display:flex;align-items:center;gap:6px;}
+.empty{padding:70px 30px;text-align:center;color:var(--faint);}
+.empty .big{font-size:40px;margin-bottom:12px;}
+.empty p{font-size:14px;line-height:1.6;}
+
+/* skeleton */
+@keyframes shim{0%{background-position:-200px 0}100%{background-position:260px 0}}
+.skel .sk{border-radius:8px;background:linear-gradient(90deg,var(--skel1) 25%,var(--skel2) 50%,var(--skel1) 75%);
+  background-size:400px 100%;animation:shim 1.1s infinite linear;}
+.skel .thumb{background:var(--skel1);}
+@media (prefers-reduced-motion:reduce){.skel .sk{animation:none;}}
+
+/* ---------- bottom nav ---------- */
+.nav{position:fixed;bottom:0;left:0;right:0;margin:0 auto;max-width:520px;z-index:40;
+  background:var(--app);border-top:1px solid var(--line);display:flex;
+  padding:6px 8px calc(8px + env(safe-area-inset-bottom,0px));}
+.nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0 2px;color:var(--faint);font-size:10.5px;font-weight:600;}
+.nav button.on{color:var(--ink);}
+.nav button.on .navi{color:var(--accent);}
+.navi{display:flex;}
+
+/* ---------- sheets ---------- */
+.ovl{position:fixed;inset:0;z-index:60;background:rgba(12,10,8,.45);opacity:0;transition:opacity .22s ease;}
+.ovl.show{opacity:1;}
+.sheet{position:fixed;left:0;right:0;bottom:0;margin:0 auto;max-width:520px;z-index:70;background:var(--sheet);
+  border-radius:20px 20px 0 0;transform:translateY(103%);transition:transform .26s cubic-bezier(.32,.72,.35,1);
+  max-height:92vh;max-height:92dvh;display:flex;flex-direction:column;}
+.sheet.show{transform:translateY(0);}
+.grab{width:38px;height:4px;border-radius:2px;background:var(--line2);margin:10px auto 2px;flex:none;}
+.sheet-scroll{overflow-y:auto;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));}
+@media (prefers-reduced-motion:reduce){.sheet,.ovl{transition:none;}}
+
+/* detail */
+.hero{height:170px;margin:12px 16px 0;border-radius:16px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.hero .e{font-size:64px;filter:drop-shadow(0 3px 5px rgba(0,0,0,.28));}
+.hero::after{content:"";position:absolute;inset:0;background:
+  radial-gradient(130% 100% at 15% 0%,rgba(255,255,255,.3),transparent 55%),
+  repeating-linear-gradient(135deg,rgba(255,255,255,.05) 0 10px,transparent 10px 20px);}
+.hero .cat-tag{position:absolute;left:12px;bottom:12px;z-index:2;background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:700;
+  padding:4px 10px;border-radius:8px;backdrop-filter:blur(4px);}
+.dt-head{padding:16px 20px 0;}
+.dt-name{font-size:21px;font-weight:800;letter-spacing:-.4px;}
+.dt-rate{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:14px;color:var(--sub);}
+.dt-rate b{font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums;}
+.dt-rate .stars{color:var(--star);letter-spacing:1px;font-size:13px;}
+.acts{display:flex;gap:8px;padding:14px 20px;}
+.act{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 0 9px;border-radius:12px;background:var(--chipbg);font-size:12px;font-weight:700;color:var(--ink);}
+.act.on{color:var(--accent);background:var(--accent-soft);}
+.act svg{display:block;}
+.dt-sec{padding:6px 20px 14px;border-top:1px solid var(--line);}
+.dt-sec h3{font-size:14px;font-weight:800;padding:12px 0 8px;display:flex;align-items:center;}
+.dt-sec h3 .sp{flex:1;}
+.dt-sec h3 .more{font-size:12px;color:var(--faint);font-weight:600;}
+.inf{display:flex;gap:10px;padding:5px 0;font-size:14px;}
+.inf .k{flex:none;width:52px;color:var(--faint);}
+.inf .v{color:var(--ink);}
+.inf .v .st-open{color:var(--open);font-weight:700;}
+.inf .v .st-soon{color:var(--warn);font-weight:700;}
+.inf .v .st-closed{color:var(--faint);font-weight:700;}
+.menu-row{display:flex;align-items:baseline;gap:8px;padding:7px 0;font-size:14.5px;}
+.menu-row .mn{flex:1;}
+.menu-row .best{font-size:10.5px;color:var(--accent);border:1px solid currentColor;border-radius:5px;padding:1px 5px;font-weight:700;}
+.menu-row .pr{font-weight:700;font-variant-numeric:tabular-nums;}
+.rev{padding:11px 0;border-bottom:1px solid var(--line);}
+.rev:last-child{border-bottom:none;}
+.rev-top{display:flex;align-items:center;gap:8px;font-size:13px;}
+.avatar{flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;}
+.rev-top .who{font-weight:700;}
+.rev-top .when{color:var(--faint);font-size:12px;}
+.rev-stars{color:var(--star);font-size:11.5px;letter-spacing:1.5px;margin-top:3px;}
+.rev p{margin-top:5px;font-size:13.5px;color:var(--sub);line-height:1.55;}
+.foot-note{padding:14px 20px 6px;font-size:11.5px;color:var(--faint);line-height:1.6;}
+
+/* location sheet */
+.ls-title{font-size:17px;font-weight:800;padding:14px 20px 4px;}
+.ls-sub{font-size:13px;color:var(--faint);padding:0 20px 12px;}
+.mypos{margin:0 20px 14px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#fff;
+  font-weight:800;font-size:15px;border-radius:12px;padding:14px 0;}
+.mypos:active{opacity:.85;}
+.area-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 20px 10px;}
+.area-btn{padding:13px 8px;border-radius:12px;background:var(--chipbg);font-size:14px;font-weight:600;color:var(--ink);border:1.5px solid transparent;}
+.area-btn.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:800;}
+
+/* nearby */
+.nb-head{padding:16px 16px 4px;}
+.nb-head h2{font-size:19px;font-weight:800;letter-spacing:-.3px;}
+.nb-head p{font-size:13px;color:var(--faint);margin-top:3px;}
+.nb-pos{margin:12px 16px 0;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
+  border-radius:14px;padding:13px 14px;box-shadow:var(--shadow);}
+.nb-pos .t{flex:1;min-width:0;}
+.nb-pos .t b{font-size:15px;display:block;}
+.nb-pos .t span{font-size:12px;color:var(--faint);}
+.nb-pos .re{flex:none;font-size:12.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:8px 12px;border-radius:9px;}
+.dist-big{flex:none;text-align:right;padding-top:3px;}
+.dist-big b{font-size:15px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;display:block;}
+.dist-big span{font-size:11px;color:var(--faint);}
+
+/* my */
+.my-wrap{padding:16px 16px 110px;display:flex;flex-direction:column;gap:12px;}
+.my-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);}
+.my-card h3{font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px;}
+.my-card p{font-size:13.5px;color:var(--sub);margin-top:8px;line-height:1.65;}
+.pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;}
+.pill.soon{background:var(--warn-soft);color:var(--warn);}
+.pill.demo{background:var(--accent-soft);color:var(--accent-ink);}
+.crit{display:flex;gap:10px;margin-top:12px;}
+.crit .cb{flex:1;background:var(--chipbg);border-radius:12px;padding:12px;text-align:center;}
+.crit .cb b{font-size:19px;font-weight:800;display:block;color:var(--accent);font-variant-numeric:tabular-nums;}
+.crit .cb span{font-size:11.5px;color:var(--faint);}
+.ver{ text-align:center;font-size:11.5px;color:var(--faint);padding:6px 0 2px;}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(8px);z-index:90;background:rgba(20,18,15,.92);color:#fff;
+  font-size:13.5px;font-weight:600;padding:11px 18px;border-radius:24px;opacity:0;transition:.25s ease;pointer-events:none;white-space:nowrap;}
+:root[data-theme="dark"] .toast{background:rgba(245,242,236,.95);color:#141312;}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .toast{background:rgba(245,242,236,.95);color:#141312;}}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px;}
+</style>
+
+<div id="app">
+  <!-- 홈 -->
+  <div id="view-home">
+    <header class="hdr">
+      <div class="hdr-top">
+        <button class="loc-btn" id="locBtn" aria-label="위치 선택">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span id="locLabel">강남</span>
+          <svg class="chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="hdr-sp"></div>
+        <button class="icon-btn" id="bellBtn" aria-label="알림">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        </button>
+      </div>
+      <div class="searchbar">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="매장, 메뉴, 동네 검색" autocomplete="off">
+      </div>
+      <div class="trust">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 8.6 8 11 4.6-2.4 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span>구글 리뷰 <b>50개 이상</b> · 평점 <b>4.5 이상</b>인 곳만 보여드려요</span>
+      </div>
+    </header>
+
+    <nav class="chips" id="chips" aria-label="카테고리"></nav>
+
+    <div class="sect">
+      <h2>믿고 가는 맛집 <span class="n" id="cnt"></span></h2>
+      <div class="sp"></div>
+      <button class="sort-btn" id="sortBtn">
+        <span id="sortLabel">평점순</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h9M3 18h5M18 6v12m0 0 3-3m-3 3-3-3"/></svg>
+      </button>
+    </div>
+    <div class="list" id="list"></div>
+  </div>
+
+  <!-- 주변 -->
+  <div id="view-near" class="hide">
+    <div class="nb-head">
+      <h2>내 주변</h2>
+      <p>선택한 위치에서 가까운 순서로 보여드려요</p>
+    </div>
+    <div class="nb-pos">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+      <div class="t"><b id="nbLoc">강남</b><span>기준 위치</span></div>
+      <button class="re" id="nbGps">내 위치로</button>
+    </div>
+    <div class="list" id="nbList" style="padding-top:8px;"></div>
+  </div>
+
+  <!-- 찜 -->
+  <div id="view-fav" class="hide">
+    <div class="nb-head">
+      <h2>찜한 맛집</h2>
+      <p>하트 누른 곳을 모아뒀어요</p>
+    </div>
+    <div class="list" id="favList" style="padding-top:8px;"></div>
+  </div>
+
+  <!-- 마이 -->
+  <div id="view-my" class="hide">
+    <div class="nb-head"><h2>마이</h2></div>
+    <div class="my-wrap">
+      <div class="my-card">
+        <h3>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 8.6 8 11 4.6-2.4 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+          선정 기준
+        </h3>
+        <p>아무 데나 보여드리지 않아요. 구글 지도 기준 아래 조건을 모두 만족하는 매장만 목록에 올라옵니다.</p>
+        <div class="crit">
+          <div class="cb"><b>50+</b><span>구글 리뷰 수</span></div>
+          <div class="cb"><b>4.5+</b><span>구글 평점</span></div>
+        </div>
+        <p id="exclNote" style="margin-top:10px;"></p>
+      </div>
+      <div class="my-card">
+        <h3>데이터 <span class="pill demo">데모 모드</span></h3>
+        <p>지금은 샘플 데이터로 동작 중이에요. <b>Google Places API</b>를 연결하면 실제 구글 지도 평점·리뷰·사진으로 자동 전환됩니다. (API 키는 PC에서 발급 후 연결 예정)</p>
+      </div>
+      <div class="my-card">
+        <h3>AI 맛집 추천 <span class="pill soon">연동 대기</span></h3>
+        <p>취향을 말하면 <b>Gemini</b>가 오늘 갈 곳을 골라주는 기능이 들어올 자리예요. API 키 연결 후 활성화됩니다.</p>
+      </div>
+      <div class="ver">찐맛 v0.1 · 데모 빌드</div>
+    </div>
+  </div>
+
+  <nav class="nav" id="nav">
+    <button data-tab="home" class="on">
+      <span class="navi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2Z"/></svg></span>홈
+    </button>
+    <button data-tab="near">
+      <span class="navi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></span>주변
+    </button>
+    <button data-tab="fav">
+      <span class="navi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.4 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2C10.5 3.5 9.3 3 7.5 3A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.1 3 5.5l7 7Z"/></svg></span>찜
+    </button>
+    <button data-tab="my">
+      <span class="navi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></span>마이
+    </button>
+  </nav>
+
+  <!-- overlays -->
+  <div class="ovl hide" id="ovl"></div>
+
+  <div class="sheet" id="locSheet" role="dialog" aria-label="위치 선택">
+    <div class="grab"></div>
+    <div class="sheet-scroll">
+      <div class="ls-title">어디 주변에서 찾을까요?</div>
+      <div class="ls-sub">위치 권한을 허용하면 현재 위치 기준으로 정렬돼요</div>
+      <button class="mypos" id="gpsBtn">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7.5"/></svg>
+        내 위치로 찾기
+      </button>
+      <div class="area-grid" id="areaGrid"></div>
+      <div style="height:14px"></div>
+    </div>
+  </div>
+
+  <div class="sheet" id="dtSheet" role="dialog" aria-label="매장 상세">
+    <div class="grab"></div>
+    <div class="sheet-scroll" id="dtBody"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------- 지역 ---------------- */
+var AREAS = [
+  {key:"gangnam", label:"강남",       lat:37.4979, lng:127.0276},
+  {key:"hongdae", label:"홍대·연남",  lat:37.5563, lng:126.9237},
+  {key:"seongsu", label:"성수",       lat:37.5446, lng:127.0559},
+  {key:"itaewon", label:"이태원·한남",lat:37.5346, lng:126.9946},
+  {key:"jongno",  label:"종로·익선",  lat:37.5720, lng:126.9895},
+  {key:"jamsil",  label:"잠실·송리단",lat:37.5133, lng:127.1002},
+  {key:"yeouido", label:"여의도",     lat:37.5219, lng:126.9245}
+];
+function area(k){ for(var i=0;i<AREAS.length;i++) if(AREAS[i].key===k) return AREAS[i]; return AREAS[0]; }
+
+/* ---------------- 카테고리 ---------------- */
+var CATS = [
+  {key:"all",  label:"전체",        e:"🍽️"},
+  {key:"kr",   label:"한식",        e:"🍚", g:[["#c96f3b","#8a4a22"],["#b9682f","#7c3f1b"],["#d07a41","#93542a"]]},
+  {key:"meat", label:"고기·구이",   e:"🥩", g:[["#b23b2e","#71201c"],["#a53326","#611a17"],["#c04a38","#7d2721"]]},
+  {key:"jp",   label:"일식",        e:"🍣", g:[["#2e6e8e","#1b4557"],["#337896","#204d61"],["#28607d","#173c4c"]]},
+  {key:"cn",   label:"중식",        e:"🥟", g:[["#c2452f","#7f2517"],["#b03d29","#6f2013"],["#cf5238","#8c2c1a"]]},
+  {key:"west", label:"양식",        e:"🍝", g:[["#a5702f","#6e471c"],["#987e35","#5f4e1e"],["#b0793a","#775023"]]},
+  {key:"cafe", label:"카페·디저트", e:"🍰", g:[["#7a5c43","#4e3a2a"],["#8a6a4e","#584231"],["#6f5138","#453023"]]},
+  {key:"bs",   label:"분식",        e:"🍢", g:[["#e0503c","#a32b22"],["#d34633","#93251d"],["#eb5c46","#b23328"]]},
+  {key:"sea",  label:"해산물",      e:"🦐", g:[["#2e7e86","#174f55"],["#2a727f","#14464f"],["#35899a","#1c5560"]]},
+  {key:"asia", label:"아시안",      e:"🍜", g:[["#3e8e5a","#22573a"],["#37804f","#1c4a30"],["#489c66","#2a6444"]]},
+  {key:"cb",   label:"치킨·버거",   e:"🍔", g:[["#d98e2b","#9c5e14"],["#cc8322","#8e550f"],["#e39a37","#a9671b"]]}
+];
+function cat(k){ for(var i=0;i<CATS.length;i++) if(CATS[i].key===k) return CATS[i]; return CATS[0]; }
+
+/* ---------------- 매장 데이터 (데모) ----------------
+   r: 평점, rc: 리뷰 수, pr: 가격대, hrs:[open,close], off:[latΔ,lngΔ]
+   메뉴 m:[이름, 가격, 대표여부], 리뷰 rv:[닉네임, 별점, 시기, 내용]           */
+var DATA = [
+ {id:1, n:"소반옥", c:"kr", a:"seongsu", r:4.7, rc:812, pr:"1~2만원", hrs:[11,21], off:[0.0021,-0.0018],
+  tag:["혼밥","한상차림"], m:[["제육 한상",13000,1],["된장찌개 정식",11000,0],["보리굴비 정식",17000,0]],
+  rv:[["서울먹보",5,"1주 전","반찬이 매일 조금씩 바뀌는데 뭘 먹어도 평균 이상이에요. 제육 한상 무조건 드세요."],
+      ["yj_food",4,"3주 전","점심시간엔 웨이팅 있어요. 회전은 빠른 편이라 15분 정도 기다렸습니다."]]},
+ {id:2, n:"미당 손칼국수", c:"kr", a:"jongno", r:4.8, rc:1543, pr:"1만원 이하", hrs:[10,20], off:[-0.0012,0.0009],
+  tag:["노포","웨이팅"], m:[["손칼국수",9000,1],["수육 (소)",15000,0],["겉절이 추가",2000,0]],
+  rv:[["미식일기",5,"2일 전","면을 직접 밀어서 그런지 식감이 완전 달라요. 국물도 사골 베이스라 진합니다."],
+      ["김*현",5,"1개월 전","30년 넘은 노포. 김치 겉절이랑 같이 먹으면 진짜 최고예요."]]},
+ {id:3, n:"골목집 두부전골", c:"kr", a:"hongdae", r:4.6, rc:327, pr:"1~2만원", hrs:[11,22], off:[0.0016,0.0021],
+  tag:["단체","술안주"], m:[["두부전골 (2인)",24000,1],["감자전",9000,0]],
+  rv:[["연남주민",5,"2주 전","직접 만든 손두부라 고소함이 다릅니다. 전골 국물에 밥 볶아 먹는 게 국룰."],
+      ["h*n",4,"1개월 전","웨이팅이 좀 있지만 두부 좋아하면 실망 없을 맛."]]},
+ {id:4, n:"해온 솥밥", c:"kr", a:"gangnam", r:4.7, rc:689, pr:"1~2만원", hrs:[11,21], off:[0.0009,0.0014],
+  tag:["데이트","예약가능"], m:[["전복 솥밥",16000,1],["차돌 솥밥",14000,0],["계절 솥밥",15000,0]],
+  rv:[["먹요정",5,"5일 전","누룽지까지 완벽. 전복이 실하게 들어있고 간장 양념장이 포인트예요."],
+      ["직장인K",4,"2주 전","점심 예약하고 가서 바로 먹었어요. 회사 근처라 자주 갑니다."]]},
+ {id:5, n:"장터불백", c:"kr", a:"yeouido", r:4.5, rc:254, pr:"1만원 이하", hrs:[10,21], off:[-0.0008,0.0011],
+  tag:["혼밥","가성비"], m:[["불백 정식",9500,1],["계란찜 추가",3000,0]],
+  rv:[["여의도러",5,"1주 전","이 가격에 이 퀄리티면 여의도에서 적수가 없어요. 밥 무한리필."],
+      ["p*k",4,"3주 전","점심 피크엔 합석 필수지만 맛은 보장합니다."]]},
+ {id:6, n:"화로상회", c:"meat", a:"gangnam", r:4.8, rc:1120, pr:"3~4만원", hrs:[16,24], off:[0.0019,-0.0007],
+  tag:["회식","예약필수"], m:[["참숯 양념갈비",19000,1],["숙성 삼겹",17000,0],["된장술밥",6000,0]],
+  rv:[["고기왕",5,"3일 전","직원분들이 다 구워주셔서 편해요. 갈비 양념이 안 달고 딱 좋습니다."],
+      ["s2_eat",5,"2주 전","마무리 된장술밥까지가 코스입니다. 회식으로 최고."]]},
+ {id:7, n:"숯골 참숯갈비", c:"meat", a:"jamsil", r:4.6, rc:903, pr:"3~4만원", hrs:[16,23], off:[0.0013,0.0016],
+  tag:["가족모임","주차"], m:[["생갈비",23000,1],["갈비탕",11000,0]],
+  rv:[["잠실토박이",5,"1주 전","생갈비 결이 진짜 좋아요. 주차 되는 갈비집이라 가족모임으로 자주 가요."],
+      ["m*j",4,"1개월 전","고기 질은 확실. 주말엔 예약 안 하면 오래 기다립니다."]]},
+ {id:8, n:"청기와 삼겹", c:"meat", a:"hongdae", r:4.5, rc:468, pr:"2~3만원", hrs:[15,24], off:[-0.0014,-0.0009],
+  tag:["술모임","늦은시간"], m:[["두툼 삼겹",15000,1],["김치찌개",8000,0]],
+  rv:[["홍대야행",5,"4일 전","두께 실화? 겉바속촉으로 구워주는 불판 시스템이 좋아요."],
+      ["lee_92",4,"3주 전","새벽까지 해서 2차로 딱. 김치찌개도 수준급."]]},
+ {id:9, n:"스시 하루", c:"jp", a:"gangnam", r:4.9, rc:745, pr:"5만원 이상", hrs:[12,22], off:[-0.0006,0.0019],
+  tag:["오마카세","예약필수"], m:[["런치 오마카세",65000,1],["디너 오마카세",120000,0]],
+  rv:[["스시러버",5,"1주 전","이 가격대 런치 중 원탑. 샤리 온도랑 간이 정확합니다."],
+      ["오마카세일지",5,"2주 전","대장님 설명이 과하지 않고 좋아요. 재방문 확정."]]},
+ {id:10, n:"멘야 코코로", c:"jp", a:"hongdae", r:4.7, rc:1211, pr:"1~2만원", hrs:[11,21], off:[0.0008,-0.0016],
+  tag:["웨이팅","혼밥"], m:[["돈코츠 라멘",11000,1],["차슈덮밥",8000,0],["교자 (5개)",6000,0]],
+  rv:[["라멘순례자",5,"2일 전","국물 농도가 일본 현지 스타일. 차슈가 입에서 녹아요."],
+      ["j*h",4,"1주 전","오픈런 추천. 12시 넘으면 30분은 기본으로 기다려요."]]},
+ {id:11, n:"텐동 아오이", c:"jp", a:"seongsu", r:4.6, rc:538, pr:"1~2만원", hrs:[11,20], off:[-0.0017,0.0008],
+  tag:["혼밥","바삭"], m:[["아나고 텐동",14000,1],["새우 텐동",12000,0]],
+  rv:[["성수직장인",5,"6일 전","튀김옷이 얇고 기름지지 않아요. 아나고는 꼭 추가하세요."],
+      ["tempura_j",4,"1개월 전","텐동 소스 간이 세지 않아 끝까지 안 질립니다."]]},
+ {id:12, n:"이자카야 츠키", c:"jp", a:"itaewon", r:4.5, rc:302, pr:"2~3만원", hrs:[17,25], off:[0.0011,0.0013],
+  tag:["분위기","데이트"], m:[["모둠 꼬치 (6종)",18000,1],["명란 계란말이",12000,0]],
+  rv:[["한남동밤",5,"1주 전","조명이랑 음악까지 완벽한 분위기 맛집. 꼬치는 소금구이 추천."],
+      ["y*n",4,"3주 전","안주 퀄리티가 높아요. 금요일엔 예약 필수."]]},
+ {id:13, n:"홍복반점", c:"cn", a:"jongno", r:4.6, rc:987, pr:"1~2만원", hrs:[11,21], off:[0.0015,-0.0011],
+  tag:["노포","단체"], m:[["수타 짜장면",8000,1],["고추 짬뽕",10000,0],["탕수육 (소)",18000,0]],
+  rv:[["종로미식가",5,"4일 전","수타면 탄력이 살아있어요. 탕수육은 옛날식 부먹 스타일."],
+      ["c*w",4,"2주 전","점심엔 웨이팅 있지만 회전 빨라요. 짬뽕 국물이 칼칼하니 좋습니다."]]},
+ {id:14, n:"마라공방", c:"cn", a:"gangnam", r:4.5, rc:611, pr:"2~3만원", hrs:[11,22], off:[0.0022,0.0004],
+  tag:["매운맛","모임"], m:[["마라탕 (기본)",12000,1],["꿔바로우",16000,0]],
+  rv:[["마라중독",5,"1주 전","재료가 신선하고 마라 향이 진해요. 꿔바로우 겉바속쫀 최고."],
+      ["강남불주먹",4,"1개월 전","맵기 조절이 세분화돼 있어 초보도 괜찮아요."]]},
+ {id:15, n:"딤섬당", c:"cn", a:"jamsil", r:4.7, rc:456, pr:"2~3만원", hrs:[11,21], off:[-0.0009,-0.0013],
+  tag:["브런치","가족"], m:[["샤오롱바오 (6개)",11000,1],["하가우 (4개)",9000,0],["창펀",10000,0]],
+  rv:[["딤섬홀릭",5,"5일 전","샤오롱바오 육즙이 진짜 터져요. 주말 브런치로 강추."],
+      ["k*m",4,"2주 전","송리단길에서 제일 줄 서는 집. 창펀도 꼭 드세요."]]},
+ {id:16, n:"트라토리아 논나", c:"west", a:"itaewon", r:4.8, rc:534, pr:"3~4만원", hrs:[12,22], off:[-0.0013,-0.0008],
+  tag:["데이트","와인"], m:[["트러플 뇨끼",24000,1],["마르게리타",19000,0],["티라미수",9000,0]],
+  rv:[["이태원미식",5,"3일 전","뇨끼가 구름처럼 부드러워요. 화덕 피자도 수준급."],
+      ["wine_holic",5,"2주 전","내추럴 와인 리스트가 알차요. 기념일에 딱."]]},
+ {id:17, n:"파스타 앤 코", c:"west", a:"seongsu", r:4.6, rc:721, pr:"2~3만원", hrs:[11,21], off:[0.0012,0.0017],
+  tag:["데이트","웨이팅"], m:[["들기름 크림파스타",17000,1],["새우 로제",18000,0]],
+  rv:[["성수데이트",5,"1주 전","들기름 크림이 느끼하지 않고 고소해요. 시그니처 인정."],
+      ["a*y",4,"3주 전","캐치테이블 웨이팅 걸고 가세요. 주말은 1시간도 넘게 기다려요."]]},
+ {id:18, n:"비스트로 얼반", c:"west", a:"yeouido", r:4.5, rc:289, pr:"3~4만원", hrs:[11,22], off:[0.0014,-0.0006],
+  tag:["회식","런치세트"], m:[["함박 스테이크",21000,1],["런치 코스",29000,0]],
+  rv:[["여의도랜치",5,"1주 전","런치 코스 가성비가 좋아요. 함박 육즙이 살아있습니다."],
+      ["b*s",4,"1개월 전","분위기가 조용해서 비즈니스 미팅하기 좋아요."]]},
+ {id:19, n:"버터앤솔트", c:"west", a:"hongdae", r:4.7, rc:843, pr:"1~2만원", hrs:[9,18], off:[0.0019,0.0007],
+  tag:["브런치","커피"], m:[["에그 베네딕트",15000,1],["프렌치토스트",13000,0]],
+  rv:[["브런치헌터",5,"2일 전","홀랜다이즈 소스가 진해요. 주말 늦은 아침에 완벽."],
+      ["so_yummy",4,"2주 전","11시 이후엔 웨이팅. 커피도 직접 로스팅해서 맛있어요."]]},
+ {id:20, n:"카페 무브먼트", c:"cafe", a:"seongsu", r:4.8, rc:1650, pr:"1만원 이하", hrs:[10,22], off:[0.0004,-0.0021],
+  tag:["작업하기좋은","디저트"], m:[["크림 라떼",6500,1],["바스크 치즈케이크",8000,0]],
+  rv:[["카페투어러",5,"1일 전","공장 개조 공간이라 층고가 시원해요. 콘센트 자리도 많아요."],
+      ["latte_a",5,"1주 전","크림라떼 당도가 딱 적당. 치즈케이크 꾸덕함 미쳤습니다."]]},
+ {id:21, n:"온도 베이커리", c:"cafe", a:"gangnam", r:4.7, rc:934, pr:"1만원 이하", hrs:[8,21], off:[-0.0011,-0.0015],
+  tag:["빵지순례","선물"], m:[["소금빵",3800,1],["몽블랑",7500,0]],
+  rv:[["빵순이",5,"3일 전","소금빵 겉은 바삭 속은 쫀득. 오후엔 품절이니 서두르세요."],
+      ["d*h",4,"2주 전","케이크류도 다 평균 이상. 선물 포장 예쁘게 해줘요."]]},
+ {id:22, n:"달빛제과", c:"cafe", a:"jongno", r:4.9, rc:512, pr:"1만원 이하", hrs:[11,20], off:[0.0008,0.0016],
+  tag:["한옥","약과"], m:[["수제 약과",4500,1],["쑥 라떼",6000,0]],
+  rv:[["익선동나들이",5,"4일 전","한옥에서 먹는 약과라니. 겉은 쫀득하고 속은 촉촉해요."],
+      ["hanok_j",5,"1주 전","웨이팅 있어도 갈 가치 있어요. 쑥라떼랑 조합 최고."]]},
+ {id:23, n:"소소당 티하우스", c:"cafe", a:"itaewon", r:4.6, rc:278, pr:"1~2만원", hrs:[11,21], off:[0.0017,0.0002],
+  tag:["조용한","티코스"], m:[["시그니처 티 코스",18000,1],["스콘 세트",9500,0]],
+  rv:[["티타임",5,"1주 전","차 종류 설명을 자세히 해주셔서 좋았어요. 조용해서 대화하기 좋아요."],
+      ["e*j",4,"1개월 전","혼자 책 읽으며 쉬기 완벽한 공간."]]},
+ {id:24, n:"즉석떡볶이 연구소", c:"bs", a:"hongdae", r:4.6, rc:1832, pr:"1~2만원", hrs:[11,22], off:[-0.0007,0.0012],
+  tag:["웨이팅","단체"], m:[["즉떡 (2인)",16000,1],["볶음밥",4000,0],["모둠튀김",8000,0]],
+  rv:[["떡볶이지도",5,"2일 전","양념장 비율을 직접 연구했다는데 인정. 마무리 볶음밥은 국룰."],
+      ["spicy_00",4,"1주 전","주말 웨이팅 40분. 그래도 또 가는 맛."]]},
+ {id:25, n:"밀떡상회", c:"bs", a:"jamsil", r:4.5, rc:674, pr:"1만원 이하", hrs:[10,21], off:[0.0018,-0.0004],
+  tag:["포장","가성비"], m:[["밀떡볶이",5500,1],["순대 (소)",5000,0]],
+  rv:[["잠실간식",5,"5일 전","밀떡파라면 무조건. 양념이 꾸덕하게 잘 배어있어요."],
+      ["g*y",4,"3주 전","포장 손님이 대부분. 순대 간까지 챙겨줘요."]]},
+ {id:26, n:"김밥별곡", c:"bs", a:"yeouido", r:4.7, rc:421, pr:"1만원 이하", hrs:[7,20], off:[-0.0012,-0.0009],
+  tag:["아침일찍","포장"], m:[["멸추김밥",4500,1],["참치김밥",5000,0]],
+  rv:[["출근길",5,"1주 전","아침 7시부터 해서 출근길에 픽업. 멸추 매콤함이 중독적."],
+      ["kimbap_z",5,"2주 전","재료를 아끼지 않아요. 터질 듯한 두께."]]},
+ {id:27, n:"물결회센터", c:"sea", a:"jamsil", r:4.6, rc:588, pr:"3~4만원", hrs:[15,24], off:[0.0006,0.0019],
+  tag:["신선","모임"], m:[["모둠회 (중)",55000,1],["매운탕",10000,0]],
+  rv:[["회좋아",5,"6일 전","수족관 관리가 잘 되어있고 숙성 상태가 좋아요. 매운탕 서비스."],
+      ["j*s",4,"2주 전","가격 대비 양이 후해요. 단체석도 넓어요."]]},
+ {id:28, n:"제주해녀상회", c:"sea", a:"gangnam", r:4.7, rc:466, pr:"3~4만원", hrs:[12,23], off:[0.0003,0.0023],
+  tag:["산지직송","술한잔"], m:[["딱새우회",28000,1],["성게미역국",13000,0]],
+  rv:[["제주앓이",5,"1주 전","딱새우가 달아요. 제주 직송이라는 말이 허언이 아님."],
+      ["haenyeo_f",4,"1개월 전","성게미역국이 진하고 고소해요. 점심 한정 메뉴."]]},
+ {id:29, n:"굴다리조개찜", c:"sea", a:"seongsu", r:4.5, rc:213, pr:"2~3만원", hrs:[16,25], off:[-0.0019,-0.0011],
+  tag:["야식","술안주"], m:[["조개찜 (중)",38000,1],["칼국수 사리",3000,0]],
+  rv:[["성수야식단",5,"3일 전","조개 해감이 완벽해서 모래 씹힌 적이 없어요. 국물에 칼국수 필수."],
+      ["o*h",4,"2주 전","새벽 1시까지 하는 게 최고 장점."]]},
+ {id:30, n:"포 사이공", c:"asia", a:"itaewon", r:4.7, rc:892, pr:"1~2만원", hrs:[11,21], off:[-0.0005,0.0017],
+  tag:["현지맛","혼밥"], m:[["소고기 쌀국수",11000,1],["분짜",13000,0]],
+  rv:[["여행자의혀",5,"4일 전","호치민에서 먹던 그 맛. 고수 아끼지 않고 줍니다."],
+      ["pho_run",4,"1주 전","분짜 소스 밸런스가 좋아요. 점심 웨이팅 있어요."]]},
+ {id:31, n:"방콕키친", c:"asia", a:"hongdae", r:4.6, rc:507, pr:"1~2만원", hrs:[11,22], off:[0.0013,0.0018],
+  tag:["이국적","모임"], m:[["팟타이",12000,1],["뿌팟퐁커리",26000,0]],
+  rv:[["태국앓이",5,"1주 전","뿌팟퐁커리에 밥 두 공기 뚝딱. 현지 셰프님이 계세요."],
+      ["t*p",4,"3주 전","향신료가 과하지 않아 태국 음식 입문으로 좋아요."]]},
+ {id:32, n:"나시고랭클럽", c:"asia", a:"seongsu", r:4.5, rc:194, pr:"1~2만원", hrs:[11,21], off:[0.0021,0.0011],
+  tag:["숨은맛집","혼밥"], m:[["나시고랭",11500,1],["사테 꼬치",9000,0]],
+  rv:[["아시안푸드",5,"2주 전","불향 가득한 나시고랭. 계란 반숙 터뜨려 비벼 드세요."],
+      ["v*n",4,"1개월 전","자리가 적어서 웨이팅은 감안하세요."]]},
+ {id:33, n:"크리스피랩", c:"cb", a:"gangnam", r:4.6, rc:1105, pr:"2~3만원", hrs:[12,24], off:[0.0016,0.0009],
+  tag:["치맥","배달가능"], m:[["시그니처 후라이드",19000,1],["갈릭 소이",20000,0]],
+  rv:[["치킨연구가",5,"3일 전","튀김옷이 얇은데 바삭함은 오래가요. 염지가 과하지 않아요."],
+      ["beer_mate",4,"1주 전","매장 생맥주 라인업이 좋아요. 치맥 성지."]]},
+ {id:34, n:"수제버거 곳간", c:"cb", a:"yeouido", r:4.7, rc:663, pr:"1~2만원", hrs:[11,21], off:[0.0007,0.0015],
+  tag:["점심","수제"], m:[["클래식 치즈버거",11000,1],["트러플 감자튀김",7000,0]],
+  rv:[["버거성애자",5,"5일 전","패티를 주문 후 굽는 게 느껴져요. 육즙이 장난 아닙니다."],
+      ["w*j",4,"2주 전","점심 피크 피해서 가면 여유롭게 먹을 수 있어요."]]},
+ {id:35, n:"화덕치킨집", c:"cb", a:"jongno", r:4.5, rc:388, pr:"2~3만원", hrs:[15,24], off:[-0.0016,0.0006],
+  tag:["담백","포장"], m:[["화덕 구운치킨",18000,1],["매운 화덕치킨",19000,0]],
+  rv:[["기름은싫어",5,"1주 전","튀기지 않아 담백한데 껍질은 바삭해요. 죄책감 없는 치킨."],
+      ["r*e",4,"1개월 전","기름기가 적어 다음날 속이 편해요."]]},
+ /* ---- 기준 미달(자동 제외) ---- */
+ {id:36, n:"국수천국",   c:"kr",  a:"hongdae", r:4.2, rc:210},
+ {id:37, n:"오늘의초밥", c:"jp",  a:"gangnam", r:4.6, rc:38},
+ {id:38, n:"감성카페 로우", c:"cafe", a:"seongsu", r:3.9, rc:512},
+ {id:39, n:"만두일가",   c:"cn",  a:"jongno",  r:4.4, rc:156},
+ {id:40, n:"피자던전",   c:"west",a:"jamsil",  r:4.1, rc:88},
+ {id:41, n:"새벽감자탕", c:"kr",  a:"yeouido", r:4.8, rc:27},
+ {id:42, n:"타코브로스", c:"asia",a:"itaewon", r:4.3, rc:301},
+ {id:43, n:"라화방",     c:"cn",  a:"gangnam", r:4.4, rc:95},
+ {id:44, n:"도넛상점",   c:"cafe",a:"hongdae", r:4.7, rc:41},
+ {id:45, n:"청춘포차",   c:"bs",  a:"seongsu", r:4.0, rc:122}
+];
+
+var PASS = DATA.filter(function(p){ return p.r>=4.5 && p.rc>=50; });
+var HIDDEN = DATA.length - PASS.length;
+
+/* ---------------- 상태 ---------------- */
+var state = {
+  tab:"home", cat:"all", sortI:0, q:"",
+  loc:{lat:area("gangnam").lat, lng:area("gangnam").lng, label:"강남", key:"gangnam"},
+  favs:{}
+};
+var SORTS = [["rate","평점순"],["rc","리뷰 많은순"],["dist","가까운 순"]];
+try{ var s=localStorage.getItem("jjinmat_favs"); if(s) state.favs=JSON.parse(s)||{}; }catch(e){}
+function saveFavs(){ try{ localStorage.setItem("jjinmat_favs", JSON.stringify(state.favs)); }catch(e){} }
+
+/* ---------------- 헬퍼 ---------------- */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function fmtN(n){ return n.toLocaleString("ko-KR"); }
+function won(n){ return n.toLocaleString("ko-KR")+"원"; }
+function coord(p){ var ar=area(p.a); return {lat:ar.lat+(p.off?p.off[0]:0), lng:ar.lng+(p.off?p.off[1]:0)}; }
+function distM(p){
+  var c=coord(p), R=6371000, toR=Math.PI/180;
+  var dLa=(c.lat-state.loc.lat)*toR, dLo=(c.lng-state.loc.lng)*toR;
+  var A=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(state.loc.lat*toR)*Math.cos(c.lat*toR)*Math.sin(dLo/2)*Math.sin(dLo/2);
+  return Math.round(2*R*Math.asin(Math.sqrt(A)));
+}
+function fmtDist(m){ return m<1000 ? m+"m" : (m/1000).toFixed(1)+"km"; }
+function walkMin(m){ return Math.max(1, Math.round(m/67)); }
+function openStat(p){
+  if(!p.hrs) return null;
+  var d=new Date(), h=d.getHours()+d.getMinutes()/60, o=p.hrs[0], c=p.hrs[1];
+  var hh=h; if(c>24 && h<o) hh=h+24;
+  if(hh>=o && hh<c){ return (c-hh)<=1 ? {t:"곧 마감",cls:"warn"} : {t:"영업 중",cls:"open"}; }
+  return {t:"영업 종료",cls:""};
+}
+function grad(p){
+  var ct=cat(p.c), gs=ct.g||[["#888","#555"]], g=gs[p.id%gs.length];
+  return "linear-gradient(145deg,"+g[0]+","+g[1]+")";
+}
+var toastT=null;
+function toast(msg){
+  var t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(function(){ t.classList.remove("show"); },2200);
+}
+
+/* ---------------- 카드 ---------------- */
+function cardHTML(p, big){
+  var ct=cat(p.c), st=openStat(p), d=distM(p);
+  var badges="";
+  if(st) badges+='<span class="bdg '+st.cls+'">'+st.t+'</span>';
+  if(p.tag) p.tag.forEach(function(t){ badges+='<span class="bdg">'+esc(t)+'</span>'; });
+  var distHtml = big
+    ? '<div class="dist-big"><b>'+fmtDist(d)+'</b><span>도보 '+walkMin(d)+'분</span></div>'
+    : "";
+  return '<button class="card" data-open="'+p.id+'">'+
+    '<span class="thumb" style="background:'+grad(p)+'"><span class="e">'+ct.e+'</span></span>'+
+    '<span class="body">'+
+      '<span class="row1"><span class="name">'+esc(p.n)+'</span>'+
+      '<span class="heart'+(state.favs[p.id]?" on":"")+'" data-fav="'+p.id+'" role="button" aria-label="찜">'+
+        '<svg width="19" height="19" viewBox="0 0 24 24" fill="'+(state.favs[p.id]?"currentColor":"none")+'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.4 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2C10.5 3.5 9.3 3 7.5 3A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.1 3 5.5l7 7Z"/></svg>'+
+      '</span></span>'+
+      '<span class="rate"><span class="star">★</span><b>'+p.r.toFixed(1)+'</b><span class="rc">리뷰 '+fmtN(p.rc)+'</span><span class="dot"></span><span>'+ct.label+'</span></span>'+
+      '<span class="meta"><span>'+area(p.a).label+'</span><span class="dot"></span><span class="dist">'+fmtDist(d)+'</span>'+(p.pr?'<span class="dot"></span><span>'+p.pr+'</span>':"")+'</span>'+
+      '<span class="badges">'+badges+'</span>'+
+    '</span>'+distHtml+
+  '</button>';
+}
+
+/* ---------------- 렌더 ---------------- */
+function filtered(){
+  var list = PASS.slice();
+  if(state.cat!=="all") list=list.filter(function(p){ return p.c===state.cat; });
+  if(state.q){
+    var q=state.q.toLowerCase();
+    list=list.filter(function(p){
+      var hay=p.n+" "+cat(p.c).label+" "+area(p.a).label+" "+(p.tag||[]).join(" ")+" "+(p.m||[]).map(function(m){return m[0];}).join(" ");
+      return hay.toLowerCase().indexOf(q)>=0;
+    });
+  }
+  var s=SORTS[state.sortI][0];
+  list.sort(function(a,b){
+    if(s==="rate") return b.r-a.r || b.rc-a.rc;
+    if(s==="rc") return b.rc-a.rc;
+    return distM(a)-distM(b);
+  });
+  return list;
+}
+function renderHome(){
+  var list=filtered();
+  $("cnt").textContent=list.length;
+  $("sortLabel").textContent=SORTS[state.sortI][1];
+  var html="";
+  if(!list.length){
+    html='<div class="empty"><div class="big">🔍</div><p>조건에 맞는 맛집이 없어요.<br>검색어나 카테고리를 바꿔보세요.</p></div>';
+  }else{
+    list.forEach(function(p){ html+=cardHTML(p,false); });
+    html+='<div class="excl"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>기준 미달(리뷰 50개 미만·평점 4.5 미만) '+HIDDEN+'곳은 목록에서 제외했어요</div>';
+  }
+  $("list").innerHTML=html;
+}
+function renderChips(){
+  var html="";
+  CATS.forEach(function(c){
+    html+='<button class="chip'+(state.cat===c.key?" on":"")+'" data-cat="'+c.key+'"><span class="e">'+c.e+'</span>'+c.label+'</button>';
+  });
+  $("chips").innerHTML=html;
+}
+function renderNear(){
+  $("nbLoc").textContent=state.loc.label;
+  var list=PASS.slice().sort(function(a,b){ return distM(a)-distM(b); }).slice(0,15);
+  var html="";
+  list.forEach(function(p){ html+=cardHTML(p,true); });
+  $("nbList").innerHTML=html;
+}
+function renderFav(){
+  var list=PASS.filter(function(p){ return state.favs[p.id]; });
+  var html="";
+  if(!list.length){
+    html='<div class="empty"><div class="big">🤍</div><p>아직 찜한 맛집이 없어요.<br>마음에 드는 곳의 하트를 눌러보세요.</p></div>';
+  }else{
+    list.forEach(function(p){ html+=cardHTML(p,false); });
+  }
+  $("favList").innerHTML=html;
+}
+function renderMy(){
+  $("exclNote").innerHTML="현재 데이터 기준, 전체 "+DATA.length+"곳 중 <b>"+HIDDEN+"곳</b>이 기준 미달로 자동 제외되어 있어요.";
+}
+function renderAreas(){
+  var html="";
+  AREAS.forEach(function(a){
+    html+='<button class="area-btn'+(state.loc.key===a.key?" on":"")+'" data-area="'+a.key+'">'+a.label+'</button>';
+  });
+  $("areaGrid").innerHTML=html;
+}
+function renderAll(){ renderHome(); if(state.tab==="near") renderNear(); if(state.tab==="fav") renderFav(); }
+
+/* ---------------- 상세 ---------------- */
+function stars(r){
+  var full=Math.round(r), s="";
+  for(var i=0;i<5;i++) s+= i<full ? "★" : "☆";
+  return s;
+}
+var AV_COLORS=["#c96f3b","#2e6e8e","#3e8e5a","#b23b2e","#7a5c43","#a5702f"];
+function openDetail(id){
+  var p=null; PASS.forEach(function(x){ if(x.id===id) p=x; });
+  if(!p) return;
+  var ct=cat(p.c), st=openStat(p), d=distM(p);
+  var menus="";
+  (p.m||[]).forEach(function(m){
+    menus+='<div class="menu-row"><span class="mn">'+esc(m[0])+(m[2]?' <span class="best">대표</span>':"")+'</span><span class="pr">'+won(m[1])+'</span></div>';
+  });
+  var revs="";
+  (p.rv||[]).forEach(function(r,i){
+    var ini=r[0].charAt(0);
+    revs+='<div class="rev"><div class="rev-top">'+
+      '<span class="avatar" style="background:'+AV_COLORS[(p.id+i)%AV_COLORS.length]+'">'+esc(ini)+'</span>'+
+      '<span class="who">'+esc(r[0])+'</span><span class="when">'+esc(r[2])+'</span></div>'+
+      '<div class="rev-stars">'+stars(r[1])+'</div>'+
+      '<p>'+esc(r[3])+'</p></div>';
+  });
+  var hrsTxt = p.hrs ? (String(p.hrs[0]).padStart(2,"0")+":00 – "+(p.hrs[1]>24?String(p.hrs[1]-24).padStart(2,"0")+":00 (익일)":String(p.hrs[1]).padStart(2,"0")+":00")) : "정보 없음";
+  var stHtml = st ? '<span class="st-'+(st.cls==="open"?"open":st.cls==="warn"?"soon":"closed")+'">'+st.t+'</span> · ' : "";
+  var mapsQ=encodeURIComponent(p.n+" "+area(p.a).label);
+  $("dtBody").innerHTML=
+    '<div class="hero" style="background:'+grad(p)+'"><span class="e">'+ct.e+'</span><span class="cat-tag">'+ct.label+'</span></div>'+
+    '<div class="dt-head">'+
+      '<div class="dt-name">'+esc(p.n)+'</div>'+
+      '<div class="dt-rate"><b>'+p.r.toFixed(1)+'</b><span class="stars">'+stars(p.r)+'</span><span>구글 리뷰 '+fmtN(p.rc)+'개</span></div>'+
+    '</div>'+
+    '<div class="acts">'+
+      '<button class="act'+(state.favs[p.id]?" on":"")+'" data-fav-dt="'+p.id+'">'+
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="'+(state.favs[p.id]?"currentColor":"none")+'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.4 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2C10.5 3.5 9.3 3 7.5 3A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.1 3 5.5l7 7Z"/></svg>'+
+        (state.favs[p.id]?"찜 완료":"찜하기")+'</button>'+
+      '<button class="act" data-call="1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.4 2.1L8 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c1 .3 1.9.6 2.9.7a2 2 0 0 1 1.7 2Z"/></svg>전화</button>'+
+      '<a class="act" style="text-decoration:none" href="https://www.google.com/maps/search/?api=1&query='+mapsQ+'" target="_blank" rel="noopener">'+
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>구글 지도</a>'+
+    '</div>'+
+    '<div class="dt-sec">'+
+      '<div class="inf"><span class="k">위치</span><span class="v">'+area(p.a).label+' · 여기서 '+fmtDist(d)+' (도보 약 '+walkMin(d)+'분)</span></div>'+
+      '<div class="inf"><span class="k">영업</span><span class="v">'+stHtml+hrsTxt+'</span></div>'+
+      (p.pr?'<div class="inf"><span class="k">가격대</span><span class="v">'+p.pr+' 안팎</span></div>':"")+
+    '</div>'+
+    (menus?'<div class="dt-sec"><h3>메뉴</h3>'+menus+'</div>':"")+
+    (revs?'<div class="dt-sec"><h3>방문자 리뷰 <span class="sp"></span><span class="more">전체 리뷰는 구글 지도에서</span></h3>'+revs+'</div>':"")+
+    '<div class="foot-note">표시된 평점·리뷰는 데모 데이터예요. Google Places API 연결 시 실제 구글 지도 정보로 대체됩니다.</div>';
+  showSheet("dtSheet");
+}
+
+/* ---------------- 시트 ---------------- */
+var curSheet=null;
+function showSheet(id){
+  curSheet=id;
+  $("ovl").classList.remove("hide");
+  requestAnimationFrame(function(){ $("ovl").classList.add("show"); $(id).classList.add("show"); });
+}
+function hideSheet(){
+  if(!curSheet) return;
+  $(curSheet).classList.remove("show");
+  $("ovl").classList.remove("show");
+  setTimeout(function(){ $("ovl").classList.add("hide"); },240);
+  curSheet=null;
+}
+
+/* ---------------- 위치 ---------------- */
+function setLoc(lat,lng,label,key){
+  state.loc={lat:lat,lng:lng,label:label,key:key||null};
+  $("locLabel").textContent=label;
+  renderAreas(); renderAll();
+}
+function useGPS(){
+  if(!navigator.geolocation){ toast("이 브라우저는 위치를 지원하지 않아요"); return; }
+  toast("현재 위치를 찾는 중…");
+  navigator.geolocation.getCurrentPosition(function(pos){
+    setLoc(pos.coords.latitude,pos.coords.longitude,"내 위치",null);
+    hideSheet(); toast("내 위치 기준으로 정렬했어요");
+  },function(){
+    toast("위치 권한이 없어요 · 동네를 직접 골라주세요");
+  },{timeout:8000,maximumAge:60000});
+}
+
+/* ---------------- 탭 ---------------- */
+function setTab(t){
+  state.tab=t;
+  ["home","near","fav","my"].forEach(function(k){
+    $("view-"+k).classList.toggle("hide",k!==t);
+  });
+  var btns=$("nav").querySelectorAll("button");
+  for(var i=0;i<btns.length;i++) btns[i].classList.toggle("on",btns[i].getAttribute("data-tab")===t);
+  if(t==="near") renderNear();
+  if(t==="fav") renderFav();
+  if(t==="my") renderMy();
+  window.scrollTo(0,0);
+}
+
+/* ---------------- 이벤트 ---------------- */
+document.addEventListener("click",function(ev){
+  var el=ev.target;
+  var fav=el.closest?el.closest("[data-fav]"):null;
+  if(fav){
+    ev.stopPropagation();
+    var id=+fav.getAttribute("data-fav");
+    if(state.favs[id]) delete state.favs[id]; else state.favs[id]=1;
+    saveFavs(); renderAll();
+    toast(state.favs[id]?"찜 목록에 담았어요":"찜을 해제했어요");
+    return;
+  }
+  var favDt=el.closest?el.closest("[data-fav-dt]"):null;
+  if(favDt){
+    var id2=+favDt.getAttribute("data-fav-dt");
+    if(state.favs[id2]) delete state.favs[id2]; else state.favs[id2]=1;
+    saveFavs(); renderAll(); openDetail(id2);
+    return;
+  }
+  var call=el.closest?el.closest("[data-call]"):null;
+  if(call){ toast("데모 데이터라 전화번호가 없어요"); return; }
+  var open=el.closest?el.closest("[data-open]"):null;
+  if(open){ openDetail(+open.getAttribute("data-open")); return; }
+  var chip=el.closest?el.closest("[data-cat]"):null;
+  if(chip){ state.cat=chip.getAttribute("data-cat"); renderChips(); renderHome(); return; }
+  var ab=el.closest?el.closest("[data-area]"):null;
+  if(ab){
+    var a=area(ab.getAttribute("data-area"));
+    setLoc(a.lat,a.lng,a.label,a.key); hideSheet();
+    toast(a.label+" 기준으로 보여드릴게요");
+    return;
+  }
+  var tb=el.closest?el.closest("[data-tab]"):null;
+  if(tb){ setTab(tb.getAttribute("data-tab")); return; }
+});
+$("ovl").addEventListener("click",hideSheet);
+$("locBtn").addEventListener("click",function(){ renderAreas(); showSheet("locSheet"); });
+$("gpsBtn").addEventListener("click",useGPS);
+$("nbGps").addEventListener("click",useGPS);
+$("bellBtn").addEventListener("click",function(){ toast("새로운 알림이 없어요"); });
+$("sortBtn").addEventListener("click",function(){
+  state.sortI=(state.sortI+1)%SORTS.length; renderHome();
+});
+$("q").addEventListener("input",function(){ state.q=this.value.trim(); renderHome(); });
+document.addEventListener("keydown",function(e){ if(e.key==="Escape") hideSheet(); });
+
+/* ---------------- 시작 (스켈레톤) ---------------- */
+function skeleton(){
+  var html="";
+  for(var i=0;i<6;i++){
+    html+='<div class="card skel"><span class="thumb"></span><span class="body">'+
+      '<span class="sk" style="display:block;height:16px;width:55%;margin-bottom:8px"></span>'+
+      '<span class="sk" style="display:block;height:12px;width:75%;margin-bottom:7px"></span>'+
+      '<span class="sk" style="display:block;height:12px;width:40%"></span>'+
+    '</span></div>';
+  }
+  $("list").innerHTML=html;
+}
+renderChips(); skeleton();
+setTimeout(function(){ renderHome(); }, 550);
+})();
+</script>
