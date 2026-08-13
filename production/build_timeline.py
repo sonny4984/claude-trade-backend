@@ -11,6 +11,16 @@ D = pathlib.Path(__file__).parent
 FF = imageio_ffmpeg.get_ffmpeg_exe()
 MAXLEN = 34
 
+# 나레이션은 TTS 가 정확히 읽도록 숫자를 한글로 풀어 쓰지만, 화면 자막은 숫자로 보여준다.
+DISPLAY = [("삼십 분", "30분"), ("단 이 퍼센트", "단 2%"), ("이십 퍼센트", "20%"),
+           ("삼 분 과학 소통", "3분 과학 소통")]
+
+
+def to_display(t):
+    for a, b in DISPLAY:
+        t = t.replace(a, b)
+    return t
+
 
 def dur(p):
     out = subprocess.run([FF, "-i", str(p), "-f", "null", "-"],
@@ -71,8 +81,9 @@ def main():
         total = sum(len(x) for x in lines)
         c = start
         for ln in lines:
-            span = d * len(ln) / total
-            subs.append({"a": round(c, 3), "b": round(c + span - 0.06, 3), "tx": ln})
+            span = d * len(ln) / total          # 시간 배분은 실제 발화 텍스트 기준
+            subs.append({"a": round(c, 3), "b": round(c + span - 0.06, 3),
+                         "tx": to_display(ln)})
             c += span
         if c > b + 0.35:
             print(f"  ⚠ s{i} 나레이션이 슬롯을 {c - b:.2f}s 초과합니다")
