@@ -3,7 +3,7 @@
 
 나레이션이 울릴 때 BGM 을 자동으로 낮추는 사이드체인 더킹을 적용한다.
 """
-import json, pathlib, subprocess, sys
+import argparse, json, pathlib, subprocess, sys
 import imageio_ffmpeg
 
 D = pathlib.Path(__file__).parent
@@ -12,9 +12,14 @@ FF = imageio_ffmpeg.get_ffmpeg_exe()
 tl = json.loads((D / "timeline.json").read_text())
 TOTAL = tl["timing"]["total"]
 
-vid = OUT / "video_raw.mp4"
+ap = argparse.ArgumentParser()
+ap.add_argument("--video", default=str(OUT / "video_raw.mp4"))
+ap.add_argument("--out", default=str(OUT / "혈당스파이크와_뇌과학의_비밀_FHD.mp4"))
+args = ap.parse_args()
+
+vid = pathlib.Path(args.video)
 bed = D / "audio" / "bed.wav"
-final = OUT / "혈당스파이크와_뇌과학의_비밀_FHD.mp4"
+final = pathlib.Path(args.out)
 
 # 나레이션 4트랙을 타임라인 위치에 배치 → 하나의 보이스 트랙으로 합성
 inputs = ["-i", str(vid), "-i", str(bed)]
