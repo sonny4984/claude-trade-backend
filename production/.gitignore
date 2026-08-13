@@ -5,6 +5,7 @@ stills/
 hero_raw.png
 out/*.mp4
 out/*.png
+out/*.mp3
 out/render.log
 
 # 납품물 중 가벼운 것만 추적: out/thumbnail.jpg, out/*.srt
