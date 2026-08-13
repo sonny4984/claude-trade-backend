@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""나레이션 마스터링: 과도한 무음 압축 → 목표 길이 맞춤 → 라우드니스 정규화(-16 LUFS)."""
-import re, subprocess, pathlib, sys
+"""나레이션 마스터링.
+
+기획서 콘티의 섹션 타임코드에 맞추기 위해 섹션마다 목표 길이를 따로 잡는다.
+길이를 맞추는 1순위 수단은 '문장 사이 호흡'이다 — 유지할 무음 길이를 이분탐색으로
+찾아 목표에 근접시키고, 남는 오차만 아주 약한 템포 보정으로 흡수한다.
+템포를 크게 건드리면 말이 빨라지거나 늘어져 티가 나므로 마지막 수단으로만 쓴다.
+"""
+import json, re, subprocess, pathlib, sys
 import imageio_ffmpeg
 
 D = pathlib.Path(__file__).parent
 A = D / "audio"
 FF = imageio_ffmpeg.get_ffmpeg_exe()
 
-# 본편 목표: 나레이션 합계 172초 (헤드1.6 + 섹션간격 3x1.0 + 테일2.4 => 약 179초 = 2:59)
-TARGET_SPEECH = 172.0
-KEEP_SIL = 0.30          # 문장 사이 유지할 최대 무음
 THRESH = "-45dB"
+SIL_MIN, SIL_MAX = 0.10, 0.80     # 문장 사이 호흡의 허용 범위
+TEMPO_MIN, TEMPO_MAX = 0.94, 1.10  # 티 나지 않는 템포 보정 범위
 
 
 def run(args):
@@ -18,7 +23,6 @@ def run(args):
     if r.returncode != 0:
         sys.stderr.write(r.stderr[-3000:])
         raise SystemExit(f"ffmpeg failed: {' '.join(args[:6])}")
-    return r.stderr
 
 
 def dur(p):
@@ -29,50 +33,73 @@ def dur(p):
     return int(h) * 3600 + int(mm) * 60 + float(ss)
 
 
+def trim(src, out, keep):
+    """앞뒤 무음 제거 + 문장 사이 무음을 keep 초로 통일."""
+    f = (f"silenceremove=start_periods=1:start_duration=0:start_threshold={THRESH}:"
+         f"stop_periods=-1:stop_duration={keep:.3f}:stop_threshold={THRESH}:detection=peak,"
+         f"areverse,"
+         f"silenceremove=start_periods=1:start_duration=0:start_threshold={THRESH},"
+         f"areverse")
+    run([FF, "-y", "-loglevel", "error", "-i", str(src), "-af", f,
+         "-ar", "48000", "-ac", "1", str(out)])
+    return dur(out)
+
+
+def fit(src, out, target):
+    """목표 길이에 가장 가까워지는 호흡 길이를 이분탐색으로 찾는다."""
+    lo, hi = SIL_MIN, SIL_MAX
+    d_lo, d_hi = trim(src, out, lo), trim(src, out, hi)
+    if target <= d_lo:
+        return lo, trim(src, out, lo)
+    if target >= d_hi:
+        return hi, trim(src, out, hi)
+    best = (abs(d_hi - target), hi, d_hi)
+    for _ in range(9):
+        mid = (lo + hi) / 2
+        d = trim(src, out, mid)
+        best = min(best, (abs(d - target), mid, d))
+        if d < target:
+            lo = mid
+        else:
+            hi = mid
+    _, keep, d = best
+    return keep, trim(src, out, keep)
+
+
 def main():
-    srcs = [A / f"s{i}.wav" for i in range(1, 5)]
+    script = json.loads((D / "script.json").read_text())
+    targets = [s["speech_sec"] for s in script["sections"]]
 
-    # 1단계 — 앞뒤 무음 제거 + 내부 긴 무음 압축
-    step1 = []
-    for i, s in enumerate(srcs, 1):
-        o = A / f"t{i}.wav"
-        f = (f"silenceremove=start_periods=1:start_duration=0:start_threshold={THRESH}:"
-             f"stop_periods=-1:stop_duration={KEEP_SIL}:stop_threshold={THRESH}:detection=peak,"
-             f"areverse,"
-             f"silenceremove=start_periods=1:start_duration=0:start_threshold={THRESH},"
-             f"areverse")
-        run([FF, "-y", "-loglevel", "error", "-i", str(s), "-af", f,
-             "-ar", "48000", "-ac", "1", str(o)])
-        step1.append(o)
+    print("호흡 길이 자동 조절")
+    fitted = []
+    for i in range(1, 5):
+        keep, d = fit(A / f"raw_s{i}.wav", A / f"t{i}.wav", targets[i - 1])
+        fitted.append((keep, d))
+        print(f"  s{i} 목표 {targets[i-1]:5.1f}s | 문장 사이 호흡 {keep:.2f}s → {d:5.1f}s")
 
-    trimmed = [dur(p) for p in step1]
-    tot = sum(trimmed)
-    print(f"무음 정리 후 합계: {tot:.2f}s  " + " / ".join(f"{d:.1f}" for d in trimmed))
-
-    # 2단계 — 목표 길이에 맞춰 템포 미세 조정 (자연스러운 범위 0.95~1.12 로 제한)
-    tempo = max(0.95, min(1.12, tot / TARGET_SPEECH))
-    print(f"템포 계수: {tempo:.4f}")
-
+    print("\n마스터링")
     finals = []
-    for i, p in enumerate(step1, 1):
-        o = A / f"n{i}.wav"
+    for i in range(1, 5):
+        keep, d = fitted[i - 1]
+        raw_tempo = d / targets[i - 1]
+        tempo = max(TEMPO_MIN, min(TEMPO_MAX, raw_tempo))
         af = (f"atempo={tempo:.5f},"
-              "highpass=f=85,"                      # 저역 잡음 제거
-              "equalizer=f=250:t=q:w=1.1:g=-1.6,"   # 탁한 저중역 정리
-              "equalizer=f=3200:t=q:w=1.6:g=2.2,"   # 명료도(자음) 강조
+              "highpass=f=85,"
+              "equalizer=f=250:t=q:w=1.1:g=-1.6,"
+              "equalizer=f=3200:t=q:w=1.6:g=2.2,"
               "acompressor=threshold=-19dB:ratio=2.6:attack=8:release=190:makeup=1.6,"
               "loudnorm=I=-16:TP=-1.5:LRA=11")
-        run([FF, "-y", "-loglevel", "error", "-i", str(p), "-af", af,
+        o = A / f"s{i}.wav"
+        run([FF, "-y", "-loglevel", "error", "-i", str(A / f"t{i}.wav"), "-af", af,
              "-ar", "48000", "-ac", "1", str(o)])
-        finals.append(o)
-
-    ds = [dur(p) for p in finals]
-    print(f"마스터링 완료 합계: {sum(ds):.2f}s  " + " / ".join(f"{d:.1f}" for d in ds))
-    for i, d in enumerate(ds, 1):
-        (A / f"s{i}.wav").unlink(missing_ok=True)
-        (A / f"n{i}.wav").rename(A / f"s{i}.wav")
+        finals.append(dur(o))
         (A / f"t{i}.wav").unlink(missing_ok=True)
-    print("→ audio/s1..s4.wav 갱신")
+        print(f"  s{i} 템포 {tempo:.3f} → {finals[-1]:5.1f}s "
+              f"(목표 {targets[i-1]:.1f}s, 오차 {finals[-1]-targets[i-1]:+.2f}s)")
+
+    err = [f - t for f, t in zip(finals, targets)]
+    worst = max(abs(e) for e in err)
+    print(f"\n최대 오차 {worst:.2f}s " + ("— 양호" if worst <= 1.0 else "— 대본 길이 조정 검토"))
 
 
 if __name__ == "__main__":
