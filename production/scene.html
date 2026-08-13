@@ -423,6 +423,16 @@ let CELLS=[],GCELL=[],ICELL=[];
 const CURVE="M86 392 C210 388 250 384 300 330 C352 274 380 120 470 96 C560 72 610 190 660 300 C700 388 730 480 800 486 C870 492 900 448 960 424 C1030 396 1090 392 1140 390";
 function ptOn(pathEl,f){const L=pathEl.getTotalLength();return pathEl.getPointAtLength(L*f)}
 
+/* 구간별 기울기가 다른 매핑 — 나레이션이 상승/하강에 쓰는 시간이 서로 달라
+   곡선 진행을 시간에 선형으로 묶으면 말과 그림이 어긋난다. */
+function pw(p,pts){
+  if(p<=pts[0][0])return pts[0][1];
+  for(let i=1;i<pts.length;i++){
+    const [pa,fa]=pts[i-1],[pb,fb]=pts[i];
+    if(p<=pb)return fa+(fb-fa)*(p-pa)/(pb-pa);
+  }
+  return pts[pts.length-1][1];
+}
 function setPath(el,d){if(el.getAttribute('d')!==d)el.setAttribute('d',d)}
 function draw(el,f){ // stroke reveal 0..1
   const L=el.__L||(el.__L=el.getTotalLength());
@@ -495,30 +505,32 @@ function S2(t){
   const L=$('L2'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
 
   const hi=eo(pr(p,.01,.07));
-  op($('s2h'),hi*(1-pr(p,.74,.8)));
+  op($('s2h'),hi*(1-pr(p,.70,.75)));
   S($('s2h'),'transform',`translateX(${lp(-50,0,hi)}px)`);
 
   // graph
-  const gi=eo(pr(p,.02,.08)), go=pr(p,.74,.8);
+  const gi=eo(pr(p,.02,.08)), go=pr(p,.70,.75);
   const G=$('gwrap'); op(G,gi*(1-go));
   S(G,'transform',`translateY(${lp(40,0,gi)}px)`);
   op($('base'),eo(pr(p,.05,.11))); op($('baselbl'),eo(pr(p,.05,.11)));
 
+  // 곡선 진행을 나레이션에 맞춘다: 정점은 "끌어올리죠" 직후, 저점은 "곤두박질칩니다" 직후.
   const cv=$('curve'); setPath(cv,CURVE);
-  const f=eio(cl(pr(p,.08,.60),0,1));
+  const f=cl(pw(p,[[.02,0],[.29,.42],[.62,.72],[.72,1]]),0,1);
   draw(cv,f);
   const CF=$('curveFill');
   setPath(CF,CURVE+" L1140 540 L86 540 Z");
-  op(CF,eo(pr(p,.2,.35))*.9*(1-go));
+  op(CF,eo(pr(p,.18,.32))*.9*(1-go));
   if(f>0.01){const q=ptOn(cv,f);$('dot').setAttribute('cx',q.x);$('dot').setAttribute('cy',q.y);op($('dot'),f<.995?1:0)}
   else op($('dot'),0);
-  op($('spikeLbl'),eo(pr(p,.3,.36))*(1-go));
-  op($('crashLbl'),eo(pr(p,.53,.59))*(1-go));
+  op($('spikeLbl'),eo(pr(p,.30,.35))*(1-go));
+  op($('crashLbl'),eo(pr(p,.63,.68))*(1-go));
 
   // vessel cells
-  const vi=eo(pr(p,.08,.15)), vo=pr(p,.72,.78);
+  const vi=eo(pr(p,.08,.15)), vo=pr(p,.70,.75);
   op($('vessel'),vi*(1-vo));
-  const flood=pr(p,.12,.34), ins=pr(p,.34,.6), clear=pr(p,.5,.68);
+  // 포도당 유입 → 인슐린 투입 → 정리, 각 단계가 해당 나레이션 문장에 걸리도록.
+  const flood=pr(p,.10,.29), ins=pr(p,.28,.46), clear=pr(p,.40,.62);
   GCELL.forEach((e,i)=>{
     const c=CELLS[i];
     const on=cl((flood*GCELL.length-i)/3,0,1);
@@ -536,14 +548,14 @@ function S2(t){
     e.setAttribute('opacity',on.toFixed(3));
   });
 
-  // fuel panel
-  const fi=eo(pr(p,.78,.85));
+  // fuel panel — "뇌 세포는 비명을 지르게 됩니다" 다음 문장(2%/20%)에 맞춰 등장
+  const fi=eo(pr(p,.735,.785));
   const F=$('fuel'); op(F,fi);
   S(F,'transform',`translateY(${lp(50,0,fi)}px)`);
-  const dim=eo(pr(p,.8,.9));
+  const dim=eo(pr(p,.78,.87));
   S($('brainP'),'opacity',lp(1,.55,dim));
   S($('brainLines'),'opacity',lp(.85,.25,dim));
-  op($('fakeT'),eo(pr(p,.91,.97)));
+  op($('fakeT'),eo(pr(p,.90,.96)));
 }
 
 /* ---------------- SCENE 3 ---------------- */
