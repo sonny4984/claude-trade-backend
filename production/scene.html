@@ -15,13 +15,14 @@
 }
 html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg)}
 body{font-family:'Pretendard';color:var(--ink);-webkit-font-smoothing:antialiased;position:relative}
-#stage{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden}
+#stage{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden;
+  background:linear-gradient(168deg,#0C1329 0%,#0A1024 46%,#0D1430 100%)}
 .layer{position:absolute;inset:0;opacity:0}
 .c{position:absolute}
-#grain{position:absolute;inset:0;opacity:.05;pointer-events:none;mix-blend-mode:overlay;
+#grain{position:absolute;inset:0;opacity:.022;pointer-events:none;mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
 #vig{position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(ellipse 75% 65% at 50% 45%,rgba(0,0,0,0) 40%,rgba(0,0,0,.55) 100%)}
+  background:radial-gradient(ellipse 75% 65% at 50% 45%,rgba(0,0,0,0) 46%,rgba(0,0,0,.42) 100%)}
 .glow{position:absolute;border-radius:50%;filter:blur(90px)}
 /* ---- subtitles ---- */
 #subwrap{position:absolute;left:0;right:0;bottom:74px;display:flex;justify-content:center;opacity:0}
@@ -30,22 +31,11 @@ body{font-family:'Pretendard';color:var(--ink);-webkit-font-smoothing:antialiase
   background:rgba(6,10,24,.62);backdrop-filter:blur(8px);
   box-shadow:0 8px 40px rgba(0,0,0,.45);text-shadow:0 2px 12px rgba(0,0,0,.7)}
 /* ---- hud ---- */
-#hud{position:absolute;left:0;right:0;top:0;height:6px;background:rgba(255,255,255,.07)}
-#hudbar{position:absolute;left:0;top:0;height:100%;width:0;
-  background:linear-gradient(90deg,var(--cyan),var(--purple))}
-#chip{position:absolute;left:64px;top:44px;display:flex;align-items:center;gap:14px;opacity:0}
-#chipdot{width:12px;height:12px;border-radius:50%;background:var(--cyan)}
-#chiptx{font-size:23px;font-weight:700;letter-spacing:.04em;color:var(--dim)}
-#tc{position:absolute;right:64px;top:42px;font-size:22px;font-weight:600;color:var(--dim2);
-  letter-spacing:.08em;font-variant-numeric:tabular-nums;opacity:0}
 .big{font-weight:900;letter-spacing:-.035em;line-height:1.06}
-.lbl{font-weight:800;letter-spacing:-.01em}
 .pill{border-radius:999px;padding:12px 30px;font-size:30px;font-weight:800}
 </style>
 
 <div id="stage">
-  <div class="glow" id="g1" style="width:900px;height:900px;background:#1E3A8A;left:-200px;top:-260px"></div>
-  <div class="glow" id="g2" style="width:820px;height:820px;background:#5B2E8C;right:-220px;bottom:-280px"></div>
 
   <!-- ================= S1 : 도입부 ================= -->
   <div class="layer" id="L1">
@@ -167,7 +157,7 @@ body{font-family:'Pretendard';color:var(--ink);-webkit-font-smoothing:antialiase
   <!-- ================= S2 : 전개부 ================= -->
   <div class="layer" id="L2">
     <div class="c" id="s2h" style="left:112px;top:112px;opacity:0">
-      <div style="font-size:26px;font-weight:800;letter-spacing:.22em;color:var(--red)">STEP 01 · 혈관에서 벌어지는 일</div>
+      <div style="font-size:26px;font-weight:800;letter-spacing:.22em;color:var(--red)">혈관에서 벌어지는 일</div>
       <div class="big" style="margin-top:12px;font-size:60px">혈당은 <span style="color:var(--red)">치솟고</span>, 그다음 <span style="color:var(--cyan)">추락</span>한다</div>
     </div>
     <!-- graph -->
@@ -243,7 +233,7 @@ body{font-family:'Pretendard';color:var(--ink);-webkit-font-smoothing:antialiase
   <!-- ================= S3 : 심화부 ================= -->
   <div class="layer" id="L3">
     <div class="c" id="s3h" style="left:112px;top:104px;opacity:0">
-      <div style="font-size:26px;font-weight:800;letter-spacing:.22em;color:var(--purple)">STEP 02 · 뇌 속 각성 스위치</div>
+      <div style="font-size:26px;font-weight:800;letter-spacing:.22em;color:var(--purple)">뇌 속 각성 스위치</div>
       <div class="big" style="margin-top:12px;font-size:60px">포도당이 <span style="color:var(--purple)">오렉신</span>을 잠재운다</div>
     </div>
     <!-- brain + hypothalamus -->
@@ -313,7 +303,7 @@ body{font-family:'Pretendard';color:var(--ink);-webkit-font-smoothing:antialiase
   <!-- ================= S4 : 결론 ================= -->
   <div class="layer" id="L4">
     <div class="c" id="s4h" style="left:0;right:0;top:96px;text-align:center;opacity:0">
-      <div style="font-size:26px;font-weight:800;letter-spacing:.22em;color:var(--green)">SOLUTION · 오늘부터 실천</div>
+      <div style="font-size:26px;font-weight:800;letter-spacing:.22em;color:var(--green)">오늘부터 실천할 것</div>
       <div class="big" style="margin-top:12px;font-size:66px">혈당을 지키는 <span style="color:var(--green)">3가지 습관</span></div>
     </div>
     <div class="c" id="cards" style="left:104px;top:288px;width:1712px;display:flex;gap:38px">
@@ -368,9 +358,6 @@ body{font-family:'Pretendard';color:var(--ink);-webkit-font-smoothing:antialiase
   </div>
 
   <div id="vig"></div><div id="grain"></div>
-  <div id="hud"><div id="hudbar"></div></div>
-  <div id="chip"><div id="chipdot"></div><div id="chiptx"></div></div>
-  <div id="tc">00:00</div>
   <div id="subwrap"><div id="sub"></div></div>
 </div>
 
@@ -643,28 +630,10 @@ function SUB(t){
   S(w,'transform',`translateY(${lp(14,0,eo(fi))}px)`);
   if($('sub').textContent!==cur.tx)$('sub').textContent=cur.tx;
 }
-const CHIPS=[['도입 · 문제 제기','#35D0FF'],['원리 · 혈당 스파이크','#FF4D6D'],['뇌 과학 · 오렉신','#A77BFF'],['솔루션 · 실천','#2FE0A0']];
-function HUD(t){
-  S($('hudbar'),'width',(cl(t/TIMING.total,0,1)*100)+'%');
-  let idx=0;
-  ['s1','s2','s3','s4'].forEach((k,i)=>{if(t>=TIMING[k][0])idx=i});
-  const [tx,col]=CHIPS[idx];
-  if($('chiptx').textContent!==tx){$('chiptx').textContent=tx;S($('chipdot'),'background',col)}
-  const fade=Math.min(pr(t,0,1.2),1);
-  op($('chip'),(fade*.9).toFixed(2)); op($('tc'),(fade*.75).toFixed(2));
-  const mm=String(Math.floor(t/60)).padStart(2,'0'), ss=String(Math.floor(t%60)).padStart(2,'0');
-  const v=mm+':'+ss; if($('tc').textContent!==v)$('tc').textContent=v;
-}
 
 function render(t){
   t=Math.max(0,t);
-  // ambient
-  S($('g1'),'transform',`translate(${Math.sin(t*.12)*60}px,${Math.cos(t*.09)*44}px)`);
-  S($('g2'),'transform',`translate(${Math.cos(t*.1)*70}px,${Math.sin(t*.13)*50}px)`);
-  const gi=cl(t/TIMING.total,0,1);
-  S($('g1'),'opacity',(.22+.1*Math.sin(t*.3)).toFixed(3));
-  S($('g2'),'opacity',(.20+.1*Math.cos(t*.26)).toFixed(3));
-  S1(t);S2(t);S3(t);S4(t);SUB(t);HUD(t);
+  S1(t);S2(t);S3(t);S4(t);SUB(t);
   // global fade in/out
   const fi=pr(t,0,.7), fo=1-pr(t,TIMING.total-.9,TIMING.total);
   S($('stage'),'opacity',(eo(fi)*fo).toFixed(3));
