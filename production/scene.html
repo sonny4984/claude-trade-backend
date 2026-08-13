@@ -1,0 +1,665 @@
+<meta charset="utf-8">
+<title>혈당 스파이크와 뇌 과학의 비밀</title>
+<style>
+@font-face{font-family:'Pretendard';src:url('fonts/Pretendard-Regular.otf');font-weight:400}
+@font-face{font-family:'Pretendard';src:url('fonts/Pretendard-Medium.otf');font-weight:500}
+@font-face{font-family:'Pretendard';src:url('fonts/Pretendard-SemiBold.otf');font-weight:600}
+@font-face{font-family:'Pretendard';src:url('fonts/Pretendard-Bold.otf');font-weight:700}
+@font-face{font-family:'Pretendard';src:url('fonts/Pretendard-ExtraBold.otf');font-weight:800}
+@font-face{font-family:'Pretendard';src:url('fonts/Pretendard-Black.otf');font-weight:900}
+*{margin:0;padding:0;box-sizing:border-box;transition:none!important;animation:none!important}
+:root{
+  --bg:#0A1024; --bg2:#111C3D;
+  --ink:#FFFFFF; --dim:#9DB0D6; --dim2:#5C6E96;
+  --red:#FF4D6D; --amber:#FFB020; --cyan:#35D0FF; --green:#2FE0A0; --purple:#A77BFF;
+}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg)}
+body{font-family:'Pretendard';color:var(--ink);-webkit-font-smoothing:antialiased;position:relative}
+#stage{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden}
+.layer{position:absolute;inset:0;opacity:0}
+.c{position:absolute}
+#grain{position:absolute;inset:0;opacity:.05;pointer-events:none;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
+#vig{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 75% 65% at 50% 45%,rgba(0,0,0,0) 40%,rgba(0,0,0,.55) 100%)}
+.glow{position:absolute;border-radius:50%;filter:blur(90px)}
+/* ---- subtitles ---- */
+#subwrap{position:absolute;left:0;right:0;bottom:74px;display:flex;justify-content:center;opacity:0}
+#sub{max-width:1420px;text-align:center;font-size:44px;font-weight:600;line-height:1.42;
+  letter-spacing:-.02em;padding:20px 40px;border-radius:18px;
+  background:rgba(6,10,24,.62);backdrop-filter:blur(8px);
+  box-shadow:0 8px 40px rgba(0,0,0,.45);text-shadow:0 2px 12px rgba(0,0,0,.7)}
+/* ---- hud ---- */
+#hud{position:absolute;left:0;right:0;top:0;height:6px;background:rgba(255,255,255,.07)}
+#hudbar{position:absolute;left:0;top:0;height:100%;width:0;
+  background:linear-gradient(90deg,var(--cyan),var(--purple))}
+#chip{position:absolute;left:64px;top:44px;display:flex;align-items:center;gap:14px;opacity:0}
+#chipdot{width:12px;height:12px;border-radius:50%;background:var(--cyan)}
+#chiptx{font-size:23px;font-weight:700;letter-spacing:.04em;color:var(--dim)}
+#tc{position:absolute;right:64px;top:42px;font-size:22px;font-weight:600;color:var(--dim2);
+  letter-spacing:.08em;font-variant-numeric:tabular-nums;opacity:0}
+.big{font-weight:900;letter-spacing:-.035em;line-height:1.06}
+.lbl{font-weight:800;letter-spacing:-.01em}
+.pill{border-radius:999px;padding:12px 30px;font-size:30px;font-weight:800}
+</style>
+
+<div id="stage">
+  <div class="glow" id="g1" style="width:900px;height:900px;background:#1E3A8A;left:-200px;top:-260px"></div>
+  <div class="glow" id="g2" style="width:820px;height:820px;background:#5B2E8C;right:-220px;bottom:-280px"></div>
+
+  <!-- ================= S1 : 도입부 ================= -->
+  <div class="layer" id="L1">
+    <!-- title card -->
+    <div class="c" id="t1a" style="left:0;right:0;top:326px;text-align:center">
+      <div id="t1kick" class="c" style="left:0;right:0;top:-92px;font-size:27px;font-weight:800;letter-spacing:.34em;color:#7DE0FF">3분 과학 소통</div>
+      <div class="big" id="t1t" style="font-size:104px">오늘 먹은 간식이<br>내 <span style="color:#FFD166">집중력</span>을 바꾼다?</div>
+      <div id="t1s" style="margin-top:38px;font-size:40px;font-weight:600;color:var(--dim)">혈당 스파이크와 뇌 과학의 비밀</div>
+      <div id="t1line" style="margin:44px auto 0;width:0;height:5px;border-radius:3px;background:linear-gradient(90deg,var(--cyan),var(--purple))"></div>
+    </div>
+    <!-- night desk -->
+    <svg class="c" id="desk" width="1920" height="1080" style="left:0;top:0" viewBox="0 0 1920 1080">
+      <defs>
+        <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#0B1330"/><stop offset="1" stop-color="#060A1A"/>
+        </linearGradient>
+        <linearGradient id="lampg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#FFD98A" stop-opacity=".55"/>
+          <stop offset="1" stop-color="#FFD98A" stop-opacity="0"/>
+        </linearGradient>
+        <radialGradient id="moon"><stop offset="0" stop-color="#DDE8FF"/><stop offset="1" stop-color="#8FA8D8"/></radialGradient>
+      </defs>
+      <rect width="1920" height="1080" fill="url(#wall)"/>
+      <!-- window -->
+      <g id="win">
+        <rect x="1180" y="132" width="560" height="430" rx="10" fill="#0A1533" stroke="#22315C" stroke-width="6"/>
+        <circle cx="1640" cy="212" r="34" fill="url(#moon)"/>
+        <g id="cityg"></g>
+        <line x1="1460" y1="132" x2="1460" y2="562" stroke="#22315C" stroke-width="6"/>
+        <line x1="1180" y1="352" x2="1740" y2="352" stroke="#22315C" stroke-width="6"/>
+      </g>
+      <!-- desk -->
+      <rect x="0" y="782" width="1920" height="26" rx="6" fill="#2A2036"/>
+      <rect x="0" y="808" width="1920" height="272" fill="#141026"/>
+      <!-- lamp -->
+      <g id="lamp">
+        <rect x="352" y="470" width="14" height="312" fill="#3A4570"/>
+        <path d="M245 470 L473 470 L420 372 L298 372 Z" fill="#3D4A7A"/>
+        <path d="M210 782 L508 782 L455 470 L263 470 Z" fill="url(#lampg)" id="lampcone"/>
+        <ellipse cx="359" cy="782" rx="86" ry="14" fill="#FFD98A" opacity=".16"/>
+      </g>
+      <!-- books -->
+      <g id="books">
+        <rect x="640" y="742" width="330" height="18" rx="4" fill="#2E4B8F"/>
+        <rect x="656" y="724" width="300" height="18" rx="4" fill="#3E6BC4"/>
+        <path d="M700 640 L980 640 L980 726 L700 726 Z" fill="#F2F5FF" opacity=".92"/>
+        <path d="M840 640 L840 726" stroke="#C7D2EA" stroke-width="4"/>
+        <g stroke="#B7C4E0" stroke-width="4" stroke-linecap="round">
+          <line x1="722" y1="666" x2="822" y2="666"/><line x1="722" y1="686" x2="822" y2="686"/>
+          <line x1="722" y1="706" x2="800" y2="706"/>
+          <line x1="858" y1="666" x2="958" y2="666"/><line x1="858" y1="686" x2="958" y2="686"/>
+        </g>
+      </g>
+      <!-- student -->
+      <g id="stu">
+        <ellipse cx="1180" cy="782" rx="130" ry="16" fill="#000" opacity=".35"/>
+        <path id="body" d="M1070 782 Q1080 640 1180 632 Q1280 640 1290 782 Z" fill="#3B5BD0"/>
+        <circle id="head" cx="1180" cy="556" r="76" fill="#F5CBA6"/>
+        <path id="hair" d="M1104 548 Q1112 468 1180 468 Q1248 468 1256 548 Q1224 512 1180 516 Q1136 512 1104 548 Z" fill="#26202E"/>
+        <g id="eyesOpen">
+          <circle cx="1154" cy="562" r="8" fill="#26202E"/><circle cx="1206" cy="562" r="8" fill="#26202E"/>
+        </g>
+        <g id="eyesShut" opacity="0" stroke="#26202E" stroke-width="7" stroke-linecap="round">
+          <path d="M1142 562 Q1154 574 1166 562"/><path d="M1194 562 Q1206 574 1218 562"/>
+        </g>
+        <path id="mouth" d="M1164 596 Q1180 606 1196 596" stroke="#26202E" stroke-width="6" fill="none" stroke-linecap="round"/>
+      </g>
+      <!-- snacks -->
+      <g id="snack" opacity="0">
+        <g id="choco">
+          <rect x="510" y="712" width="150" height="70" rx="9" fill="#5A3620"/>
+          <rect x="510" y="712" width="150" height="34" rx="9" fill="#7A4A2C"/>
+          <g stroke="#3E2415" stroke-width="4"><line x1="560" y1="712" x2="560" y2="782"/><line x1="610" y1="712" x2="610" y2="782"/></g>
+        </g>
+        <g id="soda">
+          <rect x="1420" y="654" width="96" height="128" rx="14" fill="#C7304A"/>
+          <rect x="1420" y="686" width="96" height="34" fill="#F2F5FF" opacity=".9"/>
+          <ellipse cx="1468" cy="654" rx="48" ry="12" fill="#E15070"/>
+        </g>
+      </g>
+      <!-- zzz + marks -->
+      <g id="zzz" opacity="0" fill="#9DB0D6" font-family="Pretendard" font-weight="900">
+        <text id="z1" x="1290" y="520" font-size="46">Z</text>
+        <text id="z2" x="1336" y="470" font-size="62">Z</text>
+        <text id="z3" x="1396" y="410" font-size="80">Z</text>
+      </g>
+      <g id="qm" opacity="0" fill="#FFD166" font-family="Pretendard" font-weight="900">
+        <text id="q1" x="960" y="420" font-size="72">?</text>
+        <text id="q2" x="1050" y="360" font-size="96">?</text>
+        <text id="q3" x="880" y="330" font-size="56">?</text>
+      </g>
+    </svg>
+    <!-- fog -->
+    <div class="c" id="fog" style="left:0;top:0;width:1920px;height:1080px;opacity:0;
+      background:radial-gradient(ellipse 60% 50% at 62% 52%,rgba(190,205,240,.42),rgba(190,205,240,0) 70%)"></div>
+    <!-- scrim -->
+    <div class="c" id="scrim" style="left:0;top:0;width:1920px;height:1080px;opacity:0;
+      background:radial-gradient(ellipse 70% 60% at 50% 48%,#0A1024 30%,rgba(10,16,36,.92) 100%)"></div>
+    <!-- why -->
+    <div class="c" id="why" style="left:0;right:0;top:300px;text-align:center;opacity:0">
+      <div class="big" style="font-size:190px;color:#FFD166">왜?</div>
+      <div style="margin-top:18px;font-size:44px;font-weight:700;color:var(--dim)">당을 채웠는데 왜 더 졸릴까</div>
+    </div>
+    <!-- culprit -->
+    <div class="c" id="culprit" style="left:0;right:0;top:262px;text-align:center;opacity:0">
+      <svg id="bomb" width="220" height="220" viewBox="0 0 100 100" style="display:block;margin:0 auto">
+        <circle cx="48" cy="60" r="30" fill="#1B2444" stroke="#FF4D6D" stroke-width="4"/>
+        <rect x="56" y="24" width="12" height="12" rx="2" fill="#39466E" transform="rotate(32 62 30)"/>
+        <path d="M68 26 Q84 16 78 4" stroke="#FFB020" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <circle id="spark" cx="78" cy="4" r="7" fill="#FFD166"/>
+        <text x="48" y="70" font-size="26" text-anchor="middle" fill="#FF4D6D" font-family="Pretendard" font-weight="900">!</text>
+      </svg>
+      <div style="margin-top:26px;font-size:34px;font-weight:700;color:var(--dim);letter-spacing:.06em">범인은 내 몸속 시한폭탄</div>
+      <div class="big" id="culpritT" style="margin-top:14px;font-size:126px;color:#FF4D6D">혈당 스파이크</div>
+      <div style="margin-top:16px;font-size:32px;font-weight:600;color:var(--dim2);letter-spacing:.18em">BLOOD SUGAR SPIKE</div>
+    </div>
+  </div>
+
+  <!-- ================= S2 : 전개부 ================= -->
+  <div class="layer" id="L2">
+    <div class="c" id="s2h" style="left:112px;top:112px;opacity:0">
+      <div style="font-size:26px;font-weight:800;letter-spacing:.22em;color:var(--red)">STEP 01 · 혈관에서 벌어지는 일</div>
+      <div class="big" style="margin-top:12px;font-size:60px">혈당은 <span style="color:var(--red)">치솟고</span>, 그다음 <span style="color:var(--cyan)">추락</span>한다</div>
+    </div>
+    <!-- graph -->
+    <svg class="c" id="gwrap" width="1180" height="620" viewBox="0 0 1180 620" style="left:104px;top:258px;opacity:0">
+      <defs>
+        <linearGradient id="fillg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#FF4D6D" stop-opacity=".42"/>
+          <stop offset="1" stop-color="#FF4D6D" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="softglow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <g id="grid" stroke="#1E2A4E" stroke-width="2"></g>
+      <line id="ax" x1="86" y1="540" x2="1140" y2="540" stroke="#33436E" stroke-width="4"/>
+      <line id="ay" x1="86" y1="40" x2="86" y2="540" stroke="#33436E" stroke-width="4"/>
+      <line id="base" x1="86" y1="392" x2="1140" y2="392" stroke="#4A5C8C" stroke-width="3" stroke-dasharray="12 10" opacity="0"/>
+      <text id="baselbl" x="98" y="380" font-size="22" fill="#7C8DB5" font-weight="700" opacity="0">정상 혈당</text>
+      <path id="curveFill" d="" fill="url(#fillg)" opacity="0"/>
+      <path id="curve" d="" fill="none" stroke="#FF4D6D" stroke-width="9" stroke-linecap="round" filter="url(#softglow)"/>
+      <circle id="dot" r="14" fill="#fff" opacity="0"/>
+      <text x="86" y="580" font-size="24" fill="#5C6E96" font-weight="700">섭취</text>
+      <text x="1040" y="580" font-size="24" fill="#5C6E96" font-weight="700">시간 →</text>
+      <text x="20" y="60" font-size="24" fill="#5C6E96" font-weight="700">혈당</text>
+      <g id="spikeLbl" opacity="0">
+        <rect x="400" y="72" width="196" height="60" rx="30" fill="#FF4D6D"/>
+        <text x="498" y="113" font-size="34" text-anchor="middle" fill="#fff" font-weight="900">SPIKE ↑</text>
+      </g>
+      <g id="crashLbl" opacity="0">
+        <rect x="700" y="470" width="216" height="60" rx="30" fill="#35D0FF"/>
+        <text x="808" y="511" font-size="34" text-anchor="middle" fill="#06263A" font-weight="900">CRASH ↓</text>
+      </g>
+    </svg>
+    <!-- vessel -->
+    <div class="c" id="vessel" style="left:1330px;top:258px;width:500px;height:620px;opacity:0">
+      <div style="font-size:25px;font-weight:800;color:var(--dim2);letter-spacing:.14em">혈관 속</div>
+      <svg width="500" height="560" viewBox="0 0 500 560" style="margin-top:14px">
+        <rect x="24" y="40" width="452" height="490" rx="60" fill="#141F42" stroke="#2A3A68" stroke-width="5"/>
+        <g id="cells"></g>
+      </svg>
+      <div class="c" id="vlegend" style="left:6px;top:576px;display:flex;gap:30px;font-size:23px;font-weight:700">
+        <span style="color:var(--amber)">● 포도당</span><span style="color:var(--cyan)">● 인슐린</span>
+      </div>
+    </div>
+    <!-- brain fuel -->
+    <div class="c" id="fuel" style="left:104px;top:206px;width:1720px;opacity:0">
+      <div style="text-align:center">
+        <svg width="300" height="260" viewBox="0 0 120 104" style="display:block;margin:0 auto">
+          <path id="brainP" d="M60 8 C40 8 30 20 31 32 C18 36 16 54 27 62 C24 78 38 92 54 88 C58 96 70 96 74 88 C90 92 104 78 101 62 C112 54 110 36 97 32 C98 20 88 8 68 8 Z"
+            fill="#1C2648" stroke="#A77BFF" stroke-width="3"/>
+          <g id="brainLines" stroke="#A77BFF" stroke-width="2.4" fill="none" opacity=".85">
+            <path d="M64 14 L64 88"/><path d="M52 30 Q40 34 44 46"/><path d="M76 30 Q88 34 84 46"/>
+            <path d="M50 58 Q40 66 48 76"/><path d="M78 58 Q88 66 80 76"/>
+          </g>
+        </svg>
+        <div style="margin-top:8px;font-size:46px;font-weight:900;color:#fff">뇌 세포, 연료가 끊기다</div>
+        <div style="margin-top:20px;display:flex;justify-content:center;gap:34px">
+          <div style="background:#141F42;border:3px solid #2A3A68;border-radius:22px;padding:26px 44px">
+            <div style="font-size:76px;font-weight:900;color:var(--purple)">2<span style="font-size:38px">%</span></div>
+            <div style="margin-top:6px;font-size:27px;font-weight:700;color:var(--dim)">몸무게 중 뇌의 비중</div>
+          </div>
+          <div style="background:#141F42;border:3px solid #2A3A68;border-radius:22px;padding:26px 44px">
+            <div style="font-size:76px;font-weight:900;color:var(--amber)">20<span style="font-size:38px">%</span></div>
+            <div style="margin-top:6px;font-size:27px;font-weight:700;color:var(--dim)">에너지 소비 비중</div>
+          </div>
+        </div>
+        <div id="fakeT" class="pill" style="display:inline-block;margin-top:30px;background:rgba(255,77,109,.16);
+          border:3px solid var(--red);color:#FF8DA3;opacity:0">이것이 가짜 피로 · 혈당 크래시</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= S3 : 심화부 ================= -->
+  <div class="layer" id="L3">
+    <div class="c" id="s3h" style="left:112px;top:104px;opacity:0">
+      <div style="font-size:26px;font-weight:800;letter-spacing:.22em;color:var(--purple)">STEP 02 · 뇌 속 각성 스위치</div>
+      <div class="big" style="margin-top:12px;font-size:60px">포도당이 <span style="color:var(--purple)">오렉신</span>을 잠재운다</div>
+    </div>
+    <!-- brain + hypothalamus -->
+    <svg class="c" id="bwrap" width="900" height="700" viewBox="0 0 180 140" style="left:112px;top:250px;opacity:0">
+      <defs><radialGradient id="spot"><stop offset="0" stop-color="#FFE9A8" stop-opacity=".5"/><stop offset="1" stop-color="#FFE9A8" stop-opacity="0"/></radialGradient></defs>
+      <path d="M92 14 C64 12 48 28 50 44 C30 50 28 76 44 86 C40 108 60 126 82 120 C88 130 104 130 110 120 C132 126 152 108 148 86 C164 76 162 50 142 44 C144 28 128 12 100 14 Z"
+        fill="#151F42" stroke="#7C63C9" stroke-width="2.4"/>
+      <g stroke="#6E58B4" stroke-width="1.8" fill="none" opacity=".8">
+        <path d="M96 18 L96 118"/><path d="M78 40 Q60 46 68 62"/><path d="M114 40 Q132 46 124 62"/>
+        <path d="M74 80 Q60 92 72 104"/><path d="M118 80 Q132 92 120 104"/>
+      </g>
+      <circle id="hypoGlow" cx="96" cy="86" r="34" fill="url(#spot)" opacity="0"/>
+      <circle id="hypo" cx="96" cy="86" r="11" fill="#FFB020" opacity="0"/>
+      <text id="hypoT" x="96" y="130" font-size="9" text-anchor="middle" fill="#FFD166" font-weight="800" opacity="0">시상하부</text>
+    </svg>
+    <!-- switch panel -->
+    <div class="c" id="swpanel" style="left:1010px;top:262px;width:800px;opacity:0">
+      <div style="font-size:27px;font-weight:800;color:var(--dim2);letter-spacing:.14em">OREXIN · 각성 스위치</div>
+      <div id="swbox" style="margin-top:22px;background:#121D40;border:4px solid #2FE0A0;border-radius:34px;padding:44px 50px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div id="swstate" style="font-size:82px;font-weight:900;color:#2FE0A0">ON</div>
+            <div id="swdesc" style="margin-top:6px;font-size:29px;font-weight:700;color:var(--dim)">각성 · 집중 유지</div>
+          </div>
+          <div id="swtrack" style="position:relative;width:230px;height:112px;border-radius:56px;background:#2FE0A0">
+            <div id="swknob" style="position:absolute;top:10px;left:10px;width:92px;height:92px;border-radius:50%;background:#fff"></div>
+          </div>
+        </div>
+        <div style="margin-top:34px">
+          <div style="display:flex;justify-content:space-between;font-size:24px;font-weight:700;color:var(--dim)">
+            <span>각성도</span><span id="awakeV">100%</span>
+          </div>
+          <div style="margin-top:12px;height:22px;border-radius:11px;background:#0C1430;overflow:hidden">
+            <div id="awakeBar" style="height:100%;width:100%;background:linear-gradient(90deg,#2FE0A0,#7DE0FF)"></div>
+          </div>
+        </div>
+      </div>
+      <div id="swwarn" class="pill" style="display:inline-block;margin-top:28px;background:rgba(255,77,109,.16);
+        border:3px solid var(--red);color:#FF8DA3;opacity:0">포도당 과잉 → 스위치 강제 OFF</div>
+    </div>
+    <!-- comparison -->
+    <div class="c" id="cmp" style="left:104px;top:196px;width:1712px;opacity:0">
+      <div style="text-align:center;font-size:52px;font-weight:900;letter-spacing:-.02em">같은 열량, <span style="color:var(--amber)">다른 곡선</span></div>
+      <div style="margin-top:34px;display:flex;gap:44px;justify-content:center">
+        <div style="width:806px;background:#121D40;border:4px solid #40224A;border-radius:30px;padding:30px 34px">
+          <div style="font-size:34px;font-weight:900;color:var(--red)">정제당 · 초콜릿 · 탄산음료</div>
+          <svg width="740" height="290" viewBox="0 0 740 290" style="margin-top:14px">
+            <line x1="40" y1="250" x2="720" y2="250" stroke="#33436E" stroke-width="3"/>
+            <line x1="40" y1="186" x2="720" y2="186" stroke="#4A5C8C" stroke-width="2" stroke-dasharray="9 8"/>
+            <path id="cA" d="" fill="none" stroke="#FF4D6D" stroke-width="7" stroke-linecap="round"/>
+          </svg>
+          <div style="margin-top:6px;font-size:27px;font-weight:700;color:#FF8DA3">급등 → 급락 → 졸음</div>
+        </div>
+        <div style="width:806px;background:#121D40;border:4px solid #1C4A3E;border-radius:30px;padding:30px 34px">
+          <div style="font-size:34px;font-weight:900;color:var(--green)">통곡물 · 견과류</div>
+          <svg width="740" height="290" viewBox="0 0 740 290" style="margin-top:14px">
+            <line x1="40" y1="250" x2="720" y2="250" stroke="#33436E" stroke-width="3"/>
+            <line x1="40" y1="186" x2="720" y2="186" stroke="#4A5C8C" stroke-width="2" stroke-dasharray="9 8"/>
+            <path id="cB" d="" fill="none" stroke="#2FE0A0" stroke-width="7" stroke-linecap="round"/>
+          </svg>
+          <div style="margin-top:6px;font-size:27px;font-weight:700;color:#8AF0CB">완만 유지 → 집중 지속</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= S4 : 결론 ================= -->
+  <div class="layer" id="L4">
+    <div class="c" id="s4h" style="left:0;right:0;top:96px;text-align:center;opacity:0">
+      <div style="font-size:26px;font-weight:800;letter-spacing:.22em;color:var(--green)">SOLUTION · 오늘부터 실천</div>
+      <div class="big" style="margin-top:12px;font-size:66px">혈당을 지키는 <span style="color:var(--green)">3가지 습관</span></div>
+    </div>
+    <div class="c" id="cards" style="left:104px;top:288px;width:1712px;display:flex;gap:38px">
+      <div class="card" id="cd1" style="flex:1;background:#121D40;border:4px solid #2A3A68;border-radius:34px;padding:40px 38px;opacity:0">
+        <div style="font-size:26px;font-weight:900;color:var(--amber);letter-spacing:.1em">01</div>
+        <div style="margin-top:14px;font-size:44px;font-weight:900;line-height:1.2">간식을<br>바꾸기</div>
+        <div style="margin-top:26px;display:flex;align-items:center;gap:18px;font-size:30px;font-weight:700">
+          <span style="color:#FF8DA3">초콜릿·탄산</span>
+          <span style="color:var(--dim2)">→</span>
+          <span style="color:#8AF0CB">통곡물·견과류</span>
+        </div>
+        <div style="margin-top:22px;font-size:27px;font-weight:600;color:var(--dim);line-height:1.5">
+          천천히 소화되는 간식이<br>혈당 곡선을 완만하게 만듭니다</div>
+      </div>
+      <div class="card" id="cd2" style="flex:1.28;background:#121D40;border:4px solid #1C4A3E;border-radius:34px;padding:40px 38px;opacity:0">
+        <div style="font-size:26px;font-weight:900;color:var(--green);letter-spacing:.1em">02</div>
+        <div style="margin-top:14px;font-size:44px;font-weight:900;line-height:1.2">거꾸로 식사법</div>
+        <div style="margin-top:28px;display:flex;flex-direction:column;gap:16px">
+          <div class="ordrow" id="or1" style="opacity:0;display:flex;align-items:center;gap:20px;background:#0E1836;border-radius:18px;padding:18px 24px">
+            <div style="width:52px;height:52px;border-radius:50%;background:#2FE0A0;color:#04241A;font-size:29px;font-weight:900;display:flex;align-items:center;justify-content:center">1</div>
+            <div style="font-size:34px;font-weight:800">식이섬유 <span style="font-size:25px;color:var(--dim)">채소·샐러드</span></div>
+          </div>
+          <div class="ordrow" id="or2" style="opacity:0;display:flex;align-items:center;gap:20px;background:#0E1836;border-radius:18px;padding:18px 24px">
+            <div style="width:52px;height:52px;border-radius:50%;background:#35D0FF;color:#052A3C;font-size:29px;font-weight:900;display:flex;align-items:center;justify-content:center">2</div>
+            <div style="font-size:34px;font-weight:800">단백질 <span style="font-size:25px;color:var(--dim)">고기·계란·두부</span></div>
+          </div>
+          <div class="ordrow" id="or3" style="opacity:0;display:flex;align-items:center;gap:20px;background:#0E1836;border-radius:18px;padding:18px 24px">
+            <div style="width:52px;height:52px;border-radius:50%;background:#FFB020;color:#3A2405;font-size:29px;font-weight:900;display:flex;align-items:center;justify-content:center">3</div>
+            <div style="font-size:34px;font-weight:800">탄수화물 <span style="font-size:25px;color:var(--dim)">밥·면·빵</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="card" id="cd3" style="flex:1;background:#121D40;border:4px solid #2A3A68;border-radius:34px;padding:40px 38px;opacity:0">
+        <div style="font-size:26px;font-weight:900;color:var(--cyan);letter-spacing:.1em">03</div>
+        <div style="margin-top:14px;font-size:44px;font-weight:900;line-height:1.2">곡선을<br>완만하게</div>
+        <svg width="380" height="180" viewBox="0 0 380 180" style="margin-top:22px">
+          <line x1="20" y1="150" x2="360" y2="150" stroke="#33436E" stroke-width="3"/>
+          <path d="M20 120 C90 20 130 30 190 118 C240 176 300 128 360 120" fill="none" stroke="#FF4D6D" stroke-width="5" opacity=".38" stroke-dasharray="8 8"/>
+          <path id="cd3c" d="" fill="none" stroke="#2FE0A0" stroke-width="7" stroke-linecap="round"/>
+        </svg>
+        <div style="margin-top:16px;font-size:27px;font-weight:600;color:var(--dim);line-height:1.5">
+          식후 졸음이 줄고<br>집중 시간이 길어집니다</div>
+      </div>
+    </div>
+    <!-- endcard -->
+    <div class="c" id="endc" style="left:0;right:0;top:330px;text-align:center;opacity:0">
+      <div class="big" style="font-size:88px">혈당을 지키는 <span style="color:#FFD166">과학적인 식습관</span></div>
+      <div style="margin-top:30px;font-size:42px;font-weight:700;color:var(--dim)">최고의 학습 효율과 집중력은 오늘의 한 끼에서 시작됩니다</div>
+      <div style="margin:48px auto 0;width:220px;height:5px;border-radius:3px;background:linear-gradient(90deg,var(--cyan),var(--purple))"></div>
+      <div style="margin-top:44px;font-size:30px;font-weight:800;letter-spacing:.32em;color:#7DE0FF">3분 과학 소통</div>
+    </div>
+  </div>
+
+  <div id="vig"></div><div id="grain"></div>
+  <div id="hud"><div id="hudbar"></div></div>
+  <div id="chip"><div id="chipdot"></div><div id="chiptx"></div></div>
+  <div id="tc">00:00</div>
+  <div id="subwrap"><div id="sub"></div></div>
+</div>
+
+<script>
+/* ============ deterministic engine ============ */
+const $=id=>document.getElementById(id);
+const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+const pr=(t,a,b)=>cl((t-a)/Math.max(1e-6,(b-a)),0,1);
+const eo=t=>1-Math.pow(1-t,3);           // ease out cubic
+const ei=t=>t*t*t;
+const eio=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const eb=t=>{const c=1.70158+1,s=1.70158;return 1+c*Math.pow(t-1,3)+s*Math.pow(t-1,2)};
+const lp=(a,b,t)=>a+(b-a)*t;
+const S=(e,k,v)=>{e.style[k]=v};
+const op=(e,v)=>{e.style.opacity=v};
+function mul(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+let TIMING={s1:[0,42],s2:[42,105],s3:[105,153],s4:[153,187],total:187};
+let SUBS=[];
+
+let CELLS=[],GCELL=[],ICELL=[];
+
+/* build repeated elements once */
+(function init(){
+  const r=mul(7);
+  let s='';
+  for(let i=0;i<58;i++){const x=1190+r()*540,y=142+r()*410,w=6+r()*13,h=6+r()*16;
+    s+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="#FFD98A" opacity="${(.15+r()*.6).toFixed(2)}"/>`}
+  $('cityg').innerHTML=s;
+  // graph grid
+  let g='';
+  for(let i=1;i<7;i++){const y=40+i*72; g+=`<line x1="86" y1="${y}" x2="1140" y2="${y}"/>`}
+  for(let i=1;i<9;i++){const x=86+i*117; g+=`<line x1="${x}" y1="40" x2="${x}" y2="540"/>`}
+  $('grid').innerHTML=g;
+  // vessel cells
+  let c='';
+  CELLS=[];
+  for(let i=0;i<26;i++){const a=r()*Math.PI*2,rad=r();
+    CELLS.push({x:70+r()*360,y:80+r()*410,ph:r()*6.28,sp:.5+r()*.9,kind:'g'});
+    c+=`<circle class="cellg" cx="0" cy="0" r="17" fill="#FFB020" opacity="0"/>`}
+  for(let i=0;i<16;i++){
+    CELLS.push({x:70+r()*360,y:80+r()*410,ph:r()*6.28,sp:.6+r()*1.1,kind:'i'});
+    c+=`<circle class="celli" cx="0" cy="0" r="14" fill="#35D0FF" opacity="0"/>`}
+  $('cells').innerHTML=c;
+  GCELL=[...document.querySelectorAll('.cellg')];
+  ICELL=[...document.querySelectorAll('.celli')];
+})();
+
+/* main blood-sugar curve */
+const CURVE="M86 392 C210 388 250 384 300 330 C352 274 380 120 470 96 C560 72 610 190 660 300 C700 388 730 480 800 486 C870 492 900 448 960 424 C1030 396 1090 392 1140 390";
+function ptOn(pathEl,f){const L=pathEl.getTotalLength();return pathEl.getPointAtLength(L*f)}
+
+function setPath(el,d){if(el.getAttribute('d')!==d)el.setAttribute('d',d)}
+function draw(el,f){ // stroke reveal 0..1
+  const L=el.__L||(el.__L=el.getTotalLength());
+  el.style.strokeDasharray=L; el.style.strokeDashoffset=L*(1-cl(f,0,1));
+}
+
+/* ---------------- SCENE 1 ---------------- */
+function S1(t){
+  const [a,b]=TIMING.s1,d=b-a,u=t-a,p=u/d;
+  const L=$('L1'); op(L, (u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
+
+  // title
+  const ti=pr(p,0,.06), to=pr(p,.14,.2);
+  const t1=$('t1a'); op(t1,(1-to)*eo(ti));
+  S(t1,'transform',`translateY(${lp(46,0,eo(ti))-to*40}px) scale(${lp(.96,1,eo(ti))})`);
+  op($('t1kick'),eo(pr(p,.005,.05)));
+  S($('t1line'),'width',(eo(pr(p,.045,.12))*300)+'px');
+
+  // desk scene
+  const dk=$('desk'), din=eo(pr(p,.13,.2)), dout=pr(p,.78,.86);
+  op(dk,din*(1-dout));
+  S(dk,'transform',`scale(${lp(1.06,1,din)})`);
+  const lampFlick=.86+.14*Math.sin(u*7.1)*Math.sin(u*2.3);
+  S($('lampcone'),'opacity',(.55*lampFlick).toFixed(3));
+
+  // student bob + fatigue
+  const bob=Math.sin(u*1.7)*4;
+  const tired=eo(pr(p,.55,.78));
+  S($('stu'),'transform',`translate(0,${bob-tired*10}px)`);
+  op($('eyesOpen'),1-tired); op($('eyesShut'),tired);
+  setPath($('mouth'), tired>.5?"M1164 600 Q1180 592 1196 600":"M1164 596 Q1180 606 1196 596");
+  // ghost
+  const gh=eo(pr(p,.6,.8));
+  S($('stu'),'filter',gh>0?`grayscale(${gh}) blur(${gh*2.4}px)`:'none');
+  S($('body'),'opacity',lp(1,.42,gh)); S($('head'),'opacity',lp(1,.5,gh));
+
+  // snacks
+  const sn=pr(p,.3,.4);
+  op($('snack'),eo(sn));
+  S($('choco'),'transform',`translateY(${lp(-260,0,eb(cl(sn*1.1,0,1)))}px)`);
+  S($('soda'),'transform',`translateY(${lp(-300,0,eb(cl((sn-.06)*1.25,0,1)))}px)`);
+
+  // zzz / ?
+  const zz=pr(p,.62,.72); op($('zzz'),eo(zz)*(1-pr(p,.78,.86)));
+  [1,2,3].forEach(i=>{const e=$('z'+i);S(e,'transform',`translate(${Math.sin(u*1.3+i)*8}px,${-((u*10+i*22)%56)}px)`)});
+  const qq=pr(p,.66,.76); op($('qm'),eo(qq)*(1-pr(p,.78,.86)));
+  [1,2,3].forEach(i=>{const e=$('q'+i);S(e,'transform',`translateY(${Math.sin(u*2.1+i*1.7)*10}px) rotate(${Math.sin(u+i)*7}deg)`)});
+
+  op($('fog'),eo(pr(p,.64,.8))*.9*(1-pr(p,.78,.86)));
+  op($('scrim'),(eo(pr(p,.70,.79))*.9).toFixed(3));
+
+  // why
+  const wi=pr(p,.72,.78), wo=pr(p,.83,.88);
+  const W=$('why'); op(W,eo(wi)*(1-wo));
+  S(W,'transform',`scale(${lp(.86,1,eb(cl(wi,0,1)))})`);
+
+  // culprit
+  const ci=pr(p,.87,.94);
+  const C=$('culprit'); op(C,eo(ci));
+  S(C,'transform',`translateY(${lp(60,0,eo(ci))}px)`);
+  const pulse=1+.06*Math.sin(u*9);
+  S($('culpritT'),'transform',`scale(${ci>.6?pulse:1})`);
+  S($('spark'),'opacity',(.5+.5*Math.sin(u*22)).toFixed(2));
+  S($('bomb'),'transform',`rotate(${Math.sin(u*6)*3}deg)`);
+}
+
+/* ---------------- SCENE 2 ---------------- */
+function S2(t){
+  const [a,b]=TIMING.s2,d=b-a,u=t-a,p=u/d;
+  const L=$('L2'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
+
+  const hi=eo(pr(p,.01,.07));
+  op($('s2h'),hi*(1-pr(p,.74,.8)));
+  S($('s2h'),'transform',`translateX(${lp(-50,0,hi)}px)`);
+
+  // graph
+  const gi=eo(pr(p,.02,.08)), go=pr(p,.74,.8);
+  const G=$('gwrap'); op(G,gi*(1-go));
+  S(G,'transform',`translateY(${lp(40,0,gi)}px)`);
+  op($('base'),eo(pr(p,.05,.11))); op($('baselbl'),eo(pr(p,.05,.11)));
+
+  const cv=$('curve'); setPath(cv,CURVE);
+  const f=eio(cl(pr(p,.08,.60),0,1));
+  draw(cv,f);
+  const CF=$('curveFill');
+  setPath(CF,CURVE+" L1140 540 L86 540 Z");
+  op(CF,eo(pr(p,.2,.35))*.9*(1-go));
+  if(f>0.01){const q=ptOn(cv,f);$('dot').setAttribute('cx',q.x);$('dot').setAttribute('cy',q.y);op($('dot'),f<.995?1:0)}
+  else op($('dot'),0);
+  op($('spikeLbl'),eo(pr(p,.3,.36))*(1-go));
+  op($('crashLbl'),eo(pr(p,.53,.59))*(1-go));
+
+  // vessel cells
+  const vi=eo(pr(p,.08,.15)), vo=pr(p,.72,.78);
+  op($('vessel'),vi*(1-vo));
+  const flood=pr(p,.12,.34), ins=pr(p,.34,.6), clear=pr(p,.5,.68);
+  GCELL.forEach((e,i)=>{
+    const c=CELLS[i];
+    const on=cl((flood*GCELL.length-i)/3,0,1);
+    const gone=cl((clear*GCELL.length*1.3-i)/4,0,1);
+    const x=c.x+Math.sin(u*c.sp+c.ph)*16, y=c.y+Math.cos(u*c.sp*.8+c.ph)*14 - gone*130;
+    e.setAttribute('cx',x.toFixed(1)); e.setAttribute('cy',y.toFixed(1));
+    e.setAttribute('opacity',(on*(1-gone)).toFixed(3));
+    e.setAttribute('r',(17*lp(1,.6,gone)).toFixed(1));
+  });
+  ICELL.forEach((e,i)=>{
+    const c=CELLS[GCELL.length+i];
+    const on=cl((ins*ICELL.length-i)/3,0,1);
+    const x=c.x+Math.sin(u*c.sp*1.3+c.ph)*30, y=c.y+Math.cos(u*c.sp+c.ph)*26;
+    e.setAttribute('cx',x.toFixed(1)); e.setAttribute('cy',y.toFixed(1));
+    e.setAttribute('opacity',on.toFixed(3));
+  });
+
+  // fuel panel
+  const fi=eo(pr(p,.78,.85));
+  const F=$('fuel'); op(F,fi);
+  S(F,'transform',`translateY(${lp(50,0,fi)}px)`);
+  const dim=eo(pr(p,.8,.9));
+  S($('brainP'),'opacity',lp(1,.55,dim));
+  S($('brainLines'),'opacity',lp(.85,.25,dim));
+  op($('fakeT'),eo(pr(p,.91,.97)));
+}
+
+/* ---------------- SCENE 3 ---------------- */
+function S3(t){
+  const [a,b]=TIMING.s3,d=b-a,u=t-a,p=u/d;
+  const L=$('L3'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
+
+  const hi=eo(pr(p,.01,.07)), ho=pr(p,.55,.62);
+  op($('s3h'),hi*(1-ho));
+  S($('s3h'),'transform',`translateX(${lp(-50,0,hi)}px)`);
+
+  const bi=eo(pr(p,.04,.12)), bo=pr(p,.55,.62);
+  op($('bwrap'),bi*(1-bo));
+  S($('bwrap'),'transform',`scale(${lp(.9,1,bi)})`);
+  const sp=eo(pr(p,.1,.2));
+  op($('hypoGlow'),sp*(.7+.3*Math.sin(u*3)));
+  op($('hypo'),sp); op($('hypoT'),eo(pr(p,.14,.22)));
+  $('hypo').setAttribute('r',(11*(1+.12*Math.sin(u*4))).toFixed(2));
+
+  const pi=eo(pr(p,.08,.16));
+  op($('swpanel'),pi*(1-bo));
+  S($('swpanel'),'transform',`translateY(${lp(40,0,pi)}px)`);
+
+  // switch OFF
+  const off=eio(cl(pr(p,.3,.46),0,1));
+  const knob=$('swknob'), track=$('swtrack');
+  S(knob,'left',lp(10,128,off)+'px');
+  S(track,'background',off>.5?'#FF4D6D':'#2FE0A0');
+  $('swstate').textContent = off>.5?'OFF':'ON';
+  S($('swstate'),'color',off>.5?'#FF4D6D':'#2FE0A0');
+  $('swdesc').textContent = off>.5?'졸음 · 브레인 포그':'각성 · 집중 유지';
+  S($('swbox'),'border-color',off>.5?'#FF4D6D':'#2FE0A0');
+  const aw=Math.round(lp(100,24,off));
+  $('awakeV').textContent=aw+'%';
+  S($('awakeBar'),'width',aw+'%');
+  S($('awakeBar'),'background',off>.5?'linear-gradient(90deg,#FF4D6D,#FF8DA3)':'linear-gradient(90deg,#2FE0A0,#7DE0FF)');
+  op($('swwarn'),eo(pr(p,.46,.53)));
+
+  // comparison
+  const ci=eo(pr(p,.62,.7));
+  const C=$('cmp'); op(C,ci);
+  S(C,'transform',`translateY(${lp(50,0,ci)}px)`);
+  const A=$('cA'),B=$('cB');
+  setPath(A,"M40 186 C120 180 150 176 200 92 C250 8 300 40 350 150 C395 248 450 262 520 236 C590 212 660 190 720 186");
+  setPath(B,"M40 186 C140 182 200 168 300 132 C400 96 460 104 540 140 C610 170 670 184 720 186");
+  const df=eio(cl(pr(p,.66,.9),0,1));
+  draw(A,df); draw(B,df);
+}
+
+/* ---------------- SCENE 4 ---------------- */
+function S4(t){
+  const [a,b]=TIMING.s4,d=b-a,u=t-a,p=u/d;
+  const L=$('L4'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
+
+  const hi=eo(pr(p,.01,.09)), ho=pr(p,.72,.79);
+  op($('s4h'),hi*(1-ho)); S($('s4h'),'transform',`translateY(${lp(-34,0,hi)}px)`);
+
+  const cardsOut=pr(p,.72,.79);
+  [['cd1',.08],['cd2',.15],['cd3',.22]].forEach(([id,st])=>{
+    const e=$(id), f=eo(pr(p,st,st+.13));
+    op(e,f*(1-cardsOut));
+    S(e,'transform',`translateY(${lp(64,0,f)}px) scale(${lp(.95,1,f)})`);
+  });
+  [['or1',.3],['or2',.37],['or3',.44]].forEach(([id,st])=>{
+    const e=$(id), f=eb(cl(pr(p,st,st+.1),0,1));
+    op(e,cl(f,0,1)); S(e,'transform',`translateX(${lp(-34,0,cl(f,0,1))}px)`);
+  });
+  const cd3f=eio(cl(pr(p,.5,.7),0,1));
+  const c3=$('cd3c'); setPath(c3,"M20 132 C90 96 140 84 190 88 C250 92 300 104 360 112");
+  draw(c3,cd3f);
+
+  const ei2=eo(pr(p,.8,.9));
+  const E=$('endc'); op(E,ei2);
+  S(E,'transform',`translateY(${lp(40,0,ei2)}px) scale(${lp(.97,1,ei2)})`);
+}
+
+/* ---------------- subtitles + hud ---------------- */
+function SUB(t){
+  let cur=null;
+  for(const s of SUBS){ if(t>=s.a&&t<s.b){cur=s;break} }
+  const w=$('subwrap');
+  if(!cur){op(w,0);return}
+  const fi=pr(t,cur.a,cur.a+.22), fo=1-pr(t,cur.b-.18,cur.b);
+  op(w,(eo(fi)*fo).toFixed(3));
+  S(w,'transform',`translateY(${lp(14,0,eo(fi))}px)`);
+  if($('sub').textContent!==cur.tx)$('sub').textContent=cur.tx;
+}
+const CHIPS=[['도입 · 문제 제기','#35D0FF'],['원리 · 혈당 스파이크','#FF4D6D'],['뇌 과학 · 오렉신','#A77BFF'],['솔루션 · 실천','#2FE0A0']];
+function HUD(t){
+  S($('hudbar'),'width',(cl(t/TIMING.total,0,1)*100)+'%');
+  let idx=0;
+  ['s1','s2','s3','s4'].forEach((k,i)=>{if(t>=TIMING[k][0])idx=i});
+  const [tx,col]=CHIPS[idx];
+  if($('chiptx').textContent!==tx){$('chiptx').textContent=tx;S($('chipdot'),'background',col)}
+  const fade=Math.min(pr(t,0,1.2),1);
+  op($('chip'),(fade*.9).toFixed(2)); op($('tc'),(fade*.75).toFixed(2));
+  const mm=String(Math.floor(t/60)).padStart(2,'0'), ss=String(Math.floor(t%60)).padStart(2,'0');
+  const v=mm+':'+ss; if($('tc').textContent!==v)$('tc').textContent=v;
+}
+
+function render(t){
+  t=Math.max(0,t);
+  // ambient
+  S($('g1'),'transform',`translate(${Math.sin(t*.12)*60}px,${Math.cos(t*.09)*44}px)`);
+  S($('g2'),'transform',`translate(${Math.cos(t*.1)*70}px,${Math.sin(t*.13)*50}px)`);
+  const gi=cl(t/TIMING.total,0,1);
+  S($('g1'),'opacity',(.22+.1*Math.sin(t*.3)).toFixed(3));
+  S($('g2'),'opacity',(.20+.1*Math.cos(t*.26)).toFixed(3));
+  S1(t);S2(t);S3(t);S4(t);SUB(t);HUD(t);
+  // global fade in/out
+  const fi=pr(t,0,.7), fo=1-pr(t,TIMING.total-.9,TIMING.total);
+  S($('stage'),'opacity',(eo(fi)*fo).toFixed(3));
+  return true;
+}
+window.render=render;
+window.setTiming=(x)=>{TIMING=x};
+window.setSubs=(x)=>{SUBS=x};
+render(0);
+</script>
