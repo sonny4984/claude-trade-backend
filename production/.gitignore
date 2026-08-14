@@ -1,7 +1,5 @@
 # 재생성 가능한 대용량 산출물은 저장소에 넣지 않는다
 fonts/
-audio/*
-!audio/raw_s*.wav   # 크레딧 소진으로 재생성 불가 — 유일한 원본이라 추적한다
 stills/
 hero_raw.png
 out/*.mp4
@@ -9,5 +7,13 @@ out/*.png
 out/*.mp3
 out/render.log
 
-# 납품물 중 가벼운 것만 추적: out/thumbnail.jpg, out/*.srt
+# 나레이션 원본은 크레딧 소진으로 재생성이 불가능하다.
+# 컨테이너가 초기화돼도 잃지 않도록 이것만 추적한다.
+audio/*
+!audio/raw_s1.wav
+!audio/raw_s2.wav
+!audio/raw_s3.wav
+!audio/raw_s4.wav
+
+# 납품물 중 가벼운 것만 추적
 !out/thumbnail.jpg
