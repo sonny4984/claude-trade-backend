@@ -82,6 +82,17 @@ def main():
             for k in range(size):
                 mapping[a + k] = b + k
 
+        # 인식이 주는 단어 끝 시각은 뒤 침묵 안쪽까지 흘러넘친다. 짧은 문장일수록
+        # 이 오차가 크게 먹혀서 "밤 열한시" 같은 첫 문장이 실제보다 훨씬 느리게 찍힌다.
+        # 파형에서 잰 무음 구간으로 경계를 되돌린다.
+        quiet = gaps(x, 0.10)
+
+        def snap(t, back):
+            for a, b, _ in quiet:
+                if a < t < b:
+                    return a if back else b
+            return t
+
         rows = []
         for si, s in enumerate(sents):
             idx = [k for k, v in enumerate(sent_of) if v == si and k in mapping]
@@ -89,7 +100,7 @@ def main():
                 continue
             c = len(HANGUL.findall(s))
             w0, w1 = word_of[mapping[idx[0]]], word_of[mapping[idx[-1]]]
-            st, en = words[w0].start, words[w1].end
+            st, en = snap(words[w0].start, False), snap(words[w1].end, True)
             dur = max(0.15, en - st)
             rows.append((s, c, st, en, c / dur))
         rates = [r[4] for r in rows]
@@ -100,7 +111,9 @@ def main():
         for s, c, st, en, r in rows:
             dev = (r / med - 1) * 100
             flag = ""
-            if abs(dev) >= 22:
+            # 짧은 문장은 단어 하나 길이가 속도를 좌우한다. "밤 열한시." 처럼
+            # 네 음절짜리는 30% 안팎으로 흔들리는 게 정상이라 기준을 넉넉히 준다.
+            if abs(dev) >= (35 if c < 8 else 22):
                 flag = "  ← 속도 튐"
                 problems.append((sec["id"], st, f"{'빠름' if dev>0 else '느림'} {dev:+.0f}%", s[:34]))
             print(f"  {st:6.2f}s {r:5.2f} ({dev:+5.0f}%) {s[:40]}{flag}")
@@ -108,7 +121,9 @@ def main():
         # 문장 경계가 아닌 곳의 긴 쉼
         bounds = [r[3] for r in rows[:-1]]
         for a, b, L in g:
-            if L >= 0.26 and all(abs(a - bd) > 0.45 for bd in bounds):
+            # 쉼표나 긴 문장의 숨자리에는 0.2~0.4초가 정상으로 들어간다.
+            # 문장이 끊긴 것처럼 들리는 건 문장 끝 호흡(0.7~1.0초)에 가까워질 때다.
+            if L >= 0.45 and all(abs(a - bd) > 0.45 for bd in bounds):
                 problems.append((sec["id"], a, f"문장 중간 쉼 {L:.2f}s", ""))
 
     print("\n" + "=" * 78)
