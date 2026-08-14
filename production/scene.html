@@ -273,12 +273,8 @@ body{font-family:'Pretendard';color:var(--ink);-webkit-font-smoothing:antialiase
       </div>
       <div id="swwarn" class="pill" style="display:inline-block;margin-top:26px;background:rgba(255,77,109,.16);
         border:3px solid var(--red);color:#FF8DA3;opacity:0">포도당 과잉 → 스위치 강제 OFF</div>
-      <!-- 스위치가 꺼진 뒤 이어지는 근거 두 줄 -->
-      <div id="ev1" style="display:flex;align-items:center;gap:18px;margin-top:22px;opacity:0">
-        <div style="width:13px;height:13px;border-radius:50%;background:var(--purple);flex:none"></div>
-        <div style="font-size:29px;font-weight:700;color:var(--dim)">세포 연구 · 포도당 증가 → <span style="color:#C7B4FF">오렉신 활성 억제</span></div>
-      </div>
-      <div id="ev2" style="display:flex;align-items:center;gap:18px;margin-top:16px;opacity:0">
+      <!-- 스위치가 꺼진 뒤, 나레이션이 드는 근거 한 줄 -->
+      <div id="ev1" style="display:flex;align-items:center;gap:18px;margin-top:24px;opacity:0">
         <div style="width:13px;height:13px;border-radius:50%;background:var(--amber);flex:none"></div>
         <div style="font-size:29px;font-weight:700;color:var(--dim)">기면증 환자 · <span style="color:#FFD166">오렉신 세포 소실</span></div>
       </div>
@@ -567,8 +563,11 @@ function S3(t){
   const L=$('L3'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
 
   // 스위치가 내려가는 순간과 비교 그래프가 올라오는 순간은 자막에서 뽑아 쓴다
-  const OF=(BEATS.off??.40), CM=(BEATS.cmp??.71);
-  const hi=eo(pr(p,.01,.07)), ho=pr(p,CM-.10,CM-.03);
+  const OF=(BEATS.off??.40), CM=(BEATS.cmp??.71), EV=(BEATS.ev??CM-.18);
+  // 비교 그래프는 슬롯 시계로 움직이므로, 앞 화면이 물러나는 것도 같은 시계에 건다.
+  // 진행도로 걸어 두면 나레이션이 짧아졌을 때 둘 사이가 벌어져 빈 화면이 뜬다.
+  const cmT=nr[0]+CM*nr[1];
+  const hi=eo(pr(p,.01,.07)), ho=pr(t,cmT-1.7,cmT-0.5);
   op($('s3h'),hi*(1-ho));
   S($('s3h'),'transform',`translateX(${lp(-50,0,hi)}px)`);
 
@@ -599,21 +598,23 @@ function S3(t){
   S($('awakeBar'),'background',off>.5?'linear-gradient(90deg,#FF4D6D,#FF8DA3)':'linear-gradient(90deg,#2FE0A0,#7DE0FF)');
   op($('swwarn'),eo(pr(p,OF+.015,OF+.065))*(1-bo));
 
-  // 스위치가 내려간 뒤 근거 두 줄 — 각각 해당 문장에서 떠오른다
-  [['ev1',OF+.02],['ev2',CM-.175]].forEach(([id,st])=>{
-    const e=$(id), f=eo(cl(pr(p,st,st+.055),0,1));
+  // 스위치가 내려간 뒤, 기면증 근거가 그 문장에서 떠오른다
+  {
+    const e=$('ev1'), f=eo(pr(p,EV,EV+.055));
     op(e,f*(1-bo));
     S(e,'transform',`translateX(${lp(-26,0,f)}px)`);
-  });
+  }
 
-  // comparison
-  const ci=eo(pr(p,CM-.025,CM+.045));
+  // comparison — 마지막 문장에서 올라와, 나레이션이 끝난 뒤에도 슬롯 안에서
+  // 천천히 완성된다. 남는 시간을 정지 화면으로 두지 않기 위해서다.
+  const ci=eo(pr(t,cmT-0.9,cmT+0.5));
   const C=$('cmp'); op(C,ci);
   S(C,'transform',`translateY(${lp(50,0,ci)}px)`);
   const A=$('cA'),B=$('cB');
   setPath(A,"M40 186 C120 180 150 176 200 92 C250 8 300 40 350 150 C395 248 450 262 520 236 C590 212 660 190 720 186");
   setPath(B,"M40 186 C140 182 200 168 300 132 C400 96 460 104 540 140 C610 170 670 184 720 186");
-  const df=eio(cl(pr(p,CM+.03,Math.min(.99,CM+.20)),0,1));
+  const dStart=cmT+0.6, dEnd=Math.max(dStart+2.4, b-1.6);
+  const df=eio(pr(t,dStart,dEnd));
   draw(A,df); draw(B,df);
 }
 

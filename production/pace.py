@@ -35,6 +35,16 @@ PAUSE_Q = 0.40           # 물음표 뒤 — 질문은 여운을 준다
 PAUSE_KEY = 0.46         # 핵심 문장 앞 호흡
 HEAD, TAIL = 0.10, 0.18
 
+GAP_MAX = 1.55       # 여유가 있을 때 문장 사이를 어디까지 벌릴지
+SAME_END_GAP = 1.45  # 끝맺음이 겹치는 자리는 그만큼 더 벌린다
+
+
+def ending(t):
+    """문장 끝맺음의 종류. 같은 가락이 잇따르는지 보려는 것뿐이라 거칠게 나눈다."""
+    t = t.rstrip(" .!?")
+    return "니다" if t.endswith("니다") else t[-1:]
+
+
 KEY = ("혈당 스파이크입니다", "혈당 크래시입니다", "오렉신 스위치가 있습니다",
        "삼분 과학 소통이었습니다")
 
@@ -193,8 +203,16 @@ def main():
         src = f"audio/raw_s{i}.wav"
         x = load(src)
         spans = sentence_spans(model, src, sec.get("narration_full", sec["narration"]))
-        drop = set(sec.get("drop", []))
-        spans = [sp for sp in spans if sp[0] not in drop]   # 덜어낸 문장은 음성도 버린다
+        # narration_full 은 원본 녹음 순서라 정렬에만 쓰고, 실제로 내보낼 문장과
+        # 그 순서는 narration 이 정한다. 크레딧이 없어 새로 녹음할 수 없으니
+        # 문장을 빼거나 자리를 바꾸는 것만으로 끝맺음 반복을 푼다.
+        want = [t for t in re.split(r"(?<=[.!?])\s+", sec["narration"].strip()) if t]
+        pos = {t: k for k, t in enumerate(want)}
+        spans = [sp for sp in spans if sp[0] in pos]
+        spans.sort(key=lambda sp: pos[sp[0]])
+        missing = [t for t in want if t not in {sp[0] for sp in spans}]
+        if missing:
+            raise SystemExit(f"{sec['id']}: 원본 음성에서 못 찾은 문장 {missing}")
         # 앞머리를 되짚을 때 앞 문장 꼬리를 물지 않도록 하한을 넘겨준다
         segs, floor = [], 0.0
         for s, st, en in spans:
@@ -228,7 +246,10 @@ def main():
         slot = sec["slot"][1] - sec["slot"][0]
         nkey = sum(1 for s, _, _ in spans if any(t in s for t in KEY))
         budget = slot * FILL - speech - HEAD - TAIL - nkey * PAUSE_KEY
-        gap_len = float(np.clip(budget / max(1, len(spans) - 1), 0.30, 0.78))
+        # 대본이 짧아 여유가 생기면 그 시간을 끝에 몰아 두지 않고 문장 사이로 돌린다.
+        # 화면에서 큰 동작(스위치 OFF, 비교 그래프)이 지나가는 구간에서는 이 사이가
+        # 죽은 시간이 아니라 보는 사람이 따라올 여백이 된다.
+        gap_len = float(np.clip(budget / max(1, len(spans) - 1), 0.30, GAP_MAX))
 
         pieces, report = [], []
         pieces.append(np.zeros(int(HEAD * SR), np.float32))
@@ -248,7 +269,11 @@ def main():
             pieces.append(out)
             report.append((s, rate, tempo, n / (len(out) / SR)))
             if k < len(spans) - 1:
-                gap = gap_len * (1.18 if s.rstrip().endswith("?") else 1.0)
+                # 끝맺음이 같은 문장이 이어지면 사이를 더 벌린다. 크레딧이 없어
+                # 어미를 바꿔 녹음할 수 없으니, 호흡으로 반복되는 가락을 끊는다.
+                same = ending(s) == ending(spans[k + 1][0])
+                gap = gap_len * (1.18 if s.rstrip().endswith("?") else
+                                 SAME_END_GAP if same else 1.0)
                 pieces.append(np.zeros(int(gap * SR), np.float32))
         pieces.append(np.zeros(int(TAIL * SR), np.float32))
         y = np.concatenate(pieces)
