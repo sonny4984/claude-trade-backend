@@ -39,6 +39,7 @@ def open_page(pw, port, tl):
     pg.wait_for_timeout(700)
     pg.evaluate("t => window.setTiming(t)", tl["timing"])
     pg.evaluate("s => window.setSubs(s)", tl["subs"])
+    pg.evaluate("b => window.setBeats(b)", tl.get("beats", {}))
     pg.evaluate("window.render(0)")
     return br, pg
 

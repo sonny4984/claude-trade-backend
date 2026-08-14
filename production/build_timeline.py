@@ -78,6 +78,8 @@ def main():
         start = a + sec["lead"]
         audio.append({"file": str(wav), "at": round(start, 3), "dur": round(d, 3)})
         timing[f"s{i}"] = [round(a, 3), round(b, 3)]
+        # 화면 연출은 슬롯이 아니라 나레이션 구간에 맞춰 진행시킨다.
+        timing[f"n{i}"] = [round(start, 3), round(d, 3)]
 
         lines = split_subs(sec["narration"])
         total = sum(len(x) for x in lines)
@@ -90,10 +92,24 @@ def main():
         if c > b + 0.35:
             print(f"  ⚠ s{i} 나레이션이 슬롯을 {c - b:.2f}s 초과합니다")
 
+    # 전개부 곡선의 정점·저점을 해당 문장이 끝나는 지점에 맞춘다.
+    # 대본이 바뀌어도 그래프가 말과 어긋나지 않도록 자막에서 직접 계산한다.
+    n2 = timing.get("n2")
+    beats = {}
+    if n2:
+        def frac_after(keyword, default):
+            for s in subs:
+                if keyword in s["tx"]:
+                    return round(min(1.0, max(0.0, (s["b"] - n2[0]) / n2[1])), 4)
+            return default
+        beats["peak"] = frac_after("끌어올리", 0.24)
+        beats["trough"] = frac_after("곤두박질", 0.68)
+        print(f"  전개부 곡선 정점 p={beats['peak']:.3f} · 저점 p={beats['trough']:.3f} (자막 기준)")
+
     total = script["sections"][-1]["slot"][1]
     timing["total"] = total
     (D / "timeline.json").write_text(json.dumps(
-        {"timing": timing, "subs": subs, "audio": audio, "fps": 30},
+        {"timing": timing, "subs": subs, "audio": audio, "beats": beats, "fps": 30},
         ensure_ascii=False, indent=1))
 
     print(f"총 길이 {total:.1f}s ({int(total//60)}:{total%60:04.1f}) — 기획서 콘티 타임코드 고정")

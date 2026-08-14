@@ -20,18 +20,20 @@ SR = 48000
 HOP = 0.010              # 분석 간격
 SIL_DB = -42.0           # 이보다 조용하면 쉼으로 본다
 MIN_SIL = 0.12           # 이보다 짧으면 말소리의 일부(파열음 앞 등)
-# 쉼을 한 덩어리로 보면 안 된다. 문장 끝의 호흡은 남겨야 자연스럽고,
-# 단어 사이에 낀 미세한 끊김은 없애야 말이 이어진다.
+# EBS 교육방송 나레이션 기준의 쉼 구조.
+# 문장 끝 호흡은 남기되 짧게, 어절 사이 미세한 틈은 없앤다.
 # (원래 길이 하한, 줄인 뒤 최소, 줄인 뒤 최대)
 PAUSE_BANDS = [
-    (0.50, 0.26, 0.44),   # 문장 끝 호흡 — 남겨야 자연스럽다
-    (0.28, 0.15, 0.28),   # 쉼표·구 경계
-    (0.16, 0.06, 0.13),   # 약한 끊김
-    (0.00, 0.015, 0.05),  # 어절 사이 미세한 틈 — '열 한 시'처럼 들리게 만드는 주범
+    (0.50, 0.24, 0.36),   # 문장 끝 호흡
+    (0.28, 0.13, 0.22),   # 쉼표·구 경계
+    (0.16, 0.05, 0.11),   # 약한 끊김
+    (0.00, 0.012, 0.04),  # 어절 사이 미세한 틈
 ]
+TARGET_RATE = 6.9        # 말할 때 음절/초 — EBS 교육·다큐 나레이션 대역
+PAUSE_SHARE = 0.14       # 쉼이 전체에서 차지하는 비율
 XFADE = int(0.004 * 48000)          # 이어붙일 때 클릭음 방지
 EDGE = 0.06              # 앞뒤로 남길 여백
-TEMPO_MIN, TEMPO_MAX = 0.94, 1.09
+TEMPO_MIN, TEMPO_MAX = 0.95, 1.26
 
 
 def run(args):
@@ -54,14 +56,19 @@ def save(x, p):
         w.writeframes((np.clip(x, -1, 1) * 32767).astype("<i2").tobytes())
 
 
-def find_pauses(x):
-    """(시작, 끝) 샘플 인덱스로 쉼 구간을 찾는다."""
+def find_pauses(x, rel=False):
+    """(시작, 끝) 샘플 인덱스로 쉼 구간을 찾는다.
+
+    rel=True 면 파일 자체의 말소리 레벨을 기준으로 상대 판정한다. 마스터링 뒤에는
+    컴프레서가 바닥 소음을 끌어올려 절대 임계값으로는 쉼이 덜 잡히기 때문이다.
+    """
     h = int(HOP * SR)
     n = len(x) // h
     rms = np.sqrt(np.maximum(1e-12, np.mean(
         x[:n * h].reshape(n, h) ** 2, axis=1)))
     db = 20 * np.log10(np.maximum(rms, 1e-9))
-    quiet = db < SIL_DB
+    thr = (np.percentile(db, 92) - 26) if rel else SIL_DB
+    quiet = db < thr
     runs, i = [], 0
     while i < n:
         if quiet[i]:
@@ -144,20 +151,39 @@ def dur(p):
     return int(h) * 3600 + int(mm) * 60 + float(ss)
 
 
+def syllables(t):
+    return len(re.findall(r"[가-힣]", t))
+
+
+def analyze(p, rel=False):
+    """(전체 길이, 쉼 합계) — 말한 시간은 둘의 차이."""
+    x = load(p)
+    runs = find_pauses(x, rel=rel)
+    return len(x) / SR, sum(b - a for a, b in runs) / SR
+
+
 def main():
     script = json.loads((D / "script.json").read_text())
-    print("쉼 구간 비율 조절 (말소리는 원본 그대로)")
-    fitted = []
+    print("발화 속도를 EBS 대역(6.8~7.0 음절/초)에 맞춘다\n")
+    plan = []
     for i, sec in enumerate(script["sections"], 1):
-        t = sec["speech_sec"]
-        k, d, n, sil = fit(A / f"raw_s{i}.wav", A / f"t{i}.wav", t)
-        fitted.append(d)
-        print(f"  s{i} 쉼 {n:2d}곳 {sil:5.1f}s (×{k:.2f}) | 길이 {d:5.1f}s / 목표 {t:.1f}s")
+        n = syllables(sec["narration"])
+        d, sil = analyze(A / f"raw_s{i}.wav")
+        rate = n / (d - sil)
+        tempo = max(TEMPO_MIN, min(TEMPO_MAX, rate and TARGET_RATE / rate))
+        speech_after = (d - sil) / tempo
+        target_total = speech_after / (1 - PAUSE_SHARE)
+        slot = sec["slot"][1] - sec["slot"][0]
+        room = slot - sec["lead"] - 1.4
+        target_total = min(target_total, room)
+        plan.append((tempo, target_total * tempo))   # 템포 전 길이로 환산
+        print(f"  s{i} {n:3d}음절 | 원본 {rate:.2f} 음절/초 → 템포 {tempo:.3f} "
+              f"| 목표 길이 {target_total:.1f}s (슬롯 {slot:.0f}s)")
 
-    print("\n마스터링")
+    print("\n쉼 정리 + 마스터링")
     for i, sec in enumerate(script["sections"], 1):
-        t = sec["speech_sec"]
-        tempo = max(TEMPO_MIN, min(TEMPO_MAX, fitted[i - 1] / t))
+        tempo, pre_len = plan[i - 1]
+        k, d, n_runs, sil = fit(A / f"raw_s{i}.wav", A / f"t{i}.wav", pre_len)
         af = (f"atempo={tempo:.5f},highpass=f=85,"
               "equalizer=f=250:t=q:w=1.1:g=-1.6,"
               "equalizer=f=3200:t=q:w=1.6:g=2.0,"
@@ -166,8 +192,10 @@ def main():
         run([FF, "-y", "-loglevel", "error", "-i", str(A / f"t{i}.wav"), "-af", af,
              "-ar", "48000", "-ac", "1", str(A / f"s{i}.wav")])
         (A / f"t{i}.wav").unlink(missing_ok=True)
-        d = dur(A / f"s{i}.wav")
-        print(f"  s{i} 템포 {tempo:.3f} → {d:5.1f}s (목표 {t:.1f}s, 오차 {d-t:+.2f}s)")
+        fd, fsil = analyze(A / f"s{i}.wav", rel=True)
+        rate = syllables(sec["narration"]) / (fd - fsil)
+        print(f"  s{i} {fd:5.1f}s | 쉼 {fsil:4.1f}s ({fsil/fd*100:4.1f}%) "
+              f"| 말할때 {rate:.2f} 음절/초")
 
 
 if __name__ == "__main__":

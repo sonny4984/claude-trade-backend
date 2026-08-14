@@ -377,6 +377,7 @@ function mul(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15
 
 let TIMING={s1:[0,42],s2:[42,105],s3:[105,153],s4:[153,187],total:187};
 let SUBS=[];
+let BEATS={peak:.24,trough:.68};
 
 let CELLS=[],GCELL=[],ICELL=[];
 
@@ -428,7 +429,9 @@ function draw(el,f){ // stroke reveal 0..1
 
 /* ---------------- SCENE 1 ---------------- */
 function S1(t){
-  const [a,b]=TIMING.s1,d=b-a,u=t-a,p=u/d;
+  const [a,b]=TIMING.s1;
+  // 연출 진행도는 나레이션 구간에 맞춘다 — 나레이션이 끝나면 마지막 상태로 머문다
+  const nr=TIMING.n1||[a,b-a], u=t-a, d=b-a, p=cl((t-nr[0])/nr[1],0,1);
   const L=$('L1'); op(L, (u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
 
   // title
@@ -488,7 +491,9 @@ function S1(t){
 
 /* ---------------- SCENE 2 ---------------- */
 function S2(t){
-  const [a,b]=TIMING.s2,d=b-a,u=t-a,p=u/d;
+  const [a,b]=TIMING.s2;
+  // 연출 진행도는 나레이션 구간에 맞춘다 — 나레이션이 끝나면 마지막 상태로 머문다
+  const nr=TIMING.n2||[a,b-a], u=t-a, d=b-a, p=cl((t-nr[0])/nr[1],0,1);
   const L=$('L2'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
 
   const hi=eo(pr(p,.01,.07));
@@ -503,15 +508,15 @@ function S2(t){
 
   // 곡선 진행을 나레이션에 맞춘다: 정점은 "끌어올리죠" 직후, 저점은 "곤두박질칩니다" 직후.
   const cv=$('curve'); setPath(cv,CURVE);
-  const f=cl(pw(p,[[.02,0],[.29,.42],[.62,.72],[.72,1]]),0,1);
+  const f=cl(pw(p,[[.01,0],[BEATS.peak,.42],[BEATS.trough,.72],[Math.min(1,BEATS.trough+.10),1]]),0,1);
   draw(cv,f);
   const CF=$('curveFill');
   setPath(CF,CURVE+" L1140 540 L86 540 Z");
   op(CF,eo(pr(p,.18,.32))*.9*(1-go));
   if(f>0.01){const q=ptOn(cv,f);$('dot').setAttribute('cx',q.x);$('dot').setAttribute('cy',q.y);op($('dot'),f<.995?1:0)}
   else op($('dot'),0);
-  op($('spikeLbl'),eo(pr(p,.30,.35))*(1-go));
-  op($('crashLbl'),eo(pr(p,.63,.68))*(1-go));
+  op($('spikeLbl'),eo(pr(p,BEATS.peak+.01,BEATS.peak+.06))*(1-go));
+  op($('crashLbl'),eo(pr(p,BEATS.trough+.01,BEATS.trough+.06))*(1-go));
 
   // vessel cells
   const vi=eo(pr(p,.08,.15)), vo=pr(p,.70,.75);
@@ -547,7 +552,9 @@ function S2(t){
 
 /* ---------------- SCENE 3 ---------------- */
 function S3(t){
-  const [a,b]=TIMING.s3,d=b-a,u=t-a,p=u/d;
+  const [a,b]=TIMING.s3;
+  // 연출 진행도는 나레이션 구간에 맞춘다 — 나레이션이 끝나면 마지막 상태로 머문다
+  const nr=TIMING.n3||[a,b-a], u=t-a, d=b-a, p=cl((t-nr[0])/nr[1],0,1);
   const L=$('L3'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
 
   const hi=eo(pr(p,.01,.07)), ho=pr(p,.55,.62);
@@ -594,7 +601,9 @@ function S3(t){
 
 /* ---------------- SCENE 4 ---------------- */
 function S4(t){
-  const [a,b]=TIMING.s4,d=b-a,u=t-a,p=u/d;
+  const [a,b]=TIMING.s4;
+  // 연출 진행도는 나레이션 구간에 맞춘다 — 나레이션이 끝나면 마지막 상태로 머문다
+  const nr=TIMING.n4||[a,b-a], u=t-a, d=b-a, p=cl((t-nr[0])/nr[1],0,1);
   const L=$('L4'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
 
   const hi=eo(pr(p,.01,.09)), ho=pr(p,.72,.79);
@@ -642,5 +651,6 @@ function render(t){
 window.render=render;
 window.setTiming=(x)=>{TIMING=x};
 window.setSubs=(x)=>{SUBS=x};
+window.setBeats=(x)=>{if(x&&x.peak)BEATS=x};
 render(0);
 </script>
