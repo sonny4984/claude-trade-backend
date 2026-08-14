@@ -1,6 +1,7 @@
 # 재생성 가능한 대용량 산출물은 저장소에 넣지 않는다
 fonts/
-audio/
+audio/*
+!audio/raw_s*.wav   # 크레딧 소진으로 재생성 불가 — 유일한 원본이라 추적한다
 stills/
 hero_raw.png
 out/*.mp4
