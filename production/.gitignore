@@ -18,3 +18,5 @@ audio/*
 
 # 납품물 중 가벼운 것만 추적
 !out/thumbnail.jpg
+
+__pycache__/

@@ -26,7 +26,10 @@ KEY_SLOWDOWN = 0.93      # 핵심 문장은 조금 천천히 — 강조는 속�
 Q_SLOWDOWN = 0.92        # 질문은 원래 천천히 던진다 — 억지로 당기지 않는다
 FILL = 0.88              # 나레이션이 슬롯에서 차지할 비율. 남는 시간은
                          # 문장 사이에 고르게 나눠 여백이 한쪽에 몰리지 않게 한다.
-TEMPO_LO, TEMPO_HI = 0.74, 1.14   # 늦추는 쪽은 여유를 둔다 — 당기는 것보다 티가 덜 난다
+# 늦추는 쪽이 당기는 쪽보다 티가 덜 나서 아래를 더 열어 둔다. 다만 심화부 원본
+# 자체가 다른 구간보다 느리게 읽혀서(중앙 4.6 대 도입부 6.1), 위쪽도 1.22 까지는
+# 열어야 네 구간이 같은 속도에 닿는다. 이 대역에서는 WSOLA 가공 티가 들리지 않는다.
+TEMPO_LO, TEMPO_HI = 0.74, 1.22
 PAUSE_END = 0.31         # 마침표·느낌표 뒤
 PAUSE_Q = 0.40           # 물음표 뒤 — 질문은 여운을 준다
 PAUSE_KEY = 0.46         # 핵심 문장 앞 호흡
@@ -79,13 +82,44 @@ def tighten(seg, keep=0.075):
     return np.concatenate(out) if out else seg
 
 
-def fit_segment(x, st, en, nsyl, ceiling=1.18):
+def onset(x, t, floor, look=0.40, lead=0.020):
+    """t 직전에서 말이 실제로 시작되는 지점을 찾는다.
+
+    인식이 주는 단어 시작 시각은 말이 이미 시작된 뒤를 가리킬 때가 많다.
+    그대로 자르면 첫 음절의 앞머리(자음 파열)가 날아가서, 그 음절만
+    유난히 빠르고 뭉개진 것처럼 들린다. 파형에서 직접 되짚어 올라간다.
+    """
+    h = int(0.002 * SR)
+    lo = max(int(floor * SR), int((t - look) * SR), 0)
+    hi = min(int(t * SR) + h, len(x))
+    if hi - lo < h * 3:
+        return t
+    seg = x[lo:hi]
+    n = len(seg) // h
+    rms = np.sqrt(np.maximum(1e-12, (seg[:n * h] ** 2).reshape(n, h).mean(1)))
+    db = 20 * np.log10(rms)
+    # 문장 본문 세기를 기준으로 잡아, 녹음 레벨이 달라도 같게 동작한다
+    body = x[int(t * SR):int(min(t + 0.6, len(x) / SR) * SR)]
+    ref = 20 * np.log10(max(1e-9, float(np.sqrt(np.mean(body ** 2))))) if len(body) else -30.0
+    thr = ref - 26
+    k = n - 1
+    while k > 0 and db[k] > thr:            # 뒤로 훑어 조용해지는 지점까지 물러난다
+        k -= 1
+    while k < n - 1 and db[k] <= thr:       # 다시 앞으로 나와 소리가 시작되는 첫 지점
+        k += 1
+    # 리드는 어느 문장에서나 같아야 한다. 더 물러나면 그만큼 앞에 정적이 붙어
+    # 그 문장만 느리게 측정되고, 배속 보정이 한쪽으로 쏠린다.
+    return max(floor, (lo + k * h) / SR - lead)
+
+
+def fit_segment(x, st, en, nsyl, floor=0.0, ceiling=1.18):
     """문장을 잘라내고, 배속을 과하게 쓰지 않아도 되도록 틈을 조절한다.
 
     느린 문장을 배속만으로 끌어올리면 그 문장만 가공 티가 난다. 어절 사이
     틈을 조금 더 줄이면 같은 속도에 훨씬 적은 배속으로 닿을 수 있으므로,
     필요한 배속이 ceiling 을 넘지 않는 선에서 틈을 좁혀 나간다.
     """
+    st = onset(x, st, floor)
     seg0 = x[int(st * SR):int(min(en + 0.06, len(x) / SR) * SR)]
     best = None
     for keep in (0.105, 0.090, GAP_FLOOR):
@@ -161,8 +195,11 @@ def main():
         spans = sentence_spans(model, src, sec.get("narration_full", sec["narration"]))
         drop = set(sec.get("drop", []))
         spans = [sp for sp in spans if sp[0] not in drop]   # 덜어낸 문장은 음성도 버린다
-        segs = [fit_segment(x, st, en, len(HANGUL.findall(s)))
-                for s, st, en in spans]
+        # 앞머리를 되짚을 때 앞 문장 꼬리를 물지 않도록 하한을 넘겨준다
+        segs, floor = [], 0.0
+        for s, st, en in spans:
+            segs.append(fit_segment(x, st, en, len(HANGUL.findall(s)), floor))
+            floor = en + 0.02
         prep[i] = (x, spans, segs)
         syl = sum(len(HANGUL.findall(s)) for s, _, _ in spans)
         speech = sum(len(g) for g in segs) / SR
