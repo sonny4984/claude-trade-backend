@@ -86,9 +86,13 @@ arp = np.zeros(N)
 perc = np.zeros(N)
 
 nbars = int(TOTAL / BAR) + 1
+# 마지막은 으뜸화음(Am)으로 닫는다. 진행을 그대로 두면 영상이 끝나는 자리가
+# 딸림화음(G)에 걸려, 베이스가 5도 위로 뛴 채 해결되지 않고 끊긴다.
+VID = tl["timing"]["total"]
+END_BAR = int((VID - 1.2) / BAR)
 for b in range(nbars):
     at = b * BAR
-    ch = PROG[b % 4]
+    ch = PROG[b % 4] if b < END_BAR else PROG[0]
     # 패드
     for m in ch:
         s = note(midi(m), BAR * 1.06, "saw", detune=0.004)
@@ -96,7 +100,7 @@ for b in range(nbars):
         lfo = 1 + 0.05 * np.sin(2 * np.pi * 0.13 * (t_of(len(s)) + at))
         add(pad, s * lfo * 0.34, at)
     # 베이스
-    bs = note(midi(BASS[b % 4]), BAR * 0.9, "sine")
+    bs = note(midi(BASS[b % 4] if b < END_BAR else BASS[0]), BAR * 0.9, "sine")
     bs *= adsr(len(bs), 0.02, 0.3, 0.55, 0.5)
     add(bass, bs * 0.5, at)
     # 아르페지오 (중반부에서만 등장)
@@ -140,7 +144,7 @@ music = music + lp_fast(rev, 2600) * 0.5
 env = np.ones(N)
 tt = t_of(N)
 env *= np.clip(tt / 2.5, 0, 1)                                   # 페이드 인
-env *= np.clip((TOTAL - tt) / 3.0, 0, 1)                         # 페이드 아웃
+env *= np.clip((VID - tt) / 3.5, 0, 1)                           # 영상 끝에 정확히 0
 env *= 0.62 + 0.38 * np.clip((tt - 30) / 12, 0, 1)               # 본론 진입
 music *= env
 
