@@ -5,7 +5,7 @@
 대본 문장에 맞춰, 문장마다 속도가 튀는 곳·쉼이 엉뚱한 데 들어간 곳·
 끝맺음이 늘어지거나 잘린 곳을 뽑아낸다.
 """
-import json, re, subprocess, sys
+import difflib, json, re, subprocess, sys
 import numpy as np
 import imageio_ffmpeg
 
@@ -62,28 +62,34 @@ def main():
         x = load(f)
         g = gaps(x, 0.16)          # 귀에 들리는 정도의 쉼만
 
-        # 인식된 단어를 대본 문장에 순서대로 배분
+        # 인식된 글자열과 대본 글자열을 정렬해 문장 경계를 찾는다.
+        # 음절 수를 비례 배분하면 인식 누락·병합이 한 번만 생겨도 뒤가 통째로 밀린다.
+        # (숫자를 "밤 11시"처럼 아라비아로 받아쓰는 구간에서 특히 크게 어긋난다)
         sents = [s for s in re.split(r"(?<=[.!?])\s+", sec["narration"].strip()) if s]
-        counts = [len(HANGUL.findall(s)) for s in sents]
-        total = sum(counts)
-        spoken = sum(len(HANGUL.findall(w.word)) for w in words)
-        scale = spoken / total if total else 1
 
-        # 인식 단어의 누적 음절수가 대본 문장의 누적 음절수를 넘어서는 지점에서 끊는다.
-        # 비례 배분은 인식 누락·병합이 있으면 뒤로 갈수록 어긋난다.
-        wsyl = [len(HANGUL.findall(w.word)) for w in words]
-        cum = np.cumsum(wsyl)
-        rows, start_w = [], 0
-        target = 0.0
-        for s, c in zip(sents, counts):
-            target += c * scale
-            end_w = int(np.searchsorted(cum, target, side="left"))
-            end_w = min(max(end_w, start_w), len(words) - 1)
-            chunk = words[start_w:end_w + 1]
-            start_w = end_w + 1
-            if not chunk:
+        script_chars, sent_of = [], []
+        for si, s in enumerate(sents):
+            for ch in HANGUL.findall(s):
+                script_chars.append(ch); sent_of.append(si)
+        heard_chars, word_of = [], []
+        for wi, w in enumerate(words):
+            for ch in HANGUL.findall(w.word):
+                heard_chars.append(ch); word_of.append(wi)
+
+        mapping = {}
+        sm = difflib.SequenceMatcher(None, script_chars, heard_chars, autojunk=False)
+        for a, b, size in sm.get_matching_blocks():
+            for k in range(size):
+                mapping[a + k] = b + k
+
+        rows = []
+        for si, s in enumerate(sents):
+            idx = [k for k, v in enumerate(sent_of) if v == si and k in mapping]
+            if not idx:
                 continue
-            st, en = chunk[0].start, chunk[-1].end
+            c = len(HANGUL.findall(s))
+            w0, w1 = word_of[mapping[idx[0]]], word_of[mapping[idx[-1]]]
+            st, en = words[w0].start, words[w1].end
             dur = max(0.15, en - st)
             rows.append((s, c, st, en, c / dur))
         rates = [r[4] for r in rows]
