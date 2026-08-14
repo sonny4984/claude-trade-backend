@@ -24,13 +24,13 @@ MIN_SIL = 0.12           # 이보다 짧으면 말소리의 일부(파열음 앞
 # 문장 끝 호흡은 남기되 짧게, 어절 사이 미세한 틈은 없앤다.
 # (원래 길이 하한, 줄인 뒤 최소, 줄인 뒤 최대)
 PAUSE_BANDS = [
-    (0.50, 0.24, 0.36),   # 문장 끝 호흡
-    (0.28, 0.13, 0.22),   # 쉼표·구 경계
-    (0.16, 0.05, 0.11),   # 약한 끊김
-    (0.00, 0.012, 0.04),  # 어절 사이 미세한 틈
+    (0.50, 0.27, 0.40),   # 문장 끝 호흡
+    (0.28, 0.15, 0.25),   # 쉼표·구 경계
+    (0.16, 0.07, 0.13),   # 약한 끊김
+    (0.00, 0.035, 0.075), # 어절 사이 — 너무 줄이면 단어가 붙어 뭉개진다
 ]
-TARGET_RATE = 6.9        # 말할 때 음절/초 — EBS 교육·다큐 나레이션 대역
-PAUSE_SHARE = 0.14       # 쉼이 전체에서 차지하는 비율
+TARGET_RATE = 6.45       # 말할 때 음절/초 — EBS 대역 안에서 약간 여유 있는 쪽
+PAUSE_SHARE = 0.16       # 쉼이 전체에서 차지하는 비율
 XFADE = int(0.004 * 48000)          # 이어붙일 때 클릭음 방지
 EDGE = 0.06              # 앞뒤로 남길 여백
 TEMPO_MIN, TEMPO_MAX = 0.95, 1.26
@@ -91,13 +91,31 @@ def target_pause(orig, k):
     return orig * k
 
 
-def rescale(x, runs, k):
+CLOSER_PAUSE = 0.50      # 마무리 인사 앞에 두는 호흡
+
+
+def closer_index(x, runs):
+    """마무리 인사가 시작되는 지점의 쉼을 찾는다.
+
+    앞에서부터 훑어 뒤에 남은 말소리가 인사 한 문장 분량(1.8~4.5초)으로
+    처음 줄어드는 쉼이 그 자리다. 끝에서부터 찾으면 인사 문장 안쪽의
+    어절 간격을 집어 "과학 / 소통이었습니다"처럼 갈라놓게 된다.
+    """
+    for idx, (_, b) in enumerate(runs):
+        tail = (len(x) - b) / SR
+        if 1.8 <= tail <= 4.5:
+            return idx
+    return -1
+
+
+def rescale(x, runs, k, closer=-1):
     """쉼 구간만 줄이고 말소리는 원본 그대로 이어 붙인다."""
     keep, prev = [], 0
-    for a, b in runs:
+    for ri, (a, b) in enumerate(runs):
         keep.append(x[prev:a])
         seg = x[a:b]
-        want = max(XFADE * 2, int(target_pause((b - a) / SR, k) * SR))
+        tp = CLOSER_PAUSE if ri == closer else target_pause((b - a) / SR, k)
+        want = max(XFADE * 2, int(tp * SR))
         if want >= len(seg):
             keep.append(np.pad(seg, (0, want - len(seg))))
         else:
@@ -126,11 +144,12 @@ def fit(src, out, target):
     x = trim_edges(x, runs)
     runs = find_pauses(x)
     total_sil = sum(b - a for a, b in runs) / SR
+    closer = closer_index(x, runs)
     lo, hi = 0.05, 3.0
     best = None
     for _ in range(24):
         k = (lo + hi) / 2
-        y = rescale(x, runs, k)
+        y = rescale(x, runs, k, closer)
         d = len(y) / SR
         if best is None or abs(d - target) < abs(best[1] - target):
             best = (k, d, y)
