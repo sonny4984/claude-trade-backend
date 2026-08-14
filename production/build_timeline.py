@@ -93,19 +93,32 @@ def main():
         if c > b + 0.35:
             print(f"  ⚠ s{i} 나레이션이 슬롯을 {c - b:.2f}s 초과합니다")
 
-    # 전개부 곡선의 정점·저점을 해당 문장이 끝나는 지점에 맞춘다.
-    # 대본이 바뀌어도 그래프가 말과 어긋나지 않도록 자막에서 직접 계산한다.
-    n2 = timing.get("n2")
+    # 연출 타이밍은 해당 말이 끝나는(또는 시작하는) 지점에서 직접 뽑는다.
+    # 대본이 바뀌어도 그림이 말과 어긋나지 않도록 자막에서 계산한다.
     beats = {}
-    if n2:
-        def frac_after(keyword, default):
-            for s in subs:
-                if keyword in s["tx"]:
-                    return round(min(1.0, max(0.0, (s["b"] - n2[0]) / n2[1])), 4)
+
+    def frac(nkey, keyword, default, edge="b"):
+        """nkey 구간 안에서 keyword 가 든 자막의 위치를 0~1 진행도로 돌려준다."""
+        n = timing.get(nkey)
+        if not n:
             return default
-        beats["peak"] = frac_after("끌어올리", 0.24)
-        beats["trough"] = frac_after("곤두박질", 0.68)
-        print(f"  전개부 곡선 정점 p={beats['peak']:.3f} · 저점 p={beats['trough']:.3f} (자막 기준)")
+        lo, hi = n[0], n[0] + n[1]
+        for s in subs:
+            if lo - 0.3 <= s["a"] <= hi + 0.5 and keyword in s["tx"]:
+                return round(min(1.0, max(0.0, (s[edge] - n[0]) / n[1])), 4)
+        return default
+
+    beats["peak"] = frac("n2", "끌어올리", 0.24)
+    beats["trough"] = frac("n2", "곤두박질", 0.68)
+    # 심화부: "강제로 꺼집니다" 를 말하는 순간 스위치가 내려가고,
+    #         "반면" 에서 비교 그래프가 올라온다.
+    beats["off"] = frac("n3", "꺼집니다", 0.40)
+    beats["cmp"] = frac("n3", "반면", 0.71, edge="a")
+    # 결론: 카드뉴스 → 거꾸로 식사법 → 마무리 카드
+    beats["cards"] = frac("n4", "간식은", 0.05, edge="a")
+    beats["flip"] = frac("n4", "거꾸로", 0.29, edge="a")
+    beats["end"] = frac("n4", "시작해", 0.90)
+    print("  연출 비트 " + " · ".join(f"{k} {v:.3f}" for k, v in beats.items()) + " (자막 기준)")
 
     total = script["sections"][-1]["slot"][1]
     timing["total"] = total

@@ -271,8 +271,17 @@ body{font-family:'Pretendard';color:var(--ink);-webkit-font-smoothing:antialiase
           </div>
         </div>
       </div>
-      <div id="swwarn" class="pill" style="display:inline-block;margin-top:28px;background:rgba(255,77,109,.16);
+      <div id="swwarn" class="pill" style="display:inline-block;margin-top:26px;background:rgba(255,77,109,.16);
         border:3px solid var(--red);color:#FF8DA3;opacity:0">포도당 과잉 → 스위치 강제 OFF</div>
+      <!-- 스위치가 꺼진 뒤 이어지는 근거 두 줄 -->
+      <div id="ev1" style="display:flex;align-items:center;gap:18px;margin-top:22px;opacity:0">
+        <div style="width:13px;height:13px;border-radius:50%;background:var(--purple);flex:none"></div>
+        <div style="font-size:29px;font-weight:700;color:var(--dim)">세포 연구 · 포도당 증가 → <span style="color:#C7B4FF">오렉신 활성 억제</span></div>
+      </div>
+      <div id="ev2" style="display:flex;align-items:center;gap:18px;margin-top:16px;opacity:0">
+        <div style="width:13px;height:13px;border-radius:50%;background:var(--amber);flex:none"></div>
+        <div style="font-size:29px;font-weight:700;color:var(--dim)">기면증 환자 · <span style="color:#FFD166">오렉신 세포 소실</span></div>
+      </div>
     </div>
     <!-- comparison -->
     <div class="c" id="cmp" style="left:104px;top:196px;width:1712px;opacity:0">
@@ -557,11 +566,13 @@ function S3(t){
   const nr=TIMING.n3||[a,b-a], u=t-a, d=b-a, p=cl((t-nr[0])/nr[1],0,1);
   const L=$('L3'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
 
-  const hi=eo(pr(p,.01,.07)), ho=pr(p,.55,.62);
+  // 스위치가 내려가는 순간과 비교 그래프가 올라오는 순간은 자막에서 뽑아 쓴다
+  const OF=(BEATS.off??.40), CM=(BEATS.cmp??.71);
+  const hi=eo(pr(p,.01,.07)), ho=pr(p,CM-.10,CM-.03);
   op($('s3h'),hi*(1-ho));
   S($('s3h'),'transform',`translateX(${lp(-50,0,hi)}px)`);
 
-  const bi=eo(pr(p,.04,.12)), bo=pr(p,.55,.62);
+  const bi=eo(pr(p,.04,.12)), bo=ho;
   op($('bwrap'),bi*(1-bo));
   S($('bwrap'),'transform',`scale(${lp(.9,1,bi)})`);
   const sp=eo(pr(p,.1,.2));
@@ -573,8 +584,8 @@ function S3(t){
   op($('swpanel'),pi*(1-bo));
   S($('swpanel'),'transform',`translateY(${lp(40,0,pi)}px)`);
 
-  // switch OFF
-  const off=eio(cl(pr(p,.3,.46),0,1));
+  // switch OFF — "강제로 꺼집니다" 를 말하는 동안 내려간다
+  const off=eio(cl(pr(p,OF-.05,OF+.008),0,1));
   const knob=$('swknob'), track=$('swtrack');
   S(knob,'left',lp(10,128,off)+'px');
   S(track,'background',off>.5?'#FF4D6D':'#2FE0A0');
@@ -586,16 +597,23 @@ function S3(t){
   $('awakeV').textContent=aw+'%';
   S($('awakeBar'),'width',aw+'%');
   S($('awakeBar'),'background',off>.5?'linear-gradient(90deg,#FF4D6D,#FF8DA3)':'linear-gradient(90deg,#2FE0A0,#7DE0FF)');
-  op($('swwarn'),eo(pr(p,.46,.53)));
+  op($('swwarn'),eo(pr(p,OF+.015,OF+.065))*(1-bo));
+
+  // 스위치가 내려간 뒤 근거 두 줄 — 각각 해당 문장에서 떠오른다
+  [['ev1',OF+.02],['ev2',CM-.175]].forEach(([id,st])=>{
+    const e=$(id), f=eo(cl(pr(p,st,st+.055),0,1));
+    op(e,f*(1-bo));
+    S(e,'transform',`translateX(${lp(-26,0,f)}px)`);
+  });
 
   // comparison
-  const ci=eo(pr(p,.62,.7));
+  const ci=eo(pr(p,CM-.025,CM+.045));
   const C=$('cmp'); op(C,ci);
   S(C,'transform',`translateY(${lp(50,0,ci)}px)`);
   const A=$('cA'),B=$('cB');
   setPath(A,"M40 186 C120 180 150 176 200 92 C250 8 300 40 350 150 C395 248 450 262 520 236 C590 212 660 190 720 186");
   setPath(B,"M40 186 C140 182 200 168 300 132 C400 96 460 104 540 140 C610 170 670 184 720 186");
-  const df=eio(cl(pr(p,.66,.9),0,1));
+  const df=eio(cl(pr(p,CM+.03,Math.min(.99,CM+.20)),0,1));
   draw(A,df); draw(B,df);
 }
 
@@ -606,24 +624,26 @@ function S4(t){
   const nr=TIMING.n4||[a,b-a], u=t-a, d=b-a, p=cl((t-nr[0])/nr[1],0,1);
   const L=$('L4'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
 
-  const hi=eo(pr(p,.01,.09)), ho=pr(p,.72,.79);
+  // 카드·순서·마무리 타이밍도 자막에서 뽑아 쓴다
+  const CA=(BEATS.cards??.05), FL=(BEATS.flip??.29), EN=(BEATS.end??.90);
+  const hi=eo(pr(p,.01,.09)), ho=pr(p,EN-.18,EN-.11);
   op($('s4h'),hi*(1-ho)); S($('s4h'),'transform',`translateY(${lp(-34,0,hi)}px)`);
 
-  const cardsOut=pr(p,.72,.79);
-  [['cd1',.08],['cd2',.15],['cd3',.22]].forEach(([id,st])=>{
+  const cardsOut=ho;
+  [['cd1',CA+.02],['cd2',CA+.09],['cd3',CA+.16]].forEach(([id,st])=>{
     const e=$(id), f=eo(pr(p,st,st+.13));
     op(e,f*(1-cardsOut));
     S(e,'transform',`translateY(${lp(64,0,f)}px) scale(${lp(.95,1,f)})`);
   });
-  [['or1',.3],['or2',.37],['or3',.44]].forEach(([id,st])=>{
+  [['or1',FL+.01],['or2',FL+.08],['or3',FL+.15]].forEach(([id,st])=>{
     const e=$(id), f=eb(cl(pr(p,st,st+.1),0,1));
     op(e,cl(f,0,1)); S(e,'transform',`translateX(${lp(-34,0,cl(f,0,1))}px)`);
   });
-  const cd3f=eio(cl(pr(p,.5,.7),0,1));
+  const cd3f=eio(cl(pr(p,FL+.12,FL+.245),0,1));
   const c3=$('cd3c'); setPath(c3,"M20 132 C90 96 140 84 190 88 C250 92 300 104 360 112");
   draw(c3,cd3f);
 
-  const ei2=eo(pr(p,.8,.9));
+  const ei2=eo(pr(p,EN-.10,EN-.01));
   const E=$('endc'); op(E,ei2);
   S(E,'transform',`translateY(${lp(40,0,ei2)}px) scale(${lp(.97,1,ei2)})`);
 }
