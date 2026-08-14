@@ -75,7 +75,8 @@ def main():
         wav = D / "audio" / f"s{i}.wav"
         d = dur(wav)
         a, b = sec["slot"]
-        start = a + sec["lead"]
+        # 나레이션이 길면 앞 여백을 줄여서라도 슬롯 안에 들어오게 한다
+        start = a + min(sec["lead"], max(0.2, (b - a) - d - 0.4))
         audio.append({"file": str(wav), "at": round(start, 3), "dur": round(d, 3)})
         timing[f"s{i}"] = [round(a, 3), round(b, 3)]
         # 화면 연출은 슬롯이 아니라 나레이션 구간에 맞춰 진행시킨다.
