@@ -17,9 +17,9 @@ FF = imageio_ffmpeg.get_ffmpeg_exe()
 SR = 48000
 HANGUL = re.compile(r"[가-힣]")
 
-TARGET = 5.45            # 전체 목표 음절/초 (문장·구간 공통)
+TARGET_HINT = 5.90       # 틈 조절용 기준값 — 실제 목표는 슬롯에서 계산한다
 KEY_SLOWDOWN = 0.93      # 핵심 문장은 조금 천천히 — 강조는 속도로 준다
-TEMPO_LO, TEMPO_HI = 0.82, 1.36
+TEMPO_LO, TEMPO_HI = 0.82, 1.30
 PAUSE_END = 0.31         # 마침표·느낌표 뒤
 PAUSE_Q = 0.40           # 물음표 뒤 — 질문은 여운을 준다
 PAUSE_KEY = 0.46         # 핵심 문장 앞 호흡
@@ -72,6 +72,24 @@ def tighten(seg, keep=0.075):
     return np.concatenate(out) if out else seg
 
 
+def fit_segment(x, st, en, nsyl, ceiling=1.18):
+    """문장을 잘라내고, 배속을 과하게 쓰지 않아도 되도록 틈을 조절한다.
+
+    느린 문장을 배속만으로 끌어올리면 그 문장만 가공 티가 난다. 어절 사이
+    틈을 조금 더 줄이면 같은 속도에 훨씬 적은 배속으로 닿을 수 있으므로,
+    필요한 배속이 ceiling 을 넘지 않는 선에서 틈을 좁혀 나간다.
+    """
+    seg0 = x[int(st * SR):int(min(en + 0.06, len(x) / SR) * SR)]
+    best = None
+    for keep in (0.075, 0.060, 0.048, 0.038, 0.030):
+        seg = tighten(seg0, keep)
+        rate = nsyl / max(0.2, len(seg) / SR)
+        best = seg
+        if rate * ceiling >= TARGET_HINT:
+            break
+    return best
+
+
 def stretch(seg, tempo):
     """말소리 구간의 속도만 바꾼다 (음정은 유지)."""
     if abs(tempo - 1.0) < 0.005 or len(seg) < SR // 20:
@@ -118,8 +136,8 @@ def main():
         src = f"audio/raw_s{i}.wav"
         x = load(src)
         spans = sentence_spans(model, src, sec["narration"])
-        segs = [tighten(x[int(st * SR):int(min(en + 0.06, len(x) / SR) * SR)])
-                for _, st, en in spans]
+        segs = [fit_segment(x, st, en, len(HANGUL.findall(s)))
+                for s, st, en in spans]
         prep[i] = (x, spans, segs)
         syl = sum(len(HANGUL.findall(s)) for s, _, _ in spans)
         speech = sum(len(g) for g in segs) / SR
@@ -157,9 +175,11 @@ def main():
         y = np.concatenate(pieces)
         save(y, f"audio/t{i}.wav")
 
-        # 아주 짧은 문장은 앞뒤 여운 때문에 느리게 측정된다 — 편차 계산에서 뺀다
+        # 편차는 '고르게 하려던 문장'끼리만 본다. 핵심 문장의 감속은 의도한 것이고,
+        # 아주 짧은 문장은 앞뒤 여운 때문에 실제보다 느리게 측정된다.
         rates = [r[3] for r, (s, _, _) in zip(report, spans)
-                 if len(HANGUL.findall(s)) >= 9] or [r[3] for r in report]
+                 if len(HANGUL.findall(s)) >= 9 and not any(t in s for t in KEY)] \
+                or [r[3] for r in report]
         print(f"[{sec['id']}] {len(spans)}문장 · {len(y)/SR:5.1f}s · "
               f"문장 속도 {min(rates):.2f}~{max(rates):.2f} "
               f"(편차 {(max(rates)/min(rates)-1)*100:.1f}%)")
