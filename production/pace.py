@@ -158,13 +158,25 @@ def ease_pauses(seg, thresh=0.16, target=0.11):
     return _join([p for p in parts if len(p)])
 
 
+def edges(seg, ms=0.004):
+    """머리·꼬리에 4ms 페이드. 파형이 0 아닌 값에서 시작·끝나면 그 자리가 딱 소리가 된다."""
+    n = int(ms * SR)
+    if len(seg) < n * 3:
+        return seg
+    seg = seg.copy()
+    w = np.linspace(0, 1, n, dtype=np.float32)
+    seg[:n] *= w
+    seg[-n:] *= w[::-1]
+    return seg
+
+
 def cut(x, st, en, floor=0.0):
     """문장 하나를 원본 그대로 떼어낸다.
 
     문장 안의 긴 틈은 ease_pauses 가 배속으로 줄인다. 잘라내지 않는다.
     """
     st = onset(x, st, floor)
-    return ease_pauses(x[int(st * SR):int(min(en + 0.06, len(x) / SR) * SR)])
+    return edges(ease_pauses(x[int(st * SR):int(min(en + 0.06, len(x) / SR) * SR)]))
 
 
 def stretch(seg, tempo):
@@ -239,18 +251,28 @@ def single_source(model, script):
     if missing:
         raise SystemExit(f"음원에서 못 찾은 문장 {len(missing)}개: {missing[:2]}")
 
+    # 1차: 배속을 걸지 않은 상태로 재서 필요한 배속을 구한다
     segs, floor = [], 0.0
     for t in flat:
         _, st, en = got[t]
         segs.append(cut(x, st, en, floor))
         floor = en + 0.02
-
     syl = sum(len(HANGUL.findall(t)) for t in flat)
     art = syl / (sum(len(g) for g in segs) / SR)
     tempo = float(np.clip(TARGET_ART / art, TEMPO_LO, TEMPO_HI))
+
+    # 2차: 배속은 문장마다 걸지 않고 파일 전체에 한 번만 건다.
+    #      atempo 는 버퍼 앞부분에서 분석창이 덜 찬 상태로 시작해 과도현상이 생긴다.
+    #      문장마다 걸면 그 현상이 문장 수만큼 생겨, 첫 단어가 버벅이는 것처럼
+    #      들린다. 통으로 한 번 걸면 과도현상도 한 번뿐이고 맨 앞 침묵에 묻힌다.
+    xs = stretch(x, tempo)
+    out, floor = [], 0.0
+    for t in flat:
+        _, st, en = got[t]
+        out.append(cut(xs, st / tempo, en / tempo, floor))   # 경계도 같은 비율로 옮긴다
+        floor = en / tempo + 0.02
     print(f"원본 조음속도 {art:.2f} → {art*tempo:.2f} 음절/초 · "
-          f"배속 x{tempo:.3f} (영상 전체에 하나만 적용)\n")
-    out = [stretch(g, tempo) for g in segs]
+          f"배속 x{tempo:.3f} (파일 전체에 한 번, 문장별 아님)\n")
 
     for i, sec in enumerate(script):
         idx = [k for k, o in enumerate(owner) if o == i]
