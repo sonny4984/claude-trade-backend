@@ -122,7 +122,7 @@ def _join(parts, xf=0.008):
     return out
 
 
-def ease_pauses(seg, thresh=0.16, target=0.11):
+def ease_pauses(seg, thresh=0.16, target=0.11, guard=0.25):
     """문장 안의 긴 틈만 빠르게 돌려 줄인다.
 
     예전에는 이 틈을 잘라 붙였다. 그런데 틈의 대부분은 완전한 무음이 아니라
@@ -137,6 +137,10 @@ def ease_pauses(seg, thresh=0.16, target=0.11):
     rms = np.sqrt(np.maximum(1e-12, np.mean(seg[:n * h].reshape(n, h) ** 2, axis=1)))
     db = 20 * np.log10(np.maximum(rms, 1e-9))
     quiet = db < np.percentile(db, 90) - 24
+    # 문장 머리는 건드리지 않는다. 첫 음절 근처를 손대면 그 단어만
+    # 이상하게 들리고, 그게 정확히 지적받은 증상이었다. 꼬리는 다음 문장
+    # 사이 호흡에 이어지므로 손봐도 티가 나지 않는다.
+    g = int(guard / 0.005)
     parts, prev, i = [], 0, 0
     while i < n:
         if quiet[i]:
@@ -144,7 +148,7 @@ def ease_pauses(seg, thresh=0.16, target=0.11):
             while j < n and quiet[j]:
                 j += 1
             L = (j - i) * 0.005
-            if L >= thresh:
+            if L >= thresh and i > g:
                 parts.append(seg[prev:i * h])
                 gap = seg[i * h:j * h]
                 parts.append(_af(gap, _tempo_chain(L / target)))
@@ -230,7 +234,18 @@ def sentence_spans(model, path, narration):
 
 
 SOURCE = "audio/source.wav"     # 통으로 한 번에 읽은 나레이션. source.mp3 에서 만든다
-TARGET_ART = 6.00              # 목표 조음속도(무음 제외). 원본보다 한 단계 느긋하게.
+
+# 말소리에는 배속을 걸지 않는다.
+#
+# 배속(WSOLA)은 시간을 늘리려고 파형 조각을 복제한다. 그 복제가 자음이
+# 시작되는 자리에 걸리면 "시 시험은", "그 그래서" 처럼 첫 음절이 두 번
+# 난다. 문장마다 걸던 것을 파일 전체 한 번으로 바꿔도, 늘리는 행위 자체가
+# 원인이라 남는다. 측정해 보니 원본 73곳 대비 atempo 는 94곳으로
+# 복제 의심 지점을 21곳 더 만들었다.
+#
+# 대본이 슬롯에 들어가므로 늘릴 이유가 없다. 속도가 느긋해 보여야 하는 것은
+# 문장 사이 호흡으로 만든다. 말소리는 받은 그대로 한 표본도 건드리지 않는다.
+STRETCH_SPEECH = False
 
 
 def single_source(model, script):
@@ -251,28 +266,14 @@ def single_source(model, script):
     if missing:
         raise SystemExit(f"음원에서 못 찾은 문장 {len(missing)}개: {missing[:2]}")
 
-    # 1차: 배속을 걸지 않은 상태로 재서 필요한 배속을 구한다
-    segs, floor = [], 0.0
-    for t in flat:
-        _, st, en = got[t]
-        segs.append(cut(x, st, en, floor))
-        floor = en + 0.02
-    syl = sum(len(HANGUL.findall(t)) for t in flat)
-    art = syl / (sum(len(g) for g in segs) / SR)
-    tempo = float(np.clip(TARGET_ART / art, TEMPO_LO, TEMPO_HI))
-
-    # 2차: 배속은 문장마다 걸지 않고 파일 전체에 한 번만 건다.
-    #      atempo 는 버퍼 앞부분에서 분석창이 덜 찬 상태로 시작해 과도현상이 생긴다.
-    #      문장마다 걸면 그 현상이 문장 수만큼 생겨, 첫 단어가 버벅이는 것처럼
-    #      들린다. 통으로 한 번 걸면 과도현상도 한 번뿐이고 맨 앞 침묵에 묻힌다.
-    xs = stretch(x, tempo)
     out, floor = [], 0.0
     for t in flat:
         _, st, en = got[t]
-        out.append(cut(xs, st / tempo, en / tempo, floor))   # 경계도 같은 비율로 옮긴다
-        floor = en / tempo + 0.02
-    print(f"원본 조음속도 {art:.2f} → {art*tempo:.2f} 음절/초 · "
-          f"배속 x{tempo:.3f} (파일 전체에 한 번, 문장별 아님)\n")
+        out.append(cut(x, st, en, floor))
+        floor = en + 0.02
+    syl = sum(len(HANGUL.findall(t)) for t in flat)
+    art = syl / (sum(len(g) for g in out) / SR)
+    print(f"조음속도 {art:.2f} 음절/초 · 말소리 배속 없음 — 받은 그대로\n")
 
     for i, sec in enumerate(script):
         idx = [k for k, o in enumerate(owner) if o == i]
@@ -280,14 +281,15 @@ def single_source(model, script):
         speech = sum(len(g) for g in oo) / SR
         # 화면이 자리를 잡는 동안(lead)은 말이 없다. 그만큼 빼고 계산해야
         # 나레이션이 슬롯 끝을 밀고 나가지 않는다.
-        slot = sec["slot"][1] - sec["slot"][0] - sec.get("lead", 0.9) - 0.4
+        # lead 와 꼬리 여백을 이미 뺐으므로 여유율을 또 곱하지 않는다
+        slot = sec["slot"][1] - sec["slot"][0] - sec.get("lead", 0.9) - 0.5
         nkey = sum(1 for t in ss if any(z in t for z in KEY))
         # 쉼에는 배수가 붙는다(질문 뒤, 끝맺음이 겹치는 자리). 배수를 빼고
         # 문장 수로만 나누면 실제 길이가 예산을 넘어 슬롯을 밀고 나간다.
         w = [1.18 if t.rstrip().endswith("?") else
              SAME_END_GAP if ending(t) == ending(ss[k + 1]) else 1.0
              for k, t in enumerate(ss[:-1])]
-        budget = slot * FILL - speech - HEAD - TAIL - nkey * PAUSE_KEY
+        budget = slot - speech - HEAD - TAIL - nkey * PAUSE_KEY
         gap = float(np.clip(budget / max(1e-6, sum(w)), GAP_MIN, GAP_MAX))
 
         pieces = [np.zeros(int(HEAD * SR), np.float32)]
