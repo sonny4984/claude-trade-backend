@@ -217,7 +217,7 @@ def sentence_spans(model, path, narration):
     return out
 
 
-SOURCE = "audio/source.wav"     # 통으로 한 번에 읽은 나레이션이 있으면 이걸 쓴다
+SOURCE = "audio/source.wav"     # 통으로 한 번에 읽은 나레이션. source.mp3 에서 만든다
 TARGET_ART = 6.00              # 목표 조음속도(무음 제외). 원본보다 한 단계 느긋하게.
 
 
@@ -304,6 +304,14 @@ def main():
     from faster_whisper import WhisperModel
     model = WhisperModel("medium", device="cpu", compute_type="int8")
     script = json.loads(open("script.json").read())["sections"]
+    # 받은 원본(mp3)은 저장소에 그대로 두고, 작업용 wav 는 여기서 만든다.
+    src_mp3 = pathlib.Path("audio/source.mp3")
+    if src_mp3.exists() and not pathlib.Path(SOURCE).exists():
+        subprocess.run([FF, "-y", "-loglevel", "error", "-i", str(src_mp3),
+                        "-af", "highpass=f=60,volume=0.85", "-ar", str(SR), "-ac", "1",
+                        SOURCE], check=True)
+        print(f"원본 {src_mp3} → {SOURCE}")
+
     if pathlib.Path(SOURCE).exists():
         single_source(model, script)
     else:
