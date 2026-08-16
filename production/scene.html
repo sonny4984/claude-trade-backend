@@ -373,6 +373,7 @@ const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
 const pr=(t,a,b)=>cl((t-a)/Math.max(1e-6,(b-a)),0,1);
 const eo=t=>1-Math.pow(1-t,3);           // ease out cubic
 const ei=t=>t*t*t;
+const SCENE_IN=(t,a,d0,d1)=>eo(pr(t,a+d0,a+d1));   // 장면 등장은 슬롯 시각 기준
 const eio=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
 const eb=t=>{const c=1.70158+1,s=1.70158;return 1+c*Math.pow(t-1,3)+s*Math.pow(t-1,2)};
 const lp=(a,b,t)=>a+(b-a)*t;
@@ -440,11 +441,13 @@ function S1(t){
   const L=$('L1'); op(L, (u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
 
   // title
-  const ti=pr(p,0,.06), to=pr(p,.14,.2);
-  const t1=$('t1a'); op(t1,(1-to)*eo(ti));
-  S(t1,'transform',`translateY(${lp(46,0,eo(ti))-to*40}px) scale(${lp(.96,1,eo(ti))})`);
-  op($('t1kick'),eo(pr(p,.005,.05)));
-  S($('t1line'),'width',(eo(pr(p,.045,.12))*300)+'px');
+  // 타이틀은 말이 시작되기 전에 자리를 잡아야 한다. 나레이션 진행도에 걸어 두면
+  // 첫 마디가 빈 화면 위에서 나온다 — 슬롯 시각으로 옮긴다.
+  const ti=SCENE_IN(t,a,0.25,1.75), to=pr(p,.14,.2);
+  const t1=$('t1a'); op(t1,(1-to)*ti);
+  S(t1,'transform',`translateY(${lp(46,0,ti)-to*40}px) scale(${lp(.96,1,ti)})`);
+  op($('t1kick'),SCENE_IN(t,a,0.15,1.30));
+  S($('t1line'),'width',(SCENE_IN(t,a,0.55,2.00)*300)+'px');
 
   // desk scene
   const dk=$('desk'), din=eo(pr(p,.13,.2)), dout=pr(p,.78,.86);
@@ -501,12 +504,12 @@ function S2(t){
   const nr=TIMING.n2||[a,b-a], u=t-a, d=b-a, p=cl((t-nr[0])/nr[1],0,1);
   const L=$('L2'); op(L,(u>=-0.4&&u<=d+0.4)?1:0); if(L.style.opacity==0)return;
 
-  const hi=eo(pr(p,.01,.07));
+  const hi=SCENE_IN(t,a,0.20,1.50);
   op($('s2h'),hi*(1-pr(p,.70,.75)));
   S($('s2h'),'transform',`translateX(${lp(-50,0,hi)}px)`);
 
   // graph
-  const gi=eo(pr(p,.02,.08)), go=pr(p,.70,.75);
+  const gi=SCENE_IN(t,a,0.45,1.85), go=pr(p,.70,.75);
   const G=$('gwrap'); op(G,gi*(1-go));
   S(G,'transform',`translateY(${lp(40,0,gi)}px)`);
   op($('base'),eo(pr(p,.05,.11))); op($('baselbl'),eo(pr(p,.05,.11)));
@@ -567,11 +570,11 @@ function S3(t){
   // 비교 그래프는 슬롯 시계로 움직이므로, 앞 화면이 물러나는 것도 같은 시계에 건다.
   // 진행도로 걸어 두면 나레이션이 짧아졌을 때 둘 사이가 벌어져 빈 화면이 뜬다.
   const cmT=nr[0]+CM*nr[1];
-  const hi=eo(pr(p,.01,.07)), ho=pr(t,cmT-1.7,cmT-0.5);
+  const hi=SCENE_IN(t,a,0.20,1.50), ho=pr(t,cmT-1.7,cmT-0.5);
   op($('s3h'),hi*(1-ho));
   S($('s3h'),'transform',`translateX(${lp(-50,0,hi)}px)`);
 
-  const bi=eo(pr(p,.04,.12)), bo=ho;
+  const bi=SCENE_IN(t,a,0.45,1.90), bo=ho;
   op($('bwrap'),bi*(1-bo));
   S($('bwrap'),'transform',`scale(${lp(.9,1,bi)})`);
   const sp=eo(pr(p,.1,.2));
@@ -627,7 +630,7 @@ function S4(t){
 
   // 카드·순서·마무리 타이밍도 자막에서 뽑아 쓴다
   const CA=(BEATS.cards??.05), FL=(BEATS.flip??.29), EN=(BEATS.end??.90);
-  const hi=eo(pr(p,.01,.09)), ho=pr(p,EN-.18,EN-.11);
+  const hi=SCENE_IN(t,a,0.20,1.50), ho=pr(p,EN-.18,EN-.11);
   op($('s4h'),hi*(1-ho)); S($('s4h'),'transform',`translateY(${lp(-34,0,hi)}px)`);
 
   const cardsOut=ho;

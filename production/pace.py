@@ -256,7 +256,9 @@ def single_source(model, script):
         idx = [k for k, o in enumerate(owner) if o == i]
         ss, oo = [flat[k] for k in idx], [out[k] for k in idx]
         speech = sum(len(g) for g in oo) / SR
-        slot = sec["slot"][1] - sec["slot"][0]
+        # 화면이 자리를 잡는 동안(lead)은 말이 없다. 그만큼 빼고 계산해야
+        # 나레이션이 슬롯 끝을 밀고 나가지 않는다.
+        slot = sec["slot"][1] - sec["slot"][0] - sec.get("lead", 0.9) - 0.4
         nkey = sum(1 for t in ss if any(z in t for z in KEY))
         # 쉼에는 배수가 붙는다(질문 뒤, 끝맺음이 겹치는 자리). 배수를 빼고
         # 문장 수로만 나누면 실제 길이가 예산을 넘어 슬롯을 밀고 나간다.
@@ -279,7 +281,7 @@ def single_source(model, script):
         y = np.concatenate(pieces)
         save(y, f"audio/t{i+1}.wav")
         n = sum(len(HANGUL.findall(t)) for t in ss)
-        print(f"[{sec['id']}] {len(ss)}문장 · {len(y)/SR:5.1f}s (슬롯 {slot:.0f}s) · "
+        print(f"[{sec['id']}] {len(ss)}문장 · {len(y)/SR:5.1f}s (말할 수 있는 시간 {slot:.1f}s) · "
               f"{n}음절 · 문장 사이 {gap:.2f}s")
 
 

@@ -15,6 +15,7 @@ audio/*
 !audio/raw_s2.wav
 !audio/raw_s3.wav
 !audio/raw_s4.wav
+!audio/source.mp3
 
 # 납품물 중 가벼운 것만 추적
 !out/thumbnail.jpg
