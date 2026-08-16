@@ -20,3 +20,7 @@ audio/*
 !out/thumbnail.jpg
 
 __pycache__/
+
+# 인수인계 산출물은 make_handoff.py 로 다시 만들 수 있다
+out/handoff/
+out/pace.log
