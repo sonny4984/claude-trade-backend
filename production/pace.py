@@ -291,6 +291,9 @@ SOURCE = "audio/source.wav"     # 통으로 한 번에 읽은 나레이션. sour
 STRETCH_SPEECH = False
 
 
+LAYOUT = {}
+
+
 def single_source(model, script):
     """한 번에 통으로 읽은 음원 하나를 문장별로 갈라 구간에 나눠 담는다.
 
@@ -317,15 +320,52 @@ def single_source(model, script):
         starts.append(onset(x, st, floor))
         floor = en + 0.02
 
-    out, floor = [], 0.0
-    for k, t in enumerate(flat):
-        _, st, en = got[t]
+    def raw(k):
+        """문장 하나를 원본에서 그대로 떼어낸다 — 아무 가공도 하지 않는다."""
+        _, st, en = got[flat[k]]
+        prev = got[flat[k - 1]][2] + 0.02 if k else 0.0
+        s0 = onset(x, st, prev)
         ceil = (starts[k + 1] - 0.030) if k + 1 < len(starts) else len(x) / SR
-        out.append(cut(x, st, en, floor, ceil))
-        floor = en + 0.02
+        e = tail(x, en, ceil, s0)
+        return x[int(s0 * SR):int(max(e, s0 + 0.1) * SR)]
+
+    def fits(segs, ss, sec, gap=GAP_MIN):
+        speech = sum(len(g) for g in segs) / SR
+        # 마지막 구간은 사인오프 뒤에 음악이 잦아들 여유가 필요하다.
+        # 0.5초만 남기면 말이 끝나자마자 영상이 끊기는 느낌이 난다.
+        reserve = 1.6 if i == len(script) - 1 else 0.5
+        slot = sec["slot"][1] - sec["slot"][0] - sec.get("lead", 0.9) - reserve
+        nkey = sum(1 for t in ss if any(z in t for z in KEY))
+        w = [1.18 if t.rstrip().endswith("?") else
+             SAME_END_GAP if ending(t) == ending(ss[i + 1]) else 1.0
+             for i, t in enumerate(ss[:-1])]
+        return speech + gap * sum(w) + HEAD + TAIL + nkey * PAUSE_KEY <= slot
+
+    # 구간마다 '들어가는 선에서 가장 적게' 손댄다. 대부분의 구간은
+    # 손댈 필요가 없어 받은 음성 그대로 나간다.
+    out = [None] * len(flat)
+    for i, sec in enumerate(script):
+        idx = [k for k, o in enumerate(owner) if o == i]
+        ss = [flat[k] for k in idx]
+        base = [raw(k) for k in idx]
+        chosen, used = base, None
+        if not fits(base, ss, sec):
+            for tg in (0.22, 0.19, 0.16, 0.13, 0.11):     # 약한 것부터
+                cand = [ease_pauses(g, target=tg) for g in base]
+                if fits(cand, ss, sec):
+                    chosen, used = cand, tg
+                    break
+            else:
+                chosen, used = [ease_pauses(g, target=0.11) for g in base], 0.11
+        for k, g in zip(idx, chosen):
+            out[k] = edges(g)
+        n = sum(len(HANGUL.findall(t)) for t in ss)
+        note = "손대지 않음" if used is None else f"쉼만 {used*1000:.0f}ms 로 정리"
+        print(f"[{sec['id']}] {len(ss)}문장 · {n}음절 · 말소리 {note}")
+
     syl = sum(len(HANGUL.findall(t)) for t in flat)
     art = syl / (sum(len(g) for g in out) / SR)
-    print(f"조음속도 {art:.2f} 음절/초 · 말소리 배속 없음 — 받은 그대로\n")
+    print(f"조음속도 {art:.2f} 음절/초 · 배속 없음\n")
 
     for i, sec in enumerate(script):
         idx = [k for k, o in enumerate(owner) if o == i]
@@ -334,7 +374,9 @@ def single_source(model, script):
         # 화면이 자리를 잡는 동안(lead)은 말이 없다. 그만큼 빼고 계산해야
         # 나레이션이 슬롯 끝을 밀고 나가지 않는다.
         # lead 와 꼬리 여백을 이미 뺐으므로 여유율을 또 곱하지 않는다
-        slot = sec["slot"][1] - sec["slot"][0] - sec.get("lead", 0.9) - 0.5
+        # 마지막 구간은 사인오프 뒤에 음악이 잦아들 여유가 필요하다.
+        reserve = 1.6 if i == len(script) - 1 else 0.5
+        slot = sec["slot"][1] - sec["slot"][0] - sec.get("lead", 0.9) - reserve
         nkey = sum(1 for t in ss if any(z in t for z in KEY))
         # 쉼에는 배수가 붙는다(질문 뒤, 끝맺음이 겹치는 자리). 배수를 빼고
         # 문장 수로만 나누면 실제 길이가 예산을 넘어 슬롯을 밀고 나간다.
@@ -345,9 +387,11 @@ def single_source(model, script):
         gap = float(np.clip(budget / max(1e-6, sum(w)), GAP_MIN, GAP_MAX))
 
         pieces = [np.zeros(int(HEAD * SR), np.float32)]
+        layout = []
         for k, t in enumerate(ss):
             if any(z in t for z in KEY) and k > 0:
                 pieces.append(np.zeros(int(PAUSE_KEY * SR), np.float32))
+            layout.append([t, sum(len(p) for p in pieces), len(oo[k])])
             pieces.append(oo[k])
             if k < len(ss) - 1:
                 g = gap * (1.18 if t.rstrip().endswith("?") else
@@ -356,6 +400,7 @@ def single_source(model, script):
         pieces.append(np.zeros(int(TAIL * SR), np.float32))
         y = np.concatenate(pieces)
         save(y, f"audio/t{i+1}.wav")
+        LAYOUT[sec["id"]] = layout
         n = sum(len(HANGUL.findall(t)) for t in ss)
         print(f"[{sec['id']}] {len(ss)}문장 · {len(y)/SR:5.1f}s (말할 수 있는 시간 {slot:.1f}s) · "
               f"{n}음절 · 문장 사이 {gap:.2f}s")
@@ -392,6 +437,8 @@ def main():
         single_source(model, script)
     else:
         per_section(model, script)
+    if LAYOUT:
+        json.dump(LAYOUT, open("out/layout.json", "w"), ensure_ascii=False)
     master()
 
 
