@@ -17,21 +17,16 @@ FF = imageio_ffmpeg.get_ffmpeg_exe()
 SR = 48000
 HANGUL = re.compile(r"[가-힣]")
 
-TARGET_HINT = 5.45       # 틈 조절용 기준값 — 실제 목표는 슬롯에서 계산한다
 NATURAL_RATE = 5.40      # 편안한 한국어 나레이션 속도. 슬롯이 남아도
                          # 이보다 늦추지 않는다 — 늘어지면 그것도 어색하다.
-GAP_FLOOR = 0.075        # 어절 사이 간격 하한 — 한국어 자연 발화는 0.06~0.12초.
-                         # 이보다 줄이면 단어가 붙어 '한걸음더들어가볼까요'가 된다.
-KEY_SLOWDOWN = 0.93      # 핵심 문장은 조금 천천히 — 강조는 속도로 준다
-Q_SLOWDOWN = 0.92        # 질문은 원래 천천히 던진다 — 억지로 당기지 않는다
-FILL = 0.88              # 나레이션이 슬롯에서 차지할 비율. 남는 시간은
+GAP_MIN = 0.62           # 문장 사이 최소 호흡
+FILL = 0.92              # 나레이션이 슬롯에서 차지할 비율. 남는 시간은
                          # 문장 사이에 고르게 나눠 여백이 한쪽에 몰리지 않게 한다.
-# 늦추는 쪽이 당기는 쪽보다 티가 덜 나서 아래를 더 열어 둔다. 다만 심화부 원본
-# 자체가 다른 구간보다 느리게 읽혀서(중앙 4.6 대 도입부 6.1), 위쪽도 1.22 까지는
-# 열어야 네 구간이 같은 속도에 닿는다. 이 대역에서는 WSOLA 가공 티가 들리지 않는다.
-TEMPO_LO, TEMPO_HI = 0.74, 1.22
-PAUSE_END = 0.31         # 마침표·느낌표 뒤
-PAUSE_Q = 0.40           # 물음표 뒤 — 질문은 여운을 준다
+# 배속은 음색을 건드리지 않는다. 원본 문장 하나를 0.85~1.40 으로 늘여 보고
+# 스펙트럼을 원본과 견줘 보니 어느 값에서도 차이가 측정 바닥값에 묻혔다.
+# 반면 어절 틈을 잘라 붙이는 방식은 숨소리를 끊어 그대로 들린다.
+# 그래서 길이 맞추기는 전부 배속에 맡기고, 대역을 넉넉히 연다.
+TEMPO_LO, TEMPO_HI = 0.85, 1.36
 PAUSE_KEY = 0.46         # 핵심 문장 앞 호흡
 HEAD, TAIL = 0.10, 0.18
 
@@ -59,37 +54,6 @@ def save(x, p):
     with wave.open(str(p), "wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
         w.writeframes((np.clip(x, -1, 1) * 32767).astype("<i2").tobytes())
-
-
-def tighten(seg, keep=0.075):
-    """문장 안쪽의 미세한 끊김만 줄인다.
-
-    TTS 는 어절 사이에 0.1~0.3초씩 틈을 넣는데, 이걸 둔 채로 속도를 올리면
-    말소리까지 같이 빨라져 부자연스럽다. 틈을 먼저 정리하면 훨씬 적은
-    속도 보정으로 목표에 닿는다.
-    """
-    h = int(0.005 * SR)
-    n = len(seg) // h
-    if n < 4:
-        return seg
-    rms = np.sqrt(np.maximum(1e-12, np.mean(seg[:n * h].reshape(n, h) ** 2, axis=1)))
-    db = 20 * np.log10(np.maximum(rms, 1e-9))
-    quiet = db < np.percentile(db, 90) - 24
-    out, prev, i = [], 0, 0
-    while i < n:
-        if quiet[i]:
-            j = i
-            while j < n and quiet[j]:
-                j += 1
-            if (j - i) * 0.005 >= 0.10:
-                out.append(seg[prev:i * h])
-                out.append(seg[i * h:i * h + int(keep * SR)])
-                prev = j * h
-            i = j
-        else:
-            i += 1
-    out.append(seg[prev:])
-    return np.concatenate(out) if out else seg
 
 
 def onset(x, t, floor, look=0.40, lead=0.020):
@@ -122,23 +86,85 @@ def onset(x, t, floor, look=0.40, lead=0.020):
     return max(floor, (lo + k * h) / SR - lead)
 
 
-def fit_segment(x, st, en, nsyl, floor=0.0, ceiling=1.18):
-    """문장을 잘라내고, 배속을 과하게 쓰지 않아도 되도록 틈을 조절한다.
+def _tempo_chain(tempo):
+    """atempo 는 한 번에 0.5~2.0 까지만 된다. 넘으면 나눠 건다."""
+    out = []
+    while tempo > 2.0:
+        out.append(2.0); tempo /= 2.0
+    while tempo < 0.5:
+        out.append(0.5); tempo /= 0.5
+    out.append(tempo)
+    return ",".join(f"atempo={v:.5f}" for v in out)
 
-    느린 문장을 배속만으로 끌어올리면 그 문장만 가공 티가 난다. 어절 사이
-    틈을 조금 더 줄이면 같은 속도에 훨씬 적은 배속으로 닿을 수 있으므로,
-    필요한 배속이 ceiling 을 넘지 않는 선에서 틈을 좁혀 나간다.
+
+def _af(seg, af):
+    if len(seg) < SR // 100:
+        return seg
+    p = subprocess.run(
+        [FF, "-v", "error", "-f", "s16le", "-ar", str(SR), "-ac", "1", "-i", "-",
+         "-af", af, "-f", "s16le", "-ar", str(SR), "-ac", "1", "-"],
+        input=(np.clip(seg, -1, 1) * 32767).astype("<i2").tobytes(), capture_output=True)
+    return np.frombuffer(p.stdout, "<i2").astype(np.float32) / 32768.0
+
+
+def _join(parts, xf=0.008):
+    """이음매를 짧게 겹쳐 넘긴다 — 맞대어 붙이면 그 자리가 딱 소리로 들린다."""
+    n = int(xf * SR)
+    out = parts[0]
+    for nxt in parts[1:]:
+        m = min(n, len(out), len(nxt))
+        if m < 8:
+            out = np.concatenate([out, nxt]); continue
+        w = np.linspace(0, 1, m, dtype=np.float32)
+        tail = out[-m:] * np.cos(w * np.pi / 2)          # 등파워 교차
+        head = nxt[:m] * np.sin(w * np.pi / 2)
+        out = np.concatenate([out[:-m], tail + head, nxt[m:]])
+    return out
+
+
+def ease_pauses(seg, thresh=0.16, target=0.11):
+    """문장 안의 긴 틈만 빠르게 돌려 줄인다.
+
+    예전에는 이 틈을 잘라 붙였다. 그런데 틈의 대부분은 완전한 무음이 아니라
+    숨소리와 앞 음절의 여운이 실린 자리여서, 잘라내면 숨이 반토막 나
+    목소리가 끊겨 들렸다. 여기서는 아무것도 버리지 않고 그 구간만
+    빠르게 돌린다 — 숨은 그대로 있고 길이만 준다.
+    """
+    h = int(0.005 * SR)
+    n = len(seg) // h
+    if n < 8:
+        return seg
+    rms = np.sqrt(np.maximum(1e-12, np.mean(seg[:n * h].reshape(n, h) ** 2, axis=1)))
+    db = 20 * np.log10(np.maximum(rms, 1e-9))
+    quiet = db < np.percentile(db, 90) - 24
+    parts, prev, i = [], 0, 0
+    while i < n:
+        if quiet[i]:
+            j = i
+            while j < n and quiet[j]:
+                j += 1
+            L = (j - i) * 0.005
+            if L >= thresh:
+                parts.append(seg[prev:i * h])
+                gap = seg[i * h:j * h]
+                parts.append(_af(gap, _tempo_chain(L / target)))
+                prev = j * h
+            i = j
+        else:
+            i += 1
+    if not parts:
+        return seg
+    parts.append(seg[prev:])
+    return _join([p for p in parts if len(p)])
+
+
+def cut(x, st, en, floor=0.0):
+    """문장 하나를 원본 그대로 떼어낸다.
+
+    문장 안의 긴 틈은 ease_pauses 가 배속으로 줄인다. 잘라내지 않는다.
     """
     st = onset(x, st, floor)
-    seg0 = x[int(st * SR):int(min(en + 0.06, len(x) / SR) * SR)]
-    best = None
-    for keep in (0.105, 0.090, GAP_FLOOR):
-        seg = tighten(seg0, keep)
-        rate = nsyl / max(0.2, len(seg) / SR)
-        best = seg
-        if rate * ceiling >= TARGET_HINT:
-            break
-    return best
+    return ease_pauses(x[int(st * SR):int(min(en + 0.06, len(x) / SR) * SR)])
 
 
 def stretch(seg, tempo):
@@ -196,16 +222,14 @@ def main():
     model = WhisperModel("medium", device="cpu", compute_type="int8")
     script = json.loads(open("script.json").read())["sections"]
 
-    # 1차: 문장 경계와 정리된 말소리 길이를 재서, 네 구간이 모두 슬롯에 들어가는
-    # 단일 목표 속도를 구한다. 구간마다 다른 속도를 쓰면 중간에 톤이 바뀌어 들린다.
+    # 1차: 문장을 원본 그대로 떼어내 구간별 실제 말 속도를 잰다.
     prep, need = {}, []
     for i, sec in enumerate(script, 1):
         src = f"audio/raw_s{i}.wav"
         x = load(src)
         spans = sentence_spans(model, src, sec.get("narration_full", sec["narration"]))
         # narration_full 은 원본 녹음 순서라 정렬에만 쓰고, 실제로 내보낼 문장과
-        # 그 순서는 narration 이 정한다. 크레딧이 없어 새로 녹음할 수 없으니
-        # 문장을 빼거나 자리를 바꾸는 것만으로 끝맺음 반복을 푼다.
+        # 그 순서는 narration 이 정한다.
         want = [t for t in re.split(r"(?<=[.!?])\s+", sec["narration"].strip()) if t]
         pos = {t: k for k, t in enumerate(want)}
         spans = [sp for sp in spans if sp[0] in pos]
@@ -213,84 +237,59 @@ def main():
         missing = [t for t in want if t not in {sp[0] for sp in spans}]
         if missing:
             raise SystemExit(f"{sec['id']}: 원본 음성에서 못 찾은 문장 {missing}")
-        # 앞머리를 되짚을 때 앞 문장 꼬리를 물지 않도록 하한을 넘겨준다
         segs, floor = [], 0.0
         for s, st, en in spans:
-            segs.append(fit_segment(x, st, en, len(HANGUL.findall(s)), floor))
+            segs.append(cut(x, st, en, floor))
             floor = en + 0.02
-        prep[i] = (x, spans, segs)
+        prep[i] = (spans, segs)
+
         syl = sum(len(HANGUL.findall(s)) for s, _, _ in spans)
-        speech = sum(len(g) for g in segs) / SR
         nkey = sum(1 for s, _, _ in spans if any(t in s for t in KEY))
-        pause = (len(spans) - 1) * PAUSE_END + nkey * PAUSE_KEY + HEAD + TAIL
+        pause = (len(spans) - 1) * GAP_MIN + nkey * PAUSE_KEY + HEAD + TAIL
         slot = sec["slot"][1] - sec["slot"][0]
-        room = slot - 0.4 - 0.4
-        need.append(syl / max(1.0, room - pause))
-    # 슬롯에 들어가는 것이 하한, 자연스러운 속도가 기준. 둘 중 빠른 쪽을 쓴다.
+        need.append(syl / max(1.0, slot * FILL - pause))
     target = max(NATURAL_RATE, max(need))
     print(f"목표 속도 {target:.2f} 음절/초 "
           f"(구간별 요구 {' '.join(f'{r:.2f}' for r in need)})\n")
 
     for i, sec in enumerate(script, 1):
-        x, spans, segs = prep[i]
+        spans, segs = prep[i]
+        syl = sum(len(HANGUL.findall(s)) for s, _, _ in spans)
+        raw = syl / max(0.2, sum(len(g) for g in segs) / SR)
 
-        # 말소리 길이를 먼저 재고, 남는 시간을 문장 사이에 고르게 나눈다
-        speech = 0.0
-        for k, (s, st, en) in enumerate(spans):
-            n = len(HANGUL.findall(s))
-            r = n / max(0.2, len(segs[k]) / SR)
-            is_key = any(t in s for t in KEY)
-            is_q = s.rstrip().endswith("?")
-            w = target * (KEY_SLOWDOWN if is_key else Q_SLOWDOWN if is_q else 1.0)
-            speech += len(segs[k]) / SR / float(np.clip(r and w / r, TEMPO_LO, TEMPO_HI))
+        # 배속은 구간에 하나만 건다. 문장마다 따로 걸면 원래 연기가 갖고 있던
+        # 문장 사이 완급이 지워져서, 한 사람이 이어 말하는 게 아니라 문장을
+        # 따로 녹음해 붙인 것처럼 들린다.
+        tempo = float(np.clip(target / raw, TEMPO_LO, TEMPO_HI))
+        out = [stretch(g, tempo) for g in segs]
+
+        speech = sum(len(g) for g in out) / SR
         slot = sec["slot"][1] - sec["slot"][0]
         nkey = sum(1 for s, _, _ in spans if any(t in s for t in KEY))
         budget = slot * FILL - speech - HEAD - TAIL - nkey * PAUSE_KEY
-        # 대본이 짧아 여유가 생기면 그 시간을 끝에 몰아 두지 않고 문장 사이로 돌린다.
-        # 화면에서 큰 동작(스위치 OFF, 비교 그래프)이 지나가는 구간에서는 이 사이가
-        # 죽은 시간이 아니라 보는 사람이 따라올 여백이 된다.
-        gap_len = float(np.clip(budget / max(1, len(spans) - 1), 0.30, GAP_MAX))
+        gap_len = float(np.clip(budget / max(1, len(spans) - 1), GAP_MIN, GAP_MAX))
 
-        pieces, report = [], []
-        pieces.append(np.zeros(int(HEAD * SR), np.float32))
+        pieces = [np.zeros(int(HEAD * SR), np.float32)]
         for k, (s, st, en) in enumerate(spans):
-            seg = segs[k]
-            n = len(HANGUL.findall(s))
-            rate = n / max(0.2, len(seg) / SR)
-            is_key = any(t in s for t in KEY)
-            is_q = s.rstrip().endswith('?')
-            want = target * (KEY_SLOWDOWN if is_key else
-                             Q_SLOWDOWN if is_q else 1.0)
-            # atempo 는 값이 클수록 빨라진다 — 느린 문장일수록 큰 값이 필요하다
-            tempo = float(np.clip(rate and want / rate, TEMPO_LO, TEMPO_HI))
-            out = stretch(seg, tempo)
-            if is_key and k > 0:
+            if any(t in s for t in KEY) and k > 0:
                 pieces.append(np.zeros(int(PAUSE_KEY * SR), np.float32))
-            pieces.append(out)
-            report.append((s, rate, tempo, n / (len(out) / SR)))
+            pieces.append(out[k])
             if k < len(spans) - 1:
-                # 끝맺음이 같은 문장이 이어지면 사이를 더 벌린다. 크레딧이 없어
-                # 어미를 바꿔 녹음할 수 없으니, 호흡으로 반복되는 가락을 끊는다.
-                same = ending(s) == ending(spans[k + 1][0])
-                gap = gap_len * (1.18 if s.rstrip().endswith("?") else
-                                 SAME_END_GAP if same else 1.0)
-                pieces.append(np.zeros(int(gap * SR), np.float32))
+                # 강조는 배속이 아니라 호흡으로 준다. 끝맺음이 겹치는 자리는
+                # 더 벌려 같은 가락이 잇따르는 느낌을 끊는다.
+                g = gap_len
+                if s.rstrip().endswith("?"):
+                    g *= 1.18
+                elif ending(s) == ending(spans[k + 1][0]):
+                    g *= SAME_END_GAP
+                pieces.append(np.zeros(int(g * SR), np.float32))
         pieces.append(np.zeros(int(TAIL * SR), np.float32))
         y = np.concatenate(pieces)
         save(y, f"audio/t{i}.wav")
 
-        # 편차는 '고르게 하려던 문장'끼리만 본다. 핵심 문장의 감속은 의도한 것이고,
-        # 아주 짧은 문장은 앞뒤 여운 때문에 실제보다 느리게 측정된다.
-        rates = [r[3] for r, (s, _, _) in zip(report, spans)
-                 if len(HANGUL.findall(s)) >= 9 and not any(t in s for t in KEY)
-                 and not s.rstrip().endswith('?')] \
-                or [r[3] for r in report]
         print(f"[{sec['id']}] {len(spans)}문장 · {len(y)/SR:5.1f}s · "
-              f"문장 속도 {min(rates):.2f}~{max(rates):.2f} "
-              f"(편차 {(max(rates)/min(rates)-1)*100:.1f}%)")
-        for s, r0, tp, r1 in report:
-            mark = "  ★핵심" if any(t in s for t in KEY) else ""
-            print(f"    {r0:5.2f} →{r1:5.2f}  x{tp:.2f}  {s[:38]}{mark}")
+              f"원본 {raw:.2f} → {raw*tempo:.2f} 음절/초 · 배속 x{tempo:.3f} "
+              f"(구간 전체 동일) · 문장 사이 {gap_len:.2f}s")
 
     # 톤 정리는 네 구간 모두 동일하게
     print("\n마스터링")
