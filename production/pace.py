@@ -9,7 +9,7 @@
 문장 사이 호흡도 문장부호에 맞춰 다시 놓는다. 말소리 자체는 늘이거나 줄일 뿐
 잘라내지 않으므로 내용은 그대로다.
 """
-import json, re, subprocess, sys, wave
+import json, pathlib, re, subprocess, sys, wave
 import numpy as np
 import imageio_ffmpeg
 
@@ -217,10 +217,99 @@ def sentence_spans(model, path, narration):
     return out
 
 
+SOURCE = "audio/source.wav"     # 통으로 한 번에 읽은 나레이션이 있으면 이걸 쓴다
+TARGET_ART = 6.00              # 목표 조음속도(무음 제외). 원본보다 한 단계 느긋하게.
+
+
+def single_source(model, script):
+    """한 번에 통으로 읽은 음원 하나를 문장별로 갈라 구간에 나눠 담는다.
+
+    구간마다 따로 뽑은 음원을 이어 붙이면 아무리 손봐도 이음매가 남는다.
+    통으로 읽은 것이 있으면 배속도 영상 전체에 하나만 걸어, 3분 내내
+    한 사람의 한 번의 연기 그대로 유지된다.
+    """
+    x = load(SOURCE)
+    flat, owner = [], []
+    for i, sec in enumerate(script):
+        for t in re.split(r"(?<=[.!?])\s+", sec["narration"].strip()):
+            if t:
+                flat.append(t); owner.append(i)
+    got = {sp[0]: sp for sp in sentence_spans(model, SOURCE, " ".join(flat))}
+    missing = [t for t in flat if t not in got]
+    if missing:
+        raise SystemExit(f"음원에서 못 찾은 문장 {len(missing)}개: {missing[:2]}")
+
+    segs, floor = [], 0.0
+    for t in flat:
+        _, st, en = got[t]
+        segs.append(cut(x, st, en, floor))
+        floor = en + 0.02
+
+    syl = sum(len(HANGUL.findall(t)) for t in flat)
+    art = syl / (sum(len(g) for g in segs) / SR)
+    tempo = float(np.clip(TARGET_ART / art, TEMPO_LO, TEMPO_HI))
+    print(f"원본 조음속도 {art:.2f} → {art*tempo:.2f} 음절/초 · "
+          f"배속 x{tempo:.3f} (영상 전체에 하나만 적용)\n")
+    out = [stretch(g, tempo) for g in segs]
+
+    for i, sec in enumerate(script):
+        idx = [k for k, o in enumerate(owner) if o == i]
+        ss, oo = [flat[k] for k in idx], [out[k] for k in idx]
+        speech = sum(len(g) for g in oo) / SR
+        slot = sec["slot"][1] - sec["slot"][0]
+        nkey = sum(1 for t in ss if any(z in t for z in KEY))
+        # 쉼에는 배수가 붙는다(질문 뒤, 끝맺음이 겹치는 자리). 배수를 빼고
+        # 문장 수로만 나누면 실제 길이가 예산을 넘어 슬롯을 밀고 나간다.
+        w = [1.18 if t.rstrip().endswith("?") else
+             SAME_END_GAP if ending(t) == ending(ss[k + 1]) else 1.0
+             for k, t in enumerate(ss[:-1])]
+        budget = slot * FILL - speech - HEAD - TAIL - nkey * PAUSE_KEY
+        gap = float(np.clip(budget / max(1e-6, sum(w)), GAP_MIN, GAP_MAX))
+
+        pieces = [np.zeros(int(HEAD * SR), np.float32)]
+        for k, t in enumerate(ss):
+            if any(z in t for z in KEY) and k > 0:
+                pieces.append(np.zeros(int(PAUSE_KEY * SR), np.float32))
+            pieces.append(oo[k])
+            if k < len(ss) - 1:
+                g = gap * (1.18 if t.rstrip().endswith("?") else
+                           SAME_END_GAP if ending(t) == ending(ss[k + 1]) else 1.0)
+                pieces.append(np.zeros(int(g * SR), np.float32))
+        pieces.append(np.zeros(int(TAIL * SR), np.float32))
+        y = np.concatenate(pieces)
+        save(y, f"audio/t{i+1}.wav")
+        n = sum(len(HANGUL.findall(t)) for t in ss)
+        print(f"[{sec['id']}] {len(ss)}문장 · {len(y)/SR:5.1f}s (슬롯 {slot:.0f}s) · "
+              f"{n}음절 · 문장 사이 {gap:.2f}s")
+
+
+def master():
+    """톤 정리는 네 구간 모두 같은 설정으로 — 여기서 갈리면 구간마다 음색이 달라진다."""
+    print("\n마스터링")
+    for i in range(1, 5):
+        af = ("highpass=f=85,equalizer=f=250:t=q:w=1.1:g=-1.6,"
+              "equalizer=f=3200:t=q:w=1.6:g=2.0,"
+              "acompressor=threshold=-19dB:ratio=2.4:attack=10:release=200:makeup=1.5,"
+              "loudnorm=I=-16:TP=-1.5:LRA=11")
+        subprocess.run([FF, "-y", "-loglevel", "error", "-i", f"audio/t{i}.wav",
+                        "-af", af, "-ar", "48000", "-ac", "1", f"audio/s{i}.wav"],
+                       check=True)
+        d = len(load(f"audio/s{i}.wav")) / SR
+        print(f"  s{i} {d:5.1f}s")
+
+
 def main():
     from faster_whisper import WhisperModel
     model = WhisperModel("medium", device="cpu", compute_type="int8")
     script = json.loads(open("script.json").read())["sections"]
+    if pathlib.Path(SOURCE).exists():
+        single_source(model, script)
+    else:
+        per_section(model, script)
+    master()
+
+
+def per_section(model, script):
 
     # 1차: 문장을 원본 그대로 떼어내 구간별 실제 말 속도를 잰다.
     prep, need = {}, []
@@ -266,8 +355,11 @@ def main():
         speech = sum(len(g) for g in out) / SR
         slot = sec["slot"][1] - sec["slot"][0]
         nkey = sum(1 for s, _, _ in spans if any(t in s for t in KEY))
+        w = [1.18 if s0.rstrip().endswith("?") else
+             SAME_END_GAP if ending(s0) == ending(spans[k + 1][0]) else 1.0
+             for k, (s0, _, _) in enumerate(spans[:-1])]
         budget = slot * FILL - speech - HEAD - TAIL - nkey * PAUSE_KEY
-        gap_len = float(np.clip(budget / max(1, len(spans) - 1), GAP_MIN, GAP_MAX))
+        gap_len = float(np.clip(budget / max(1e-6, sum(w)), GAP_MIN, GAP_MAX))
 
         pieces = [np.zeros(int(HEAD * SR), np.float32)]
         for k, (s, st, en) in enumerate(spans):
@@ -292,18 +384,6 @@ def main():
               f"(구간 전체 동일) · 문장 사이 {gap_len:.2f}s")
 
     # 톤 정리는 네 구간 모두 동일하게
-    print("\n마스터링")
-    for i in range(1, 5):
-        af = ("highpass=f=85,equalizer=f=250:t=q:w=1.1:g=-1.6,"
-              "equalizer=f=3200:t=q:w=1.6:g=2.0,"
-              "acompressor=threshold=-19dB:ratio=2.4:attack=10:release=200:makeup=1.5,"
-              "loudnorm=I=-16:TP=-1.5:LRA=11")
-        subprocess.run([FF, "-y", "-loglevel", "error", "-i", f"audio/t{i}.wav",
-                        "-af", af, "-ar", "48000", "-ac", "1", f"audio/s{i}.wav"],
-                       check=True)
-        d = len(load(f"audio/s{i}.wav")) / SR
-        print(f"  s{i} {d:5.1f}s")
-
 
 if __name__ == "__main__":
     main()
