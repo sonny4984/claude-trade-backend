@@ -174,13 +174,56 @@ def edges(seg, ms=0.004):
     return seg
 
 
-def cut(x, st, en, floor=0.0):
+def tail(x, en, ceil, st=0.0, look=0.30, hold=0.030, pad=0.040):
+    """문장이 실제로 끝나는 지점을 찾는다.
+
+    끝에 무조건 여유를 붙이면 다음 문장이 곧바로 이어질 때 그 앞머리가
+    딸려 들어온다. "밤 열한시." 뒤에 "시험은"의 「시」가 묻어 들어가
+    "밤 열한시 시 시험은" 처럼 들리던 원인이 이것이었다.
+
+    인식이 주는 문장 끝 시각은 다음 문장 시작보다 뒤로 넘어가 있을 때가
+    있다. 그럴 때는 두 문장 사이에서 가장 조용한 지점을 찾아 거기서 가른다.
+    """
+    h = int(0.005 * SR)
+    lim = min(ceil, len(x) / SR)
+    ref = 20 * np.log10(max(1e-9, float(np.sqrt(np.mean(
+        x[int(max(st, en - 0.5) * SR):max(int(en * SR), int(st * SR) + h)] ** 2)))))
+    thr = ref - 26
+
+    # 1) 정상: 문장 끝 뒤로 훑어 잦아드는 자리를 찾는다
+    a, b = int(en * SR), min(int((en + look) * SR), int(lim * SR), len(x))
+    if b > a + h * 2:
+        seg = x[a:b]; n = len(seg) // h
+        rms = np.sqrt(np.maximum(1e-12, (seg[:n * h] ** 2).reshape(n, h).mean(1)))
+        db = 20 * np.log10(rms)
+        need, c = int(hold / 0.005), 0
+        for k in range(n):
+            c = c + 1 if db[k] < thr else 0
+            if c >= need:
+                return min(lim, (a + (k - c + 1) * h) / SR + pad)
+
+    # 2) 인식된 끝이 다음 문장을 이미 넘어섰다 — 사이에서 가장 조용한 곳에서 가른다
+    lo = max(int(st * SR) + h, int((min(en, lim) - 0.22) * SR), 0)
+    hi = max(lo + h * 2, int(lim * SR))
+    hi = min(hi, len(x))
+    if hi <= lo + h:
+        return max(min(en, lim), st + 0.1)
+    seg = x[lo:hi]; n = len(seg) // h
+    if n < 2:
+        return max(min(en, lim), st + 0.1)
+    rms = np.sqrt(np.maximum(1e-12, (seg[:n * h] ** 2).reshape(n, h).mean(1)))
+    k = int(np.argmin(rms))
+    return min(lim, (lo + k * h) / SR + 0.015)
+
+
+def cut(x, st, en, floor=0.0, ceil=None):
     """문장 하나를 원본 그대로 떼어낸다.
 
     문장 안의 긴 틈은 ease_pauses 가 배속으로 줄인다. 잘라내지 않는다.
     """
     st = onset(x, st, floor)
-    return edges(ease_pauses(x[int(st * SR):int(min(en + 0.06, len(x) / SR) * SR)]))
+    e = tail(x, en, len(x) / SR if ceil is None else ceil, st)
+    return edges(ease_pauses(x[int(st * SR):int(max(e, st + 0.1) * SR)]))
 
 
 def stretch(seg, tempo):
@@ -266,10 +309,19 @@ def single_source(model, script):
     if missing:
         raise SystemExit(f"음원에서 못 찾은 문장 {len(missing)}개: {missing[:2]}")
 
-    out, floor = [], 0.0
+    # 자르기 전에 모든 문장의 실제 시작점을 먼저 구한다. 앞 문장의 꼬리가
+    # 어디서 멈춰야 하는지 알려면 다음 문장이 어디서 시작하는지 알아야 한다.
+    starts, floor = [], 0.0
     for t in flat:
         _, st, en = got[t]
-        out.append(cut(x, st, en, floor))
+        starts.append(onset(x, st, floor))
+        floor = en + 0.02
+
+    out, floor = [], 0.0
+    for k, t in enumerate(flat):
+        _, st, en = got[t]
+        ceil = (starts[k + 1] - 0.030) if k + 1 < len(starts) else len(x) / SR
+        out.append(cut(x, st, en, floor, ceil))
         floor = en + 0.02
     syl = sum(len(HANGUL.findall(t)) for t in flat)
     art = syl / (sum(len(g) for g in out) / SR)
