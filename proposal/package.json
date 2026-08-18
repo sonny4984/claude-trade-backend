@@ -1,0 +1,8 @@
+{
+  "name": "proposal-docs",
+  "private": true,
+  "description": "공모전 기획안 워드 문서 생성. 루트 프로젝트(Vercel)와 분리해 둔다.",
+  "dependencies": {
+    "docx": "^9.7.1"
+  }
+}
