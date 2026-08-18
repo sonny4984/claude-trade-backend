@@ -92,7 +92,7 @@ children.push(new Paragraph({ spacing: { after: 140 }, indent: { left: 140 },
 children.push(table(annex.table));
 children.push(secHead(null, '어느 것을 고를지'));
 annex.pick.forEach(x => children.push(item(x)));
-children.push(secHead(null, '교과 연계와 수준'));
+children.push(secHead(null, '쓰는 공식과 교과 연계'));
 annex.level.forEach(x => children.push(item(x)));
 children.push(secHead(null, '세 안 공통 — 공모 요강 준수 사항'));
 annex.rules.forEach(x => children.push(item(x)));
