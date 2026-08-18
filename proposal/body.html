@@ -1,0 +1,321 @@
+<title>과학영상 공모전 제안 세 가지</title>
+<style>
+:root{
+  --paper:#F2F5F4; --surface:#FFFFFF; --surface2:#E7ECEA;
+  --ink:#131C22; --muted:#59696F; --faint:#8598A0; --line:#D6DEDB;
+  --accent:#0B6E63; --accent-soft:#DCEBE7; --mark:#B4471A; --mark-soft:#F7E6DC;
+  --grid:rgba(11,110,99,.07);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1618; --surface:#16211F; --surface2:#1D2A27;
+    --ink:#E7EFEC; --muted:#93A6A5; --faint:#6B7F80; --line:#26332F;
+    --accent:#48C9B4; --accent-soft:#123330; --mark:#E8874F; --mark-soft:#33200F;
+    --grid:rgba(72,201,180,.08);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1618; --surface:#16211F; --surface2:#1D2A27;
+  --ink:#E7EFEC; --muted:#93A6A5; --faint:#6B7F80; --line:#26332F;
+  --accent:#48C9B4; --accent-soft:#123330; --mark:#E8874F; --mark-soft:#33200F;
+  --grid:rgba(72,201,180,.08);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:'PD',system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.75;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:58rem;margin:0 auto;padding:0 clamp(18px,5vw,36px) 88px;
+  display:flex;flex-direction:column;gap:52px}
+
+/* 모눈종이 — 실험 노트 */
+header{position:relative;padding:clamp(38px,7vw,74px) 0 clamp(26px,4vw,38px);
+  display:flex;flex-direction:column;gap:16px}
+header::before{content:"";position:absolute;inset:0;z-index:0;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:26px 26px;
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,transparent 88%);
+  mask-image:linear-gradient(180deg,#000 0%,transparent 88%)}
+header>*{position:relative;z-index:1}
+h1{font-weight:900;font-size:clamp(30px,5.4vw,48px);line-height:1.12;margin:0;
+  letter-spacing:-.035em;text-wrap:balance}
+.kicker{font-size:12px;font-weight:800;letter-spacing:.2em;color:var(--accent)}
+.lede{color:var(--muted);font-size:17px;max-width:50ch;margin:0}
+
+h2{font-weight:900;font-size:clamp(20px,2.7vw,25px);margin:0;letter-spacing:-.025em}
+h3{font-weight:800;font-size:19px;margin:0;letter-spacing:-.015em}
+p{margin:0}
+section{display:flex;flex-direction:column;gap:18px}
+.shead{display:flex;align-items:baseline;gap:12px;border-bottom:2px solid var(--ink);
+  padding-bottom:9px;flex-wrap:wrap}
+.shead .tag{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* 요강 확인 */
+.checks{display:flex;flex-direction:column;gap:10px}
+.check{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--mark);
+  border-radius:0 9px 9px 0;padding:14px 18px;display:flex;gap:14px;align-items:flex-start}
+.check .w{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--mark);
+  background:var(--mark-soft);padding:3px 8px;border-radius:4px;white-space:nowrap;flex:none;
+  margin-top:3px}
+.check b{font-weight:800}
+.check span{color:var(--muted);display:block;font-size:15px;margin-top:2px}
+
+/* 배점 읽기 */
+.rubric{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.rcell{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:16px 18px;display:flex;flex-direction:column;gap:6px}
+.rcell.key{border-color:var(--accent);background:var(--accent-soft)}
+.rcell .pt{font-family:var(--mono);font-size:32px;font-weight:900;line-height:1;
+  font-variant-numeric:tabular-nums}
+.rcell.key .pt{color:var(--accent)}
+.rcell .nm{font-size:14px;font-weight:800}
+.rcell .sub{font-size:13px;color:var(--muted);line-height:1.55}
+
+/* 제안 카드 */
+.plan{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  overflow:hidden;display:flex;flex-direction:column}
+.plan.pick{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.ptop{padding:22px 24px 18px;display:flex;flex-direction:column;gap:10px;
+  border-bottom:1px solid var(--line)}
+.plabel{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.06em;
+  padding:3px 9px;border-radius:5px;background:var(--surface2);color:var(--muted)}
+.chip.on{background:var(--accent);color:var(--surface)}
+.quote{font-size:22px;font-weight:900;letter-spacing:-.03em;line-height:1.3;
+  text-wrap:balance}
+.pbody{padding:20px 24px 24px;display:flex;flex-direction:column;gap:20px}
+.row{display:flex;flex-direction:column;gap:7px}
+.rlab{font-size:11px;font-weight:800;letter-spacing:.13em;color:var(--faint)}
+.rtxt{font-size:15.5px;color:var(--ink)}
+.rtxt.m{color:var(--muted)}
+ul{margin:0;padding-left:1.15em;display:flex;flex-direction:column;gap:5px;font-size:15.5px}
+li::marker{color:var(--accent)}
+
+/* 3분 구성 */
+.tl{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+.tlrow{display:grid;grid-template-columns:64px 1fr;gap:14px;padding:9px 0;
+  border-bottom:1px solid var(--line);align-items:baseline}
+.tlrow .t{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:700;
+  font-variant-numeric:tabular-nums}
+.tlrow .d{font-size:15px}
+
+/* 점수 예상 */
+.score{display:flex;gap:16px;flex-wrap:wrap;padding-top:2px}
+.sc{display:flex;align-items:center;gap:7px}
+.sc .n{font-size:12.5px;color:var(--muted);font-weight:700}
+.dots{display:flex;gap:3px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--surface2);
+  border:1px solid var(--line)}
+.dot.f{background:var(--accent);border-color:var(--accent)}
+
+.note{background:var(--surface2);border-radius:10px;padding:16px 20px;
+  color:var(--muted);font-size:15px}
+.note b{color:var(--ink);font-weight:800}
+footer{color:var(--faint);font-size:13.5px;border-top:1px solid var(--line);padding-top:20px}
+@media (max-width:560px){
+  .tlrow{grid-template-columns:56px 1fr;gap:10px}
+  .check{flex-direction:column;gap:8px}
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="kicker">과학영상창작 공모전 · 주제 제안</div>
+  <h1>중학생이 3분 안에<br>보여줄 수 있는 과학</h1>
+  <p class="lede">요강의 배점을 먼저 읽고, 거기에 맞춰 세 가지를 준비했습니다.
+     셋 다 학생이 직접 촬영·출연할 수 있고, 하루면 촬영이 끝납니다.</p>
+</header>
+
+<section>
+  <div class="shead"><h2>배점부터 읽었습니다</h2><span class="tag">총 100점</span></div>
+  <div class="rubric">
+    <div class="rcell"><div class="pt">30</div><div class="nm">창의성</div>
+      <div class="sub">내용이 흥미로운가 · 제작 방법이 창의적인가</div></div>
+    <div class="rcell key"><div class="pt">50</div><div class="nm">정확성</div>
+      <div class="sub">과학원리가 있는가 · <b>탐구 과정이 드러나는가</b> · 타당한가</div></div>
+    <div class="rcell"><div class="pt">20</div><div class="nm">전달성</div>
+      <div class="sub">편집과 구성 · 생활 속 과학에 대한 감동</div></div>
+  </div>
+  <div class="note"><b>정확성이 절반입니다.</b> 그리고 그 안에 “과학적 탐구 과정이 드러나는가”가
+    들어 있습니다. 과학을 <b>설명하는</b> 영상보다, 학생이 <b>직접 재고 기록한 숫자가 나오는</b> 영상이
+    유리합니다. 아래 세 가지는 전부 측정에서 출발합니다.</div>
+</section>
+
+<section>
+  <div class="shead"><h2>먼저 확인해 주세요</h2><span class="tag">요강에서 놓치기 쉬운 조건</span></div>
+  <div class="checks">
+    <div class="check"><div class="w">자막 글꼴</div>
+      <div><b>굴림 · 고딕 · 명조체만 됩니다.</b>
+        <span>다른 폰트는 불가라고 명시돼 있습니다. 예쁜 폰트를 쓰면 감점 요인이 됩니다.</span></div></div>
+    <div class="check"><div class="w">자막 길이</div>
+      <div><b>한 화면당 10자 내외.</b>
+        <span>문장을 통째로 넣으면 안 됩니다. 짧게 끊어야 하고, 그만큼 나레이션이 중요해집니다.</span></div></div>
+    <div class="check"><div class="w">촬영 원칙</div>
+      <div><b>사진과 영상은 직접 촬영한 것만.</b>
+        <span>웹에서 가져오면 출처를 사진과 함께 표기해야 합니다. 직접 찍는 편이 안전하고,
+          그림·도표를 직접 그려 넣으면 저작권 문제가 아예 없습니다.</span></div></div>
+    <div class="check"><div class="w">가점</div>
+      <div><b>제작자가 직접 출연하면 창의성에 추가점이 있습니다.</b>
+        <span>세 안 모두 학생이 화면에 나오는 구성으로 짰습니다.</span></div></div>
+    <div class="check"><div class="w">제출 형식</div>
+      <div><b>3분 초과분은 심사에서 제외됩니다.</b>
+        <span>첫 화면에 제목과 학교명 · mp4 · 300MB 이내 ·
+          파일명은 <span class="num">학교명-제목-학번 이름.mp4</span></span></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><h2>제안 하나 — 놀이터 그네</h2><span class="tag">주제 분류: 과학</span></div>
+  <article class="plan pick">
+    <div class="ptop">
+      <div class="plabel">
+        <span class="chip on">추천</span>
+        <span class="chip">요강에 명시된 주제</span>
+        <span class="chip">촬영 반나절</span>
+      </div>
+      <div class="quote">“형이 타도 내가 타도, 그네는 같은 박자였다”</div>
+    </div>
+    <div class="pbody">
+      <div class="row"><div class="rlab">무엇을 재나</div>
+        <div class="rtxt">그네가 열 번 왕복하는 시간을 스톱워치로 잽니다. 바꿔볼 것은 세 가지 —
+          <b>타는 사람의 몸무게</b>, <b>미는 세기</b>, <b>줄의 길이</b>.</div></div>
+      <div class="row"><div class="rlab">무엇이 나오나</div>
+        <div class="rtxt">몸무게를 바꿔도, 세게 밀어도 주기는 그대로입니다.
+          <b>줄 길이를 바꿀 때만 주기가 달라집니다.</b> 단진자의 성질이 눈앞에서 확인됩니다.</div></div>
+      <div class="row"><div class="rlab">한 걸음 더</div>
+        <div class="rtxt">잰 값을 진자 주기 공식에 거꾸로 넣으면 <b>중력가속도가 계산됩니다.</b>
+          교과서의 9.8과 얼마나 가까운지 비교하면 그것만으로 탐구가 완성됩니다.</div></div>
+      <div class="row"><div class="rlab">3분 구성</div>
+        <div class="tl">
+          <div class="tlrow"><span class="t">0:00</span><span class="d">그네 두 대, 형과 내가 나란히 탄다. “왜 같이 흔들리지?”</span></div>
+          <div class="tlrow"><span class="t">0:25</span><span class="d">바꿔볼 것 세 가지를 화면에 세운다</span></div>
+          <div class="tlrow"><span class="t">0:50</span><span class="d">측정 — 몸무게를 바꿔가며 열 번 왕복</span></div>
+          <div class="tlrow"><span class="t">1:25</span><span class="d">측정 — 미는 세기를 바꿔가며</span></div>
+          <div class="tlrow"><span class="t">1:50</span><span class="d">측정 — 줄 길이를 바꾸자 처음으로 숫자가 움직인다</span></div>
+          <div class="tlrow"><span class="t">2:20</span><span class="d">표와 그래프로 정리, 공식과 대조</span></div>
+          <div class="tlrow"><span class="t">2:40</span><span class="d">잰 값으로 중력가속도를 구해 마무리</span></div>
+        </div></div>
+      <div class="row"><div class="rlab">준비물</div>
+        <div class="rtxt m">스마트폰 · 스톱워치 · 줄자. 놀이터 한 번 가면 끝납니다.</div></div>
+      <div class="score">
+        <div class="sc"><span class="n">창의성</span><span class="dots"><i class="dot f"></i><i class="dot f"></i><i class="dot"></i></span></div>
+        <div class="sc"><span class="n">정확성</span><span class="dots"><i class="dot f"></i><i class="dot f"></i><i class="dot f"></i></span></div>
+        <div class="sc"><span class="n">전달성</span><span class="dots"><i class="dot f"></i><i class="dot f"></i><i class="dot f"></i></span></div>
+      </div>
+      <div class="note">배점이 가장 큰 <b>정확성 50점</b>을 정면으로 노립니다. 바꿀 것을 하나씩만
+        바꾸는 변인 통제, 반복 측정, 공식과의 대조까지 탐구의 형태가 그대로 나옵니다.
+        요강이 예시로 든 “우리 마을 놀이터의 놀이 기구” 주제와도 정확히 맞습니다.</div>
+    </div>
+  </article>
+</section>
+
+<section>
+  <div class="shead"><h2>제안 둘 — 동네 온도 지도</h2><span class="tag">주제 분류: 환경</span></div>
+  <article class="plan">
+    <div class="ptop">
+      <div class="plabel">
+        <span class="chip">기후 위기 대응</span>
+        <span class="chip">그림이 곧 데이터</span>
+        <span class="chip">촬영 하루</span>
+      </div>
+      <div class="quote">“열 걸음 옮겼을 뿐인데 8도가 달라졌다”</div>
+    </div>
+    <div class="pbody">
+      <div class="row"><div class="rlab">무엇을 재나</div>
+        <div class="rtxt">여름 한낮, 같은 시각에 동네를 돌며 표면 온도를 잽니다.
+          아스팔트 · 보도블록 · 잔디 · 나무 그늘 · 건물 그림자, 지점마다 세 번씩.</div></div>
+      <div class="row"><div class="rlab">무엇이 나오나</div>
+        <div class="rtxt">몇 걸음 사이에서 온도가 크게 갈립니다. <b>도시의 열섬 현상</b>을
+          우리 동네 숫자로 보여줄 수 있고, <b>나무 한 그루가 만드는 냉각 효과</b>가
+          몇 도인지 값으로 나옵니다.</div></div>
+      <div class="row"><div class="rlab">한 걸음 더</div>
+        <div class="rtxt">동네 지도를 직접 그려 측정값을 색으로 칠하면 <b>우리 동네 열 지도</b>가
+          완성됩니다. “여기에 나무를 심으면”이라는 제언까지 자연스럽게 이어집니다.</div></div>
+      <div class="row"><div class="rlab">3분 구성</div>
+        <div class="tl">
+          <div class="tlrow"><span class="t">0:00</span><span class="d">더운 날, 그늘로 뛰어드는 장면에서 출발</span></div>
+          <div class="tlrow"><span class="t">0:25</span><span class="d">측정 방법과 규칙을 정한다</span></div>
+          <div class="tlrow"><span class="t">0:50</span><span class="d">다섯 지점을 돌며 측정</span></div>
+          <div class="tlrow"><span class="t">1:50</span><span class="d">직접 그린 지도에 숫자를 색으로 칠한다</span></div>
+          <div class="tlrow"><span class="t">2:20</span><span class="d">나무 그늘의 냉각 효과를 계산</span></div>
+          <div class="tlrow"><span class="t">2:40</span><span class="d">우리 학교에 심는다면, 으로 마무리</span></div>
+        </div></div>
+      <div class="row"><div class="rlab">준비물</div>
+        <div class="rtxt m">비접촉 온도계(문구점·다이소) 또는 온도계 · 스마트폰 · 종이 지도.</div></div>
+      <div class="score">
+        <div class="sc"><span class="n">창의성</span><span class="dots"><i class="dot f"></i><i class="dot f"></i><i class="dot"></i></span></div>
+        <div class="sc"><span class="n">정확성</span><span class="dots"><i class="dot f"></i><i class="dot f"></i><i class="dot f"></i></span></div>
+        <div class="sc"><span class="n">전달성</span><span class="dots"><i class="dot f"></i><i class="dot f"></i><i class="dot f"></i></span></div>
+      </div>
+      <div class="note">측정값이 그대로 그림이 되기 때문에 <b>전달성</b>에서 강합니다.
+        “생활 속 과학에 대한 감동”이라는 심사 문구와도 잘 맞고, 기후라는 큰 주제를
+        우리 동네 이야기로 좁힌 점이 인상에 남습니다.</div>
+    </div>
+  </article>
+</section>
+
+<section>
+  <div class="shead"><h2>제안 셋 — 나와 AI의 3분 대결</h2><span class="tag">주제 분류: 인공지능</span></div>
+  <article class="plan">
+    <div class="ptop">
+      <div class="plabel">
+        <span class="chip">인간 vs AI</span>
+        <span class="chip">학생이 주인공</span>
+        <span class="chip">교실에서 촬영</span>
+      </div>
+      <div class="quote">“누가 낸 아이디어인지 가리고, 반 친구들이 골랐다”</div>
+    </div>
+    <div class="pbody">
+      <div class="row"><div class="rlab">무엇을 하나</div>
+        <div class="rtxt">같은 과제를 학생과 AI가 각각 3분 동안 풉니다.
+          예를 들어 “페트병을 다시 쓰는 방법”. 그리고 <b>누가 낸 것인지 가린 채</b>
+          반 친구 스무 명에게 고르게 합니다.</div></div>
+      <div class="row"><div class="rlab">무엇이 나오나</div>
+        <div class="rtxt">개수는 AI가 앞섭니다. 그런데 <b>“해보고 싶다”는 표를 더 받는 쪽</b>은
+          어디일까요. 그리고 둘을 합쳐 다시 물으면 점수가 어떻게 달라질까요.</div></div>
+      <div class="row"><div class="rlab">한 걸음 더</div>
+        <div class="rtxt">누가 냈는지 가리고 평가하는 방식 자체가 <b>편견을 없애는 실험 설계</b>입니다.
+          결론은 승패가 아니라 협업으로 향합니다.</div></div>
+      <div class="row"><div class="rlab">3분 구성</div>
+        <div class="tl">
+          <div class="tlrow"><span class="t">0:00</span><span class="d">대결 선언 — 나와 AI, 같은 과제 3분</span></div>
+          <div class="tlrow"><span class="t">0:25</span><span class="d">규칙과 평가 기준을 정한다</span></div>
+          <div class="tlrow"><span class="t">0:50</span><span class="d">각자 3분 (화면 분할, 시간 압축)</span></div>
+          <div class="tlrow"><span class="t">1:30</span><span class="d">이름을 가리고 반 친구들에게 투표</span></div>
+          <div class="tlrow"><span class="t">2:10</span><span class="d">개표 — 예상과 다른 결과</span></div>
+          <div class="tlrow"><span class="t">2:40</span><span class="d">둘을 합쳤을 때가 가장 높았다</span></div>
+        </div></div>
+      <div class="row"><div class="rlab">준비물</div>
+        <div class="rtxt m">스마트폰 · 투표용지 · 반 친구들의 협조. 촬영 동의는 미리 받아야 합니다.</div></div>
+      <div class="score">
+        <div class="sc"><span class="n">창의성</span><span class="dots"><i class="dot f"></i><i class="dot f"></i><i class="dot f"></i></span></div>
+        <div class="sc"><span class="n">정확성</span><span class="dots"><i class="dot f"></i><i class="dot f"></i><i class="dot"></i></span></div>
+        <div class="sc"><span class="n">전달성</span><span class="dots"><i class="dot f"></i><i class="dot f"></i><i class="dot f"></i></span></div>
+      </div>
+      <div class="note"><b>창의성 30점</b>에서 가장 강합니다. 다만 물리·화학 같은 원리가 아니라
+        조사 방법이 과학이라, 정확성 항목에서는 앞의 두 안보다 설명할 것이 많습니다.
+        학생이 AI에 관심이 크다면 가장 즐겁게 만들 수 있는 주제입니다.</div>
+    </div>
+  </article>
+</section>
+
+<section>
+  <div class="shead"><h2>고르실 때</h2></div>
+  <div class="note">
+    <b>수상 확률만 보면 첫 번째입니다.</b> 배점의 절반인 정확성을 정면으로 가져가고,
+    요강이 직접 예로 든 주제이며, 촬영이 가장 간단합니다.<br><br>
+    환경 쪽에 관심이 있으면 두 번째, AI를 좋아하는 학생이면 세 번째가 즐겁습니다.
+    셋 중 무엇을 고르셔도 <b>학생이 직접 재고, 직접 나오고, 직접 찍는다</b>는 구조는 같습니다.
+    측정과 촬영만 해주시면 나머지 편집·자막·나레이션·그래픽은 제가 맡겠습니다.
+  </div>
+</section>
+
+<footer>
+  자막 글꼴은 요강대로 굴림·고딕·명조 중에서 쓰고, 한 화면 10자 안으로 끊겠습니다.
+  그래프와 도표는 직접 그려 넣어 저작권 문제가 생기지 않게 하겠습니다.
+</footer>
+
+</div>
