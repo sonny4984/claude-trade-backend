@@ -1,9 +1,9 @@
-// 원본 기획서와 같은 형식으로 세 편을 한 문서에 담는다.
+// 원본 기획서와 같은 형식으로 세 편을 한 문서에 담고, 뒤에 별지를 붙인다.
 const fs = require('fs');
-const { Document, Packer, Paragraph, TextRun, PageBreak,
-        AlignmentType, ShadingType, BorderStyle } = require('docx');
+const { Document, Packer, Paragraph, TextRun, PageBreak, Table, TableRow, TableCell,
+        WidthType, AlignmentType, ShadingType, BorderStyle, VerticalAlign } = require('docx');
 
-const plans = JSON.parse(fs.readFileSync('plans.json', 'utf8'));
+const { plans, annex } = JSON.parse(fs.readFileSync('plans.json', 'utf8'));
 const F = '맑은 고딕';
 
 const run = (text, o = {}) => new TextRun({ text, font: F, size: o.size || 20,
@@ -23,7 +23,7 @@ const titleBar = (t) => new Paragraph({
 
 const secHead = (n, t) => new Paragraph({
   spacing: { before: 200, after: 60 },
-  children: [run(`${n}. ${t}`, { bold: true, size: 21 })],
+  children: [run(n === null ? t : `${n}. ${t}`, { bold: true, size: 21 })],
 });
 
 // 소항목 — " 라벨: 본문 " 형태, 라벨만 굵게
@@ -32,15 +32,42 @@ const item = ([label, body]) => new Paragraph({
   children: [run(' ' + label + ': ', { bold: true }), run(body)],
 });
 
-// 콘티 한 칸
-const cut = ([head, video, narration]) => ([
-  new Paragraph({ spacing: { before: 100, after: 40 },
-    children: [run(head, { bold: true })] }),
-  new Paragraph({ spacing: { after: 30 }, indent: { left: 200 },
-    children: [run('-영상: ', { bold: true }), run(video)] }),
-  new Paragraph({ spacing: { after: 40 }, indent: { left: 200 },
-    children: [run('-나레이션/자막: ', { bold: true }), run(narration)] }),
-]);
+// 콘티 한 칸 — 영상 / 나레이션 / 자막 세 줄
+const line = (label, body) => new Paragraph({
+  spacing: { after: 30 }, indent: { left: 200 },
+  children: [run(label, { bold: true }), run(body)],
+});
+const cut = ([head, video, narration, subtitle]) => {
+  const out = [
+    new Paragraph({ spacing: { before: 100, after: 40 },
+      children: [run(head, { bold: true })] }),
+    line('-영상: ', video),
+    line('-나레이션: ', narration),
+  ];
+  if (subtitle) out.push(line('-자막(10자 내외): ', subtitle));
+  return out;
+};
+
+// 별지 비교표 — A4 폭 11906 에서 좌우 여백 1000 씩 빼면 9906
+const COLS = [1900, 2669, 2669, 2668];
+const cell = (text, o = {}) => new TableCell({
+  width: { size: COLS[o.i], type: WidthType.DXA },
+  verticalAlign: VerticalAlign.CENTER,
+  shading: o.head ? { type: ShadingType.CLEAR, fill: 'EDE7D3' } : undefined,
+  margins: { top: 60, bottom: 60, left: 80, right: 80 },
+  children: [new Paragraph({
+    alignment: o.head ? AlignmentType.CENTER : AlignmentType.LEFT,
+    children: [run(text, { bold: !!o.head || o.i === 0, size: 18 })] })],
+});
+const table = ({ head, rows }) => new Table({
+  columnWidths: COLS,
+  width: { size: 9906, type: WidthType.DXA },
+  rows: [
+    new TableRow({ tableHeader: true,
+      children: head.map((t, i) => cell(t, { i, head: true })) }),
+    ...rows.map(r => new TableRow({ children: r.map((t, i) => cell(t, { i })) })),
+  ],
+});
 
 const children = [];
 plans.forEach((p, i) => {
@@ -56,6 +83,17 @@ plans.forEach((p, i) => {
   p.s4.forEach(x => cut(x).forEach(c => children.push(c)));
   children.push(secHead(5, '기대 효과'));           p.s5.forEach(x => children.push(item(x)));
 });
+
+// 별지
+children.push(new Paragraph({ children: [new PageBreak()] }));
+children.push(titleBar(annex.title));
+children.push(new Paragraph({ spacing: { after: 140 }, indent: { left: 140 },
+  children: [run(annex.intro)] }));
+children.push(table(annex.table));
+children.push(secHead(null, '어느 것을 고를지'));
+annex.pick.forEach(x => children.push(item(x)));
+children.push(secHead(null, '세 안 공통 — 공모 요강 준수 사항'));
+annex.rules.forEach(x => children.push(item(x)));
 
 const doc = new Document({
   styles: { default: { document: { run: { font: F, size: 20 } } } },
