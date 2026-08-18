@@ -1,0 +1,502 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>공모전 기획안 시안</title>
+<style>
+  html,body{margin:0;padding:0;background:#000;overflow:hidden}
+  canvas{display:block}
+</style>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+// 기획안 세 편의 시안을 결정론적으로 그린다.  ?s=1|2|3 으로 고른다.
+// render(t) 는 t 초의 화면만 보고 그린다. 난수도 시각도 쓰지 않는다.
+const W = 1920, H = 1080;
+const g = document.getElementById('c').getContext('2d');
+const S = Number(new URLSearchParams(location.search).get('s') || 1);
+
+// 자막 글꼴은 공모 요강에 따라 고딕체만 쓴다.
+const GO = "'NanumGothic', sans-serif";
+
+// ───────── 보간 도구 ─────────
+const cl = (x, a = 0, b = 1) => x < a ? a : x > b ? b : x;
+const pr = (t, a, b) => cl((t - a) / (b - a));          // a→b 구간의 진행도
+const eo = x => 1 - Math.pow(1 - x, 3);                  // 감속
+const ei = x => x * x * x;
+const eio = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const lp = (a, b, x) => a + (b - a) * x;
+const on = (t, a, b) => t >= a && t < b;                 // 이 구간에 있나
+
+// ───────── 편별 색 ─────────
+const THEME = {
+  1: { bg0:'#080e1a', bg1:'#0f1b30', ac:'#5ad1ff', ac2:'#ffd166', dim:'#8b9bb4' },
+  2: { bg0:'#120b08', bg1:'#241410', ac:'#ff7a4a', ac2:'#57b6ff', dim:'#b39a8e' },
+  3: { bg0:'#0a0f0e', bg1:'#12211f', ac:'#ffb020', ac2:'#34d3b5', dim:'#93a8a3' },
+}[S];
+
+const META = {
+  1: { title:'형이 타도 나랑 같은 박자였다',
+       sub:'놀이터 그네에 숨은 진자의 법칙',
+       tag:'주제 분류 · 과학' },
+  2: { title:'열 걸음 옮겼더니 21도가 달라졌다',
+       sub:'우리 동네 온도 지도 만들기',
+       tag:'주제 분류 · 환경' },
+  3: { title:'물을 뿌리니 25도가 9도가 됐다',
+       sub:'우리 학교에서 가장 미끄러운 곳 찾기',
+       tag:'주제 분류 · 안전' },
+}[S];
+
+// ───────── 기본 그리기 ─────────
+function bg(t) {
+  const gr = g.createLinearGradient(0, 0, W, H);
+  gr.addColorStop(0, THEME.bg0); gr.addColorStop(1, THEME.bg1);
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  // 아주 느린 빛 번짐 하나. 화면이 완전히 죽지 않게만 둔다.
+  const cx = W * (0.5 + 0.06 * Math.sin(t * 0.15));
+  const rg = g.createRadialGradient(cx, H * 0.42, 0, cx, H * 0.42, W * 0.62);
+  rg.addColorStop(0, 'rgba(255,255,255,0.045)');
+  rg.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, W, H);
+}
+
+function txt(s, x, y, size, o = {}) {
+  g.font = `${o.w || 700} ${size}px ${GO}`;
+  g.fillStyle = o.c || '#fff';
+  g.textAlign = o.al || 'center';
+  g.textBaseline = o.bl || 'alphabetic';
+  if (o.sp) {                      // 자간
+    const chars = [...s];
+    let tot = 0; chars.forEach(ch => tot += g.measureText(ch).width + o.sp);
+    tot -= o.sp;
+    let cx = o.al === 'left' ? x : x - tot / 2;
+    g.textAlign = 'left';
+    chars.forEach(ch => { g.fillText(ch, cx, y); cx += g.measureText(ch).width + o.sp; });
+    return;
+  }
+  g.fillText(s, x, y);
+}
+
+// 컷 이름표 — 기획안 콘티의 어느 칸인지 좌상단에 계속 띄운다
+function head(label) {
+  g.globalAlpha = 0.82;
+  g.font = `700 26px ${GO}`; g.textAlign = 'left'; g.textBaseline = 'middle';
+  const w = g.measureText(label).width + 44;
+  g.fillStyle = 'rgba(0,0,0,0.34)';
+  rr(56, 46, w, 50, 25); g.fill();
+  g.fillStyle = THEME.dim; g.fillText(label, 78, 72);
+  g.globalAlpha = 1;
+}
+
+function rr(x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+
+// 자막 — 요강대로 한 화면 10자 이내, 위치와 크기를 처음부터 끝까지 고정한다
+function sub(s, a = 1) {
+  if (!s || a <= 0) return;
+  g.globalAlpha = a;
+  g.font = `700 58px ${GO}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const w = g.measureText(s).width + 76, y = 946;
+  g.fillStyle = 'rgba(0,0,0,0.62)';
+  rr(W / 2 - w / 2, y - 46, w, 92, 14); g.fill();
+  g.fillStyle = '#fff'; g.fillText(s, W / 2, y + 3);
+  g.globalAlpha = 1;
+}
+
+// 실제 촬영이 들어갈 자리 — 시안에서 확실히 구분되게 점선 액자로 표시한다
+function shoot(t, a, b, lines) {
+  const f = eo(pr(t, a, a + .5)), o = 1 - pr(t, b - .35, b);
+  g.globalAlpha = f * o;
+  const bw = 1180, bh = 560, x = (W - bw) / 2, y = 232;
+  g.fillStyle = 'rgba(255,255,255,0.035)'; rr(x, y, bw, bh, 18); g.fill();
+  g.setLineDash([16, 12]); g.lineWidth = 3;
+  g.strokeStyle = 'rgba(255,255,255,0.30)'; rr(x, y, bw, bh, 18); g.stroke();
+  g.setLineDash([]);
+  // 카메라 표시
+  const cx = W / 2, cy = y + 150;
+  g.strokeStyle = THEME.ac; g.lineWidth = 4;
+  rr(cx - 52, cy - 34, 104, 68, 10); g.stroke();
+  g.beginPath(); g.arc(cx, cy, 21, 0, 7); g.stroke();
+  g.beginPath(); g.moveTo(cx - 26, cy - 34); g.lineTo(cx - 14, cy - 48);
+  g.lineTo(cx + 14, cy - 48); g.lineTo(cx + 26, cy - 34); g.stroke();
+  txt('실제 촬영 화면이 들어갑니다', cx, y + 262, 40, { c: '#fff' });
+  lines.forEach((L, i) => txt(L, cx, y + 328 + i * 46, 30, { c: THEME.dim, w: 400 }));
+  g.globalAlpha = 1;
+}
+
+// 값 하나를 큰 숫자로 세우는 카드
+function stat(x, y, w, label, val, unit, f, col) {
+  g.globalAlpha = f;
+  g.fillStyle = 'rgba(255,255,255,0.05)'; rr(x, y, w, 190, 16); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.10)'; g.lineWidth = 2; rr(x, y, w, 190, 16); g.stroke();
+  txt(label, x + w / 2, y + 56, 30, { c: THEME.dim, w: 700 });
+  txt(val, x + w / 2, y + 138, 76, { c: col || '#fff', w: 800 });
+  if (unit) txt(unit, x + w / 2, y + 172, 24, { c: THEME.dim });
+  g.globalAlpha = 1;
+}
+
+// 가로 막대
+function bar(x, y, w, h, frac, col, lab, val, f) {
+  g.globalAlpha = f;
+  g.fillStyle = 'rgba(255,255,255,0.07)'; rr(x, y, w, h, h / 2); g.fill();
+  const ww = Math.max(h, w * cl(frac));
+  g.fillStyle = col; rr(x, y, ww, h, h / 2); g.fill();
+  txt(lab, x - 24, y + h / 2 + 10, 30, { al: 'right', c: '#fff' });
+  txt(val, x + w + 24, y + h / 2 + 10, 32, { al: 'left', c: col, w: 800 });
+  g.globalAlpha = 1;
+}
+
+// 식을 한 줄씩 세우는 판
+function eq(x, y, lines, t, a, step) {
+  lines.forEach((L, i) => {
+    const f = eo(pr(t, a + i * step, a + i * step + .55));
+    if (f <= 0) return;
+    g.globalAlpha = f;
+    txt(L[0], x, y + i * 70 + (1 - f) * 14, L[1] || 46,
+        { al: 'center', c: L[2] || '#fff', w: L[3] || 700 });
+    g.globalAlpha = 1;
+  });
+}
+
+// ───────── 공통 카드 ─────────
+function titleCard(t, a, b) {
+  const f = eo(pr(t, a + .25, a + 1.5)), o = 1 - pr(t, b - .5, b);
+  g.globalAlpha = o;
+  txt(META.tag, W / 2, 322, 28, { c: THEME.ac, sp: 6, w: 700 });
+  g.globalAlpha = o * f;
+  txt(META.title, W / 2, 452, 84, { w: 800 });
+  txt(META.sub, W / 2, 536, 42, { c: THEME.dim, w: 700 });
+  g.globalAlpha = o * eo(pr(t, a + 1.1, a + 2.0));
+  g.strokeStyle = THEME.ac; g.lineWidth = 4;
+  g.beginPath(); g.moveTo(W / 2 - 90, 596); g.lineTo(W / 2 + 90, 596); g.stroke();
+  txt('○○중학교', W / 2, 684, 44, { c: '#fff', w: 700 });
+  txt('첫 화면에 제목과 학교명 — 공모 요강 필수', W / 2, 744, 26, { c: THEME.dim, w: 400 });
+  g.globalAlpha = 1;
+}
+
+function endCard(t, a) {
+  const f = eo(pr(t, a + .2, a + 1.1));
+  g.globalAlpha = f;
+  txt('시안', W / 2, 452, 30, { c: THEME.ac, sp: 8 });
+  txt(META.title, W / 2, 546, 62, { w: 800 });
+  txt('본편은 2분 50초 · 학생이 직접 촬영한 화면으로 채웁니다',
+      W / 2, 622, 30, { c: THEME.dim, w: 400 });
+  g.globalAlpha = 1;
+}
+
+// ═════════════ 시안 1 · 그네 진자 ═════════════
+function s1(t) {
+  if (on(t, 0, 4.5)) { titleCard(t, 0, 4.5); return; }
+
+  if (on(t, 4.5, 9.5)) {
+    head('도입부 · 00:10~00:33');
+    shoot(t, 4.5, 9.5, ['그네 두 대에 학생과 형이 나란히 앉아 동시에 발을 뗍니다.',
+                        '몸집 차이가 한 화면에 들어오도록 옆에서 찍습니다.']);
+    sub('무거우면 느릴까?', eo(pr(t, 5.4, 5.9)) * (1 - pr(t, 9.2, 9.5)));
+    return;
+  }
+
+  if (on(t, 9.5, 16.5)) {
+    head('전개부 1 · 00:33~01:00');
+    txt('타는 사람만 바꾼다', W / 2, 250, 52, { w: 800 });
+    txt('열 번 왕복에 걸린 시간', W / 2, 306, 30, { c: THEME.dim, w: 400 });
+    stat(430, 384, 480, '나 (43kg)', '28.4', '초', eo(pr(t, 10.0, 10.8)), THEME.ac);
+    stat(1010, 384, 480, '형 (63kg)', '28.5', '초', eo(pr(t, 11.2, 12.0)), THEME.ac);
+    const f = eo(pr(t, 12.8, 13.6));
+    g.globalAlpha = f;
+    txt('차이 0.1초 — 스톱워치를 누르는 손이 늦은 정도', W / 2, 660, 34,
+        { c: THEME.ac2, w: 700 });
+    g.globalAlpha = 1;
+    sub('무게는 상관없다', eo(pr(t, 14.2, 14.7)) * (1 - pr(t, 16.2, 16.5)));
+    return;
+  }
+
+  if (on(t, 16.5, 23.0)) {
+    head('전개부 2 · 01:00~01:24');
+    txt('미는 세기만 바꾼다', W / 2, 236, 52, { w: 800 });
+    // 28.4 와 29.5 는 0 부터 그린 막대로는 구분이 안 된다. 숫자를 세워 보여준다.
+    stat(430, 300, 480, '작게 밀기 (15도)', '28.4', '초', eo(pr(t, 17.0, 17.7)), THEME.ac);
+    stat(1010, 300, 480, '크게 밀기 (45도)', '29.5', '초', eo(pr(t, 18.0, 18.9)), THEME.ac2);
+    eq(W / 2, 592, [
+      ['공식에는 미는 폭이 들어 있지 않다', 40, '#fff'],
+      ['그런데 1.1초가 늘었다', 44, THEME.ac2, 800],
+      ['T = 2π√(L/g) 는 15도 안쪽에서만 맞는 식', 34, THEME.dim, 400],
+    ], t, 19.4, .75);
+    sub('15도까지만 맞는 식', eo(pr(t, 21.4, 21.9)) * (1 - pr(t, 22.7, 23.0)));
+    return;
+  }
+
+  if (on(t, 23.0, 31.0)) {
+    head('전개부 3 · 01:24~02:00');
+    txt('줄 길이만 바꾼다', W / 2, 218, 50, { w: 800 });
+    const f1 = eo(pr(t, 23.4, 24.1)), f2 = eo(pr(t, 24.4, 25.1));
+    stat(430, 268, 480, '길이 2.0 m', '28.4', '초', f1, THEME.ac);
+    stat(1010, 268, 480, '길이 1.2 m', '22.0', '초', f2, THEME.ac2);
+    // 제곱근 관계를 잰 값으로 확인하는 자리 — 중3 수학 제곱근
+    eq(W / 2, 570, [
+      ['길이가 제곱근 안에 있다면', 36, THEME.dim, 400],
+      ['√(2.0 ÷ 1.2)  =  √1.67  =  1.29', 52, '#fff', 800],
+      ['28.4 ÷ 22.0  =  1.29', 52, THEME.ac2, 800],
+      ['잰 값이 공식을 그대로 따라왔다', 34, THEME.ac, 700],
+    ], t, 25.8, .85);
+    sub('시간 비도 1.29', eo(pr(t, 29.4, 29.9)) * (1 - pr(t, 30.7, 31.0)));
+    return;
+  }
+
+  if (on(t, 31.0, 37.0)) {
+    head('심화부 · 02:00~02:32');
+    txt('식을 거꾸로 쓴다', W / 2, 238, 50, { w: 800 });
+    eq(W / 2, 372, [
+      ['T = 2π√(L / g)', 58, '#fff', 800],
+      ['g = 4π²L / T²', 58, THEME.ac, 800],
+      ['g = 4π² × 2.0 ÷ 2.84²  =  9.79', 48, '#fff', 800],
+    ], t, 31.3, .95);
+    const f = eo(pr(t, 34.4, 35.2));
+    g.globalAlpha = f;
+    g.fillStyle = 'rgba(255,255,255,0.05)'; rr(560, 636, 800, 130, 16); g.fill();
+    txt('교과서에 적힌 중력가속도', W / 2, 690, 30, { c: THEME.dim, w: 400 });
+    txt('9.8 m/s²', W / 2, 744, 48, { c: THEME.ac2, w: 800 });
+    g.globalAlpha = 1;
+    sub('교과서는 9.8', eo(pr(t, 35.6, 36.1)) * (1 - pr(t, 36.7, 37.0)));
+    return;
+  }
+  endCard(t, 37.0);
+}
+
+// ═════════════ 시안 2 · 온도 지도 ═════════════
+const PTS = [
+  ['아스팔트 · 햇빛', 51, '#ff3d2e'], ['보도블록 · 햇빛', 46, '#ff6a2b'],
+  ['아스팔트 · 건물 그늘', 41, '#ff9c2b'], ['보도블록 · 건물 그늘', 37, '#ffc93c'],
+  ['잔디 · 햇빛', 36, '#c8d94a'], ['보도블록 · 나무 그늘', 33, '#5fc48a'],
+  ['나무 아래 흙', 30, '#4aa8ff'],
+];
+
+function s2(t) {
+  if (on(t, 0, 4.5)) { titleCard(t, 0, 4.5); return; }
+
+  if (on(t, 4.5, 8.5)) {
+    head('도입부 · 00:10~00:32');
+    shoot(t, 4.5, 8.5, ['한낮의 아스팔트 도로. 학생이 걷다가 나무 그늘로 들어섭니다.',
+                        '걷기 전에 물 500g 을 담은 컵 두 개를 햇빛과 그늘에 놓아 둡니다.']);
+    sub('열 걸음 차이', eo(pr(t, 5.3, 5.8)) * (1 - pr(t, 8.2, 8.5)));
+    return;
+  }
+
+  if (on(t, 8.5, 17.0)) {
+    head('전개부 · 00:32~01:12');
+    txt('일곱 지점 · 같은 시각 30분 안에', W / 2, 176, 46, { w: 800 });
+    txt('재는 것은 기온이 아니라 바닥 온도', W / 2, 226, 28, { c: THEME.dim, w: 400 });
+    PTS.forEach((p, i) => {
+      const f = eo(pr(t, 9.2 + i * .48, 9.2 + i * .48 + .6));
+      if (f <= 0) return;
+      bar(620, 286 + i * 84, 700, 52, (p[1] - 24) / 30, p[2], p[0], p[1] + '도', f);
+    });
+    sub('기온 아닌 바닥 온도', eo(pr(t, 10.0, 10.5)) * (1 - pr(t, 13.2, 13.5)));
+    sub('21도 차이', eo(pr(t, 14.6, 15.1)) * (1 - pr(t, 16.7, 17.0)));
+    return;
+  }
+
+  if (on(t, 17.0, 24.0)) {
+    head('심화부 1 · 01:12~01:40');
+    txt('같은 보도블록, 그늘만 바꾼다', W / 2, 226, 50, { w: 800 });
+    txt('둘 다 직사광선은 막혔다', W / 2, 278, 28, { c: THEME.dim, w: 400 });
+    stat(430, 348, 480, '건물 그늘', '37', '도', eo(pr(t, 17.5, 18.2)), '#ffc93c');
+    stat(1010, 348, 480, '나무 그늘', '33', '도', eo(pr(t, 18.6, 19.3)), '#5fc48a');
+    eq(W / 2, 638, [
+      ['남은 4도는 그늘 때문이 아니다', 44, THEME.ac, 800],
+      ['잎에서 물이 마르면서 열을 가져간다', 36, '#fff', 700],
+      ['증산작용 · 중학교 1학년 과학', 28, THEME.dim, 400],
+    ], t, 20.0, .8);
+    sub('4도는 나무 몫', eo(pr(t, 22.4, 22.9)) * (1 - pr(t, 23.7, 24.0)));
+    return;
+  }
+
+  if (on(t, 24.0, 32.5)) {
+    head('심화부 2 · 01:40~02:05');
+    txt('들어온 열을 계산한다', W / 2, 196, 50, { w: 800 });
+    txt('물 500 g · 30분 · 재기 전에 저어서 섞는다', W / 2, 246, 28, { c: THEME.dim, w: 400 });
+    // Q = cmΔT — 중2 과학 비열
+    eq(W / 2, 336, [['Q = c m ΔT', 56, '#fff', 800]], t, 24.3, .5);
+    const f1 = eo(pr(t, 25.2, 26.0)), f2 = eo(pr(t, 26.4, 27.2));
+    stat(400, 396, 520, '햇빛 쪽  +9도', '18,900', '줄', f1, '#ff7a4a');
+    stat(1000, 396, 520, '그늘 쪽  +3도', '6,300', '줄', f2, '#57b6ff');
+    eq(W / 2, 686, [
+      ['차이 12,600 줄', 54, THEME.ac, 800],
+      ['계단 한 층 오르는 일이 1,760줄 — 일곱 층 분량', 34, '#fff', 700],
+      ['비열 · 중학교 2학년 과학', 26, THEME.dim, 400],
+    ], t, 28.0, .85);
+    sub('계단 일곱 층쯤', eo(pr(t, 30.6, 31.1)) * (1 - pr(t, 32.2, 32.5)));
+    return;
+  }
+
+  if (on(t, 32.5, 37.0)) {
+    head('심화부 3 · 02:05~02:28');
+    txt('우리 동네 온도 지도', W / 2, 210, 50, { w: 800 });
+    // 직접 그린 지도에 색이 칠해지는 장면. 격자를 순서대로 채운다.
+    const x0 = 610, y0 = 288, cw = 100, ch = 82;
+    for (let r = 0; r < 6; r++) for (let c = 0; c < 7; c++) {
+      const i = r * 7 + c;
+      const f = eo(pr(t, 33.0 + i * .055, 33.0 + i * .055 + .3));
+      if (f <= 0) continue;
+      // 왼쪽 아래로 갈수록 시원해지는 가상의 동네
+      const heat = cl((c * 0.62 + (5 - r) * 0.5) / 6);
+      const col = `hsl(${lp(205, 8, heat)} 82% ${lp(52, 55, heat)}%)`;
+      g.globalAlpha = f * .92;
+      g.fillStyle = col; rr(x0 + c * cw, y0 + r * ch, cw - 8, ch - 8, 6); g.fill();
+      g.globalAlpha = 1;
+    }
+    const f = eo(pr(t, 35.6, 36.3));
+    g.globalAlpha = f;
+    txt('가장 붉은 곳은 나무가 한 그루도 없는 길', W / 2, 866, 36, { c: '#fff', w: 700 });
+    g.globalAlpha = 1;
+    return;
+  }
+  endCard(t, 37.0);
+}
+
+// ═════════════ 시안 3 · 미끄럼 각도 ═════════════
+// 판을 천천히 기울이면 마찰계수가 작은 신발부터 차례로 미끄러진다.
+const SHOES = [
+  ['고무 슬리퍼', 25, 9, '#ff5a4a'],
+  ['학교 실내화', 29, 14, '#ffb020'],
+  ['닳은 운동화', 33, 19, '#8fd14f'],
+  ['새 운동화', 39, 27, '#34d3b5'],
+];
+
+function s3(t) {
+  if (on(t, 0, 4.5)) { titleCard(t, 0, 4.5); return; }
+
+  if (on(t, 4.5, 8.5)) {
+    head('도입부 · 00:10~00:32');
+    shoot(t, 4.5, 8.5, ['비 오는 날 현관에서 발이 밀리는 순간을 느리게 보여줍니다.',
+                        '신발 네 켤레를 바닥에 나란히 놓고 예상 한 줄을 비춥니다.']);
+    sub('바닥일까 신발일까', eo(pr(t, 5.3, 5.8)) * (1 - pr(t, 8.2, 8.5)));
+    return;
+  }
+
+  if (on(t, 8.5, 18.0)) {
+    head('전개부 1 · 00:32~00:58');
+    // 0~40도까지 9초 동안 기울인다
+    const ang = lp(0, 41, eio(pr(t, 9.0, 16.4)));
+    // 받침점과 판 길이. 최대 41도에서 판 끝이 (1044, 183) 이라서
+    // 우상단 수식 상자(x 1120 부터)와 부딪히지 않는다.
+    const px = 380, py = 760, L = 880;
+    g.save();
+    g.translate(px, py); g.rotate(-ang * Math.PI / 180);
+    g.fillStyle = 'rgba(255,255,255,0.14)'; rr(0, -26, L, 26, 4); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.34)'; g.lineWidth = 2; rr(0, -26, L, 26, 4); g.stroke();
+    SHOES.forEach((s, i) => {
+      const slid = cl((ang - s[1]) / 9);      // 자기 각도를 넘으면 미끄러진다
+      const x = lp(215 + i * 158, -170, ei(slid));
+      // 다 미끄러진 뒤에야 사라지게 한다. 중간에 흐려지면 남은 조각처럼 보인다.
+      g.globalAlpha = 1 - cl((slid - .85) / .15);
+      g.fillStyle = s[3]; rr(x, -70, 118, 44, 12); g.fill();
+      g.fillStyle = 'rgba(0,0,0,0.34)'; rr(x + 8, -36, 102, 10, 5); g.fill();
+      g.globalAlpha = 1;
+    });
+    g.restore();
+    // 받침점 삼각형
+    g.fillStyle = 'rgba(255,255,255,0.22)';
+    g.beginPath(); g.moveTo(px, py); g.lineTo(px - 40, py + 62); g.lineTo(px + 40, py + 62);
+    g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.16)'; g.fillRect(px - 60, py + 62, 1500, 8);
+    // 각도 표시
+    txt(ang.toFixed(0) + '도', 250, 322, 96, { c: THEME.ac, w: 800 });
+    txt('기울인 각도', 250, 368, 26, { c: THEME.dim, w: 400 });
+    // 미끄러진 신발의 각도를 오른쪽에 쌓는다
+    SHOES.forEach((s, i) => {
+      if (ang < s[1]) return;
+      const f = eo(cl((ang - s[1]) / 4));
+      g.globalAlpha = f;
+      txt(s[0], 1856, 274 + i * 92, 29, { al: 'right', c: THEME.dim });
+      txt(s[1] + '도', 1856, 320 + i * 92, 42, { al: 'right', c: s[3], w: 800 });
+      g.globalAlpha = 1;
+    });
+    // 힘의 분해와 유도 — 중3 삼각비 + 고1 물리
+    const f = eo(pr(t, 12.4, 13.4));
+    if (f > 0) {
+      g.globalAlpha = f;
+      g.fillStyle = 'rgba(0,0,0,0.42)'; rr(1120, 60, 740, 152, 14); g.fill();
+      txt('mg sinθ  =  μ mg cosθ', 1490, 120, 38, { c: '#fff', w: 800 });
+      txt('μ  =  tan θ', 1490, 182, 44, { c: THEME.ac2, w: 800 });
+      g.globalAlpha = 1;
+    }
+    sub('판을 천천히 든다', eo(pr(t, 9.6, 10.1)) * (1 - pr(t, 12.0, 12.3)));
+    sub('tan 값이 마찰계수', eo(pr(t, 13.8, 14.3)) * (1 - pr(t, 17.7, 18.0)));
+    return;
+  }
+
+  if (on(t, 18.0, 24.5)) {
+    head('전개부 2 · 00:58~01:22');
+    txt('물을 뿌리고 다시 잰다', W / 2, 190, 50, { w: 800 });
+    const cols = [['마른 바닥', 1], ['물을 뿌린 뒤', 2]];
+    cols.forEach((c, j) => txt(c[0], 900 + j * 460, 268, 32, { c: THEME.dim }));
+    SHOES.forEach((s, i) => {
+      const f = eo(pr(t, 18.5 + i * .42, 18.5 + i * .42 + .55));
+      if (f <= 0) return;
+      g.globalAlpha = f;
+      txt(s[0], 660, 358 + i * 104, 34, { al: 'right', c: '#fff' });
+      txt(s[1] + '도', 900, 358 + i * 104, 46, { c: s[3], w: 800 });
+      const f2 = eo(pr(t, 20.6 + i * .34, 20.6 + i * .34 + .5));
+      g.globalAlpha = f * f2;
+      txt('→', 1130, 358 + i * 104, 34, { c: THEME.dim });
+      txt(s[2] + '도', 1360, 358 + i * 104, 46, { c: s[3], w: 800 });
+      g.globalAlpha = 1;
+    });
+    const f = eo(pr(t, 22.6, 23.4));
+    g.globalAlpha = f;
+    txt('전부 내려갔다 — 여기까지는 예상대로', W / 2, 830, 36, { c: '#fff', w: 700 });
+    g.globalAlpha = 1;
+    return;
+  }
+
+  if (on(t, 24.5, 31.0)) {
+    head('전개부 3 · 01:22~01:45');
+    txt('그런데 내려간 폭이 달랐다', W / 2, 206, 50, { w: 800 });
+    txt('물은 신발을 가리지 않을 거라던 예상이 틀렸다', W / 2, 258, 30,
+        { c: THEME.dim, w: 400 });
+    SHOES.forEach((s, i) => {
+      const d = s[1] - s[2];
+      const f = eo(pr(t, 25.2 + i * .5, 25.2 + i * .5 + .6));
+      if (f <= 0) return;
+      bar(700, 336 + i * 104, 640, 58, d / 18, s[3], s[0], d + '도 내려감', f);
+    });
+    eq(W / 2, 830, [
+      ['잘 버티던 신발이 물에서도 덜 나빠졌다', 40, THEME.ac, 800],
+      ['무엇이 이 차이를 만들었을까', 34, '#fff', 700],
+    ], t, 28.4, .8);
+    sub('예상이 틀렸다', eo(pr(t, 29.8, 30.3)) * (1 - pr(t, 30.7, 31.0)));
+    return;
+  }
+
+  if (on(t, 31.0, 37.0)) {
+    head('심화부 · 01:45~02:15');
+    txt('홈만 테이프로 막고 다시 잰다', W / 2, 200, 50, { w: 800 });
+    txt('신발도 바닥도 그대로. 바꾼 것은 홈 하나', W / 2, 250, 30, { c: THEME.dim, w: 400 });
+    const rows = [['새 운동화', 27, '#34d3b5'], ['홈이 닳은 운동화', 19, '#8fd14f'],
+                  ['홈을 테이프로 막음', 15, '#ffb020'], ['고무 슬리퍼', 9, '#ff5a4a']];
+    rows.forEach((r, i) => {
+      const f = eo(pr(t, 31.5 + i * .58, 31.5 + i * .58 + .6));
+      if (f <= 0) return;
+      bar(760, 326 + i * 100, 600, 56, r[1] / 30, r[2], r[0], r[1] + '도', f);
+    });
+    eq(W / 2, 812, [
+      ['27도가 15도로 — 12도가 사라졌다', 44, THEME.ac, 800],
+      ['일부러 막은 것과 저절로 닳은 것이 같은 방향', 34, '#fff', 700],
+    ], t, 34.6, .8);
+    sub('27도가 15도로', eo(pr(t, 35.9, 36.4)) * (1 - pr(t, 36.7, 37.0)));
+    return;
+  }
+  endCard(t, 37.0);
+}
+
+// ───────── 진입점 ─────────
+window.render = function (t) {
+  g.clearRect(0, 0, W, H);
+  bg(t);
+  ({ 1: s1, 2: s2, 3: s3 })[S](t);
+};
+window.TOTAL = 40;
+render(0);
+</script>
