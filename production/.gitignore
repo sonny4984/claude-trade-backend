@@ -16,6 +16,12 @@ audio/*
 !audio/raw_s3.wav
 !audio/raw_s4.wav
 !audio/source.mp3
+# 가공된 나레이션도 함께 지킨다. source.mp3 만 있으면 되살릴 수는 있지만,
+# 컨테이너가 초기화될 때마다 옛 음원이 되살아나 그 위에서 작업하는 사고가 났다.
+!audio/s1.wav
+!audio/s2.wav
+!audio/s3.wav
+!audio/s4.wav
 
 # 납품물 중 가벼운 것만 추적
 !out/thumbnail.jpg
