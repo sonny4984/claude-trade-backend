@@ -51,9 +51,10 @@ children.push(new Paragraph({ alignment: AlignmentType.CENTER,
 children.push(secHead(1, '무엇을 왜 찍는가'));        d.s1.forEach(x => children.push(item(x)));
 children.push(secHead(2, '찍을 여섯 컷 (다 합쳐 23초)'));
 d.s2.forEach(x => cut(x).forEach(c => children.push(c)));
-children.push(secHead(3, '촬영 공통 수칙'));          d.s3.forEach(x => children.push(item(x)));
-children.push(secHead(4, '요강에 맞춰 이미 손본 것')); d.s4.forEach(x => children.push(item(x)));
-children.push(secHead(5, '지금 상태와 더 할 수 있는 것')); d.s5.forEach(x => children.push(item(x)));
+children.push(secHead(3, '찍은 화면을 어떻게 넣는가')); d.s_how.forEach(x => children.push(item(x)));
+children.push(secHead(4, '촬영 공통 수칙'));          d.s3.forEach(x => children.push(item(x)));
+children.push(secHead(5, '요강에 맞춰 이미 손본 것')); d.s4.forEach(x => children.push(item(x)));
+children.push(secHead(6, '지금 상태와 더 할 수 있는 것')); d.s5.forEach(x => children.push(item(x)));
 
 const doc = new Document({
   styles: { default: { document: { run: { font: F, size: 20 } } } },
