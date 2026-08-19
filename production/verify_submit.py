@@ -65,6 +65,7 @@ def main():
     check("음악", "numpy 로 직접 합성 (bgm.py)", "", True)
     check("사진·영상", "외부 소재 0개, 전부 직접 그린 그래픽", "", True)
     check("효과음", "직접 합성 (bgm.py)", "", True)
+    check("나레이션", "클라이언트가 보내주신 클로바더빙 음원 (합성음)", "", True)
 
     print("\n" + ("전부 통과" if ok else "확인 필요한 항목이 있습니다"))
     return 0 if ok else 1
