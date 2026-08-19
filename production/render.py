@@ -56,6 +56,7 @@ def main():
     ap.add_argument("--name", default="○○중학교")
     ap.add_argument("--who", default="")
     ap.add_argument("--nosub", action="store_true")
+    ap.add_argument("--bg", default="", help="1 기본 남색 / 2 한 단계 밝게 / 3 더 밝게")
     a = ap.parse_args()
 
     query = ""
@@ -63,6 +64,7 @@ def main():
         from urllib.parse import urlencode
         q = {"school": 1, "name": a.name, "who": a.who}
         if a.nosub: q["nosub"] = 1
+        if a.bg in ("2", "3"): q["bg"] = a.bg
         query = "?" + urlencode(q)
 
     tl = json.loads((D / a.timeline).read_text())
