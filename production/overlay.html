@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>촬영 자리 표시</title>
+<style>
+  /* 배경을 비워 둔다. 투명 PNG 로 찍어 완성본 위에 덧씌운다. */
+  html,body{margin:0;padding:0;background:transparent;width:1920px;height:1080px;
+            overflow:hidden;font-family:'NanumGothic','나눔고딕',sans-serif;
+            -webkit-font-smoothing:antialiased}
+  .scrim{position:absolute;left:0;right:0;background:rgba(4,8,18,.62)}
+  .box{position:absolute;left:370px;width:1180px;border:3px dashed rgba(255,255,255,.42);
+       border-radius:18px;background:rgba(255,255,255,.05)}
+  .cut{position:absolute;left:0;right:0;text-align:center;color:#7DE0FF;
+       font-size:30px;font-weight:800;letter-spacing:.16em}
+  .big{position:absolute;left:0;right:0;text-align:center;color:#fff;
+       font-size:46px;font-weight:800}
+  .desc{position:absolute;left:0;right:0;text-align:center;color:#B7C4DA;
+        font-size:30px;font-weight:400;line-height:1.5}
+  .note{position:absolute;left:0;right:0;text-align:center;color:#FFD166;
+        font-size:26px;font-weight:700}
+  .cam{position:absolute;left:50%;transform:translateX(-50%)}
+  /* 왼쪽 위 시안 표시 */
+  .tag{position:absolute;left:56px;top:46px;padding:12px 26px;border-radius:26px;
+       background:rgba(0,0,0,.55);color:#9FB0C8;font-size:26px;font-weight:700}
+</style>
+<body></body>
+<script>
+const q = new URLSearchParams(location.search);
+const mode = q.get('mode') || 'cut';
+const B = document.body;
+const el = (cls, css, html) => {
+  const d = document.createElement('div');
+  d.className = cls; d.style.cssText = css; d.innerHTML = html || '';
+  B.appendChild(d); return d;
+};
+
+if (mode === 'tag') {                       // 영상 내내 붙어 있는 작은 표시
+  el('tag', '', '시안 — 촬영이 들어갈 자리를 표시한 판');
+} else {
+  // 제목 화면(컷 1·2) 위에서는 제목 글자가 그대로 읽혀야 한다. 옅게만 덮고
+  // 표시는 제목 아래 빈 칸에 낮게 깐다. 제목 블록은 250~700px 을 쓴다.
+  const overTitle = q.get('title') === '1';
+
+  if (overTitle) {
+    el('scrim', 'top:0;height:880px;background:rgba(4,8,18,.34)');
+    const bt = 712;
+    el('box', `top:${bt}px;height:168px`);
+    el('cut', `top:${bt + 26}px`, q.get('cut') + '  ·  제목은 이 위에 그대로 남습니다');
+    el('big', `top:${bt + 62}px;font-size:38px`, '여기에 아이가 찍은 영상이 들어갑니다');
+    el('desc', `top:${bt + 116}px;font-size:26px`, q.get('desc'));
+  } else {
+    const bt = 210;
+    el('scrim', 'top:96px;height:784px');
+    el('box', `top:${bt}px;height:640px`);
+    const cam = el('cam', `top:${bt + 92}px;width:120px;height:86px`);
+    cam.innerHTML = `<svg width="120" height="86" viewBox="0 0 120 86" fill="none">
+      <rect x="4" y="20" width="112" height="62" rx="10" stroke="#7DE0FF" stroke-width="4"/>
+      <circle cx="60" cy="51" r="21" stroke="#7DE0FF" stroke-width="4"/>
+      <path d="M36 20 L48 6 H72 L84 20" stroke="#7DE0FF" stroke-width="4"/></svg>`;
+    const y0 = bt + 214;
+    el('cut', `top:${y0}px`, q.get('cut'));
+    el('big', `top:${y0 + 52}px`, '여기에 아이가 찍은 영상이 들어갑니다');
+    el('desc', `top:${y0 + 122}px`, q.get('desc'));
+    if (q.get('note')) el('note', `top:${y0 + 208}px`, q.get('note'));
+  }
+}
+</script>
