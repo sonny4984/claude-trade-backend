@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """저작권 부담이 없는 오리지널 BGM과 효과음을 직접 합성한다 (48kHz 스테레오)."""
-import json, pathlib
+import argparse, json, pathlib
 import numpy as np
+
+# 고객이 "배경음악 좀 밝게" 를 요청했다. 화음 진행과 빠르기만 바꿔 다시 만든다.
+_ap = argparse.ArgumentParser()
+_ap.add_argument("--bright", action="store_true", help="장조 진행으로 밝게")
+_ap.add_argument("--out", default="bed.wav")
+ARGS = _ap.parse_args()
 
 D = pathlib.Path(__file__).parent
 SR = 48000
@@ -74,11 +80,17 @@ def midi(m):
 
 
 # ---------------- 음악 ----------------
-BPM = 84.0
-BAR = 4 * 60 / BPM                      # 2.857s
-# Am – F – C – G  (담담하고 사색적인 진행)
-PROG = [[57, 60, 64], [53, 57, 60], [48, 55, 64], [55, 59, 62]]
-BASS = [45, 41, 48, 43]
+if ARGS.bright:
+    # C – G – Am – F. 으뜸화음으로 시작해 장조로 들린다. 빠르기도 조금 올린다.
+    BPM = 94.0
+    PROG = [[48, 55, 64], [55, 59, 62], [57, 60, 64], [53, 57, 60]]
+    BASS = [48, 43, 45, 41]
+else:
+    # Am – F – C – G  (담담하고 사색적인 진행)
+    BPM = 84.0
+    PROG = [[57, 60, 64], [53, 57, 60], [48, 55, 64], [55, 59, 62]]
+    BASS = [45, 41, 48, 43]
+BAR = 4 * 60 / BPM
 
 pad = np.zeros(N)
 bass = np.zeros(N)
@@ -129,9 +141,9 @@ for b in range(nbars):
             h = rng.normal(0, 1, n_) * np.exp(-t_of(n_) * 90)
             add(perc, h * 0.035, at + e * BAR / 8)
 
-pad = lp_fast(pad, 1700)
-arp = lp_fast(arp, 4200)
-music = pad * 0.9 + bass * 0.85 + arp + perc
+pad = lp_fast(pad, 2600 if ARGS.bright else 1700)
+arp = lp_fast(arp, 6000 if ARGS.bright else 4200)
+music = pad * 0.9 + bass * 0.85 + arp * (1.5 if ARGS.bright else 1.0) + perc
 
 # 간단한 잔향 (슈뢰더 근사)
 rev = np.zeros(N)
@@ -267,7 +279,7 @@ mix = norm(mix, 0.9)
 (D / "audio").mkdir(exist_ok=True)
 out = (mix * 32767).astype("<i2")
 import wave
-with wave.open(str(D / "audio" / "bed.wav"), "wb") as w:
+with wave.open(str(D / "audio" / ARGS.out), "wb") as w:
     w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
     w.writeframes(out.tobytes())
-print(f"→ audio/bed.wav  {TOTAL:.1f}s  (BGM {nbars}마디 + 효과음)")
+print(f"→ audio/{ARGS.out}  {TOTAL:.1f}s  (BGM {nbars}마디 + 효과음{', 밝게' if ARGS.bright else ''})")

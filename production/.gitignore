@@ -34,3 +34,5 @@ out/pace.log
 
 # 편집용 분리 트랙은 make_stems.py 로 다시 만들 수 있다
 out/편집용/
+out/*.png
+audio/bed_bright.wav

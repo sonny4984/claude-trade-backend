@@ -15,10 +15,11 @@ TOTAL = tl["timing"]["total"]
 ap = argparse.ArgumentParser()
 ap.add_argument("--video", default=str(OUT / "video_raw.mp4"))
 ap.add_argument("--out", default=str(OUT / "혈당스파이크와_뇌과학의_비밀_FHD.mp4"))
+ap.add_argument("--bed", default="bed.wav")
 args = ap.parse_args()
 
 vid = pathlib.Path(args.video)
-bed = D / "audio" / "bed.wav"
+bed = D / "audio" / args.bed
 final = pathlib.Path(args.out)
 
 # 나레이션 4트랙을 타임라인 위치에 배치 → 하나의 보이스 트랙으로 합성

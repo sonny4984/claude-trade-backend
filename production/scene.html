@@ -674,6 +674,30 @@ function render(t){
 }
 window.render=render;
 
+/* ---------------- 색 밝기 · 자막 끄기 ----------------
+   ?bg=2|3  배경을 남색에서 단계적으로 밝힌다
+   ?nosub=1 자막을 띄우지 않는다                                    */
+(function(){
+  const q=new URLSearchParams(location.search);
+  const lv=q.get('bg');
+  if(lv==='2'||lv==='3'){
+    const p=lv==='2'
+      ? {bg:'#142347',bg2:'#1D2F5E',g:'linear-gradient(168deg,#17264D 0%,#142347 46%,#182A55 100%)',vig:'.34'}
+      : {bg:'#1E3164',bg2:'#294080',g:'linear-gradient(168deg,#22376F 0%,#1E3164 46%,#24397A 100%)',vig:'.28'};
+    const st=document.createElement('style');
+    st.textContent=`:root{--bg:${p.bg};--bg2:${p.bg2}}
+      html,body{background:${p.bg}}
+      .layer{background:${p.g} !important}
+      #vig{background:radial-gradient(ellipse 75% 65% at 50% 45%,rgba(0,0,0,0) 46%,rgba(0,0,0,${p.vig}) 100%) !important}`;
+    document.head.appendChild(st);
+  }
+  if(q.has('nosub')){
+    const st=document.createElement('style');
+    st.textContent='#subwrap{display:none !important}';
+    document.head.appendChild(st);
+  }
+})();
+
 /* ---------------- 교내대회용 ----------------
    ?school=1&name=○○중학교&who=3학년 0반 홍길동
    공모 요강이 두 가지를 요구한다.
