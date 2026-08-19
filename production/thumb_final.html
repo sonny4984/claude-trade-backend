@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>썸네일</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#080D1C}
+body{font-family:'NanumGothic',sans-serif;-webkit-font-smoothing:antialiased;position:relative}
+.sq{font-family:'NanumSquare','NanumGothic',sans-serif;font-weight:700}
+.abs{position:absolute}
+/* 제목은 두꺼운 어두운 외곽선을 둘러 어느 배경에서도 읽히게 한다 */
+.h{letter-spacing:-.05em;line-height:1.02;white-space:nowrap;color:#fff;
+   -webkit-text-stroke:12px #05091A;paint-order:stroke fill}
+</style>
+<body></body>
+<script>
+const q = new URLSearchParams(location.search);
+const who = q.get('who') || '신정중학교 차민';
+const B = document.body;
+const add = h => B.insertAdjacentHTML('beforeend', h);
+
+// 밤 책상 장면. 졸린 표정이 나오는 프레임을 쓴다.
+add(`<img class="abs" src="plate_desk.png" style="left:-116px;top:-58px;width:2265px;height:1274px">`);
+add(`<div class="abs" style="inset:0;background:linear-gradient(100deg,
+      rgba(5,9,22,.97) 0%,rgba(5,9,22,.94) 33%,rgba(5,9,22,.60) 49%,rgba(5,9,22,0) 66%)"></div>`);
+add(`<div class="abs" style="inset:0;pointer-events:none;background:
+      radial-gradient(ellipse 82% 74% at 50% 46%,rgba(0,0,0,0) 52%,rgba(0,0,0,.40) 100%)"></div>`);
+
+// 학교와 이름 — 작게 한 줄
+add(`<div class="abs" style="left:100px;top:100px;display:flex;align-items:center;gap:20px">
+      <div style="width:7px;height:40px;border-radius:2px;background:#FFD54A"></div>
+      <div style="font-weight:700;font-size:34px;color:#E6EDFF;letter-spacing:-.01em">${who}</div></div>`);
+
+// 제목
+add(`<div class="sq h abs" style="left:96px;top:330px;font-size:104px">오늘 먹은 간식이</div>`);
+add(`<div class="sq h abs" style="left:96px;top:458px;font-size:124px">내 <span style="color:#FFD166">집중력</span>을 바꾼다?</div>`);
+</script>
