@@ -11,15 +11,37 @@ import imageio_ffmpeg
 D = pathlib.Path(__file__).parent
 OUT = D / "out"
 FF = imageio_ffmpeg.get_ffmpeg_exe()
-FP = FF.replace("ffmpeg", "ffprobe")
+
 SCHOOL, NAME = "신정중학교", "차민"
 ok = True
 
 
 def probe(p):
-    r = subprocess.run([FP, "-v", "error", "-show_streams", "-show_format",
-                        "-of", "json", str(p)], capture_output=True, text=True)
-    return json.loads(r.stdout)
+    """ffprobe 가 없는 환경이라 ffmpeg -i 의 출력에서 필요한 값만 긁는다."""
+    import re
+    t = subprocess.run([FF, "-hide_banner", "-i", str(p)],
+                       capture_output=True, text=True).stderr
+    d = {"streams": [], "format": {"format_name": p.suffix.lstrip("."),
+                                   "size": str(p.stat().st_size)}}
+    m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", t)
+    if m:
+        h, mi, se = m.groups()
+        d["format"]["duration"] = str(int(h) * 3600 + int(mi) * 60 + float(se))
+    for ln in t.splitlines():
+        if "Stream #" not in ln:
+            continue
+        if "Video:" in ln:
+            wh = re.search(r"(\d{2,5})x(\d{2,5})", ln)
+            d["streams"].append({"codec_type": "video",
+                                 "codec_name": ln.split("Video: ")[1].split()[0].rstrip(","),
+                                 "width": int(wh.group(1)), "height": int(wh.group(2))})
+        elif "Audio:" in ln:
+            sr = re.search(r"(\d+) Hz", ln)
+            d["streams"].append({"codec_type": "audio",
+                                 "codec_name": ln.split("Audio: ")[1].split()[0].rstrip(","),
+                                 "sample_rate": sr.group(1) if sr else "0",
+                                 "channels": 2 if "stereo" in ln else 1})
+    return d
 
 
 def check(label, got, want, good):
@@ -61,7 +83,7 @@ def main():
     check("용량", f"{mp4.stat().st_size/1024/1024:.1f} MB", "", True)
 
     print("\n저작권 — 유튜브 검열에 걸릴 요소가 있는지")
-    check("글꼴", "나눔고딕 · 나눔스퀘어 (OFL, 상업 이용 가능)", "", True)
+    check("글꼴", "영상 Pretendard · 썸네일 나눔스퀘어 (둘 다 OFL)", "", True)
     check("음악", "numpy 로 직접 합성 (bgm.py)", "", True)
     check("사진·영상", "외부 소재 0개, 전부 직접 그린 그래픽", "", True)
     check("효과음", "직접 합성 (bgm.py)", "", True)
