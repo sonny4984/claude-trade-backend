@@ -358,7 +358,7 @@ body{font-family:'Pretendard';color:var(--ink);-webkit-font-smoothing:antialiase
       <div class="big" style="font-size:88px">혈당을 지키는 <span style="color:#FFD166">과학적인 식습관</span></div>
       <div style="margin-top:30px;font-size:42px;font-weight:700;color:var(--dim)">최고의 학습 효율과 집중력은 오늘의 한 끼에서 시작됩니다</div>
       <div style="margin:48px auto 0;width:220px;height:5px;border-radius:3px;background:linear-gradient(90deg,var(--cyan),var(--purple))"></div>
-      <div style="margin-top:44px;font-size:30px;font-weight:800;letter-spacing:.32em;color:#7DE0FF">3분 과학 소통</div>
+      <div id="endkick" style="margin-top:44px;font-size:30px;font-weight:800;letter-spacing:.32em;color:#7DE0FF">3분 과학 소통</div>
     </div>
   </div>
 
@@ -673,6 +673,28 @@ function render(t){
   return true;
 }
 window.render=render;
+
+/* ---------------- 교내대회용 ----------------
+   ?school=1&name=○○중학교&who=3학년 0반 홍길동
+   공모 요강이 두 가지를 요구한다.
+     - 첫 화면에 제목과 학교명
+     - 자막 글꼴은 굴림, 고딕, 명조체만
+   교육청 출품본과 파일을 나누지 않고 이 스위치 하나로 갈아 끼운다.        */
+(function(){
+  const q=new URLSearchParams(location.search);
+  if(!q.has('school'))return;
+  const name=q.get('name')||'○○중학교';
+  const who=q.get('who')||'';
+  const st=document.createElement('style');
+  // 요강이 허용하는 고딕체로 통일한다. SVG 안의 font-family 속성까지 덮어야 해서
+  // 전체 선택자에 !important 를 쓴다.
+  st.textContent="*{font-family:'NanumGothic','나눔고딕',sans-serif !important}";
+  document.head.appendChild(st);
+  const kick=document.getElementById('t1kick');
+  if(kick){kick.textContent=name;kick.style.letterSpacing='.18em';}
+  const ek=document.getElementById('endkick');
+  if(ek){ek.textContent=who?name+'  '+who:name;ek.style.letterSpacing='.14em';}
+})();
 window.setTiming=(x)=>{TIMING=x};
 window.setSubs=(x)=>{SUBS=x};
 window.setBeats=(x)=>{if(x&&x.peak)BEATS=x};

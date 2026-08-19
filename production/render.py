@@ -22,7 +22,7 @@ def serve():
     return httpd, port
 
 
-def open_page(pw, port, tl):
+def open_page(pw, port, tl, query=""):
     br = pw.chromium.launch(
         executable_path="/opt/pw-browsers/chromium",
         args=["--force-color-profile=srgb", "--disable-lcd-text",
@@ -32,7 +32,7 @@ def open_page(pw, port, tl):
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
-    pg.goto(f"http://127.0.0.1:{port}/scene.html", wait_until="load")
+    pg.goto(f"http://127.0.0.1:{port}/scene.html{query}", wait_until="load")
     if errs:
         raise SystemExit("페이지 스크립트 오류:\n  " + "\n  ".join(errs[:6]))
     pg.evaluate("document.fonts.ready")
@@ -50,15 +50,25 @@ def main():
     ap.add_argument("--video", action="store_true")
     ap.add_argument("--out", default=str(D / "out" / "video_raw.mp4"))
     ap.add_argument("--fps", type=int, default=0)
+    # 교내대회용: 자막을 10자 이내로 끊고 글꼴을 고딕으로, 첫 화면에 학교명을 넣는다
+    ap.add_argument("--timeline", default="timeline.json")
+    ap.add_argument("--school", action="store_true")
+    ap.add_argument("--name", default="○○중학교")
+    ap.add_argument("--who", default="")
     a = ap.parse_args()
 
-    tl = json.loads((D / "timeline.json").read_text())
+    query = ""
+    if a.school:
+        from urllib.parse import urlencode
+        query = "?" + urlencode({"school": 1, "name": a.name, "who": a.who})
+
+    tl = json.loads((D / a.timeline).read_text())
     fps = a.fps or tl.get("fps", 30)
     total = tl["timing"]["total"]
     httpd, port = serve()
 
     with sync_playwright() as pw:
-        br, pg = open_page(pw, port, tl)
+        br, pg = open_page(pw, port, tl, query)
 
         if a.stills:
             outdir = D / "stills"; outdir.mkdir(exist_ok=True)

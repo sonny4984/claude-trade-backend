@@ -5,7 +5,7 @@ hero_raw.png
 out/*.mp4
 out/*.png
 out/*.mp3
-out/render.log
+out/*.log
 out/diagnose.log
 
 # 나레이션 원본은 크레딧 소진으로 재생성이 불가능하다.
