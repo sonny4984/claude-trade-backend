@@ -1,0 +1,257 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>썸네일 5종</title>
+<style>
+/* 보내 주신 다섯 가지 스타일을 하나씩. 사진은 쓰지 않고 전부 직접 그린다. */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1920px;height:1080px;overflow:hidden}
+body{font-family:'NanumGothic',sans-serif;-webkit-font-smoothing:antialiased;position:relative}
+.sq{font-family:'NanumSquare','NanumGothic',sans-serif;font-weight:700}
+.abs{position:absolute}
+svg{display:block}
+</style>
+<body></body>
+<script>
+const V = Number(new URLSearchParams(location.search).get('v') || 1);
+const B = document.body;
+const add = h => B.insertAdjacentHTML('beforeend', h);
+
+// 혈당 곡선 하나. 다섯 판에서 크기만 바꿔 쓴다.
+const CURVE = 'M0 210 C 60 208, 96 200, 132 168 C 168 132, 192 44, 240 40 '
+            + 'C 288 36, 306 120, 342 176 C 378 226, 420 236, 480 232';
+
+// ───────────────────────── 1. 밝은 편집형 ─────────────────────────
+if (V === 1) {
+  add(`<div class="abs" style="inset:0;background:linear-gradient(135deg,#FAFBFD 0%,#EDF1F6 62%,#E3E9F1 100%)"></div>`);
+  // 오른쪽에 놓인 보고서와 뇌 모형. 사진 대신 직접 그린다.
+  add(`<div class="abs" style="left:1010px;top:392px;width:820px;height:560px;
+        transform:rotate(-6deg);background:#fff;border-radius:6px;
+        box-shadow:0 34px 70px rgba(28,42,66,.20),0 4px 12px rgba(28,42,66,.10)"></div>`);
+  add(`<svg class="abs" style="left:1052px;top:452px;transform:rotate(-6deg)" width="700" height="400" viewBox="0 0 700 400">
+        <g stroke="#D8DFE9" stroke-width="2">
+          ${[0,1,2,3,4,5].map(i=>`<line x1="40" y1="${40+i*56}" x2="676" y2="${40+i*56}"/>`).join('')}
+        </g>
+        <line x1="40" y1="24" x2="40" y2="320" stroke="#C2CBD8" stroke-width="3"/>
+        <line x1="40" y1="320" x2="676" y2="320" stroke="#C2CBD8" stroke-width="3"/>
+        <g transform="translate(56,52) scale(1.30,1.05)">
+          <path d="${CURVE}" fill="none" stroke="#D93B4A" stroke-width="9" stroke-linecap="round"/>
+        </g>
+        <text x="470" y="118" font-family="NanumGothic" font-weight="700" font-size="27" fill="#D93B4A">혈당 스파이크</text>
+        <text x="452" y="356" font-family="NanumGothic" font-weight="700" font-size="27" fill="#1A56DB">집중력 저하</text>
+      </svg>`);
+  add(`<svg class="abs" style="left:1310px;top:96px" width="540" height="430" viewBox="0 0 540 430">
+        <ellipse cx="262" cy="404" rx="168" ry="18" fill="#1C2A42" opacity=".10"/>
+        <path d="M126 214 C98 178 110 120 158 104 C172 62 226 40 270 58
+                 C308 26 378 36 398 80 C450 84 482 134 462 178
+                 C486 208 470 254 428 264 C410 300 356 314 320 296
+                 C282 318 228 310 206 278 C158 282 126 254 126 214 Z"
+              fill="#F0E3D7" stroke="#CDB49F" stroke-width="6"/>
+        <g stroke="#CDB49F" stroke-width="6" fill="none" stroke-linecap="round">
+          <path d="M170 142 C214 128 224 176 190 190"/>
+          <path d="M250 96 C292 110 278 156 242 150"/>
+          <path d="M348 92 C390 108 374 152 340 146"/>
+          <path d="M424 154 C456 172 442 212 410 204"/>
+          <path d="M226 214 C268 202 280 248 244 258"/>
+          <path d="M322 208 C362 220 352 264 316 258"/>
+          <path d="M398 226 C424 240 416 268 392 266"/>
+        </g>
+        <path d="M188 282 C164 300 168 340 198 350 C232 360 262 338 254 310 C248 286 216 272 188 282 Z"
+              fill="#E6D3C2" stroke="#CDB49F" stroke-width="6"/>
+        <g stroke="#CDB49F" stroke-width="4" fill="none">
+          <path d="M182 302 C204 296 232 306 244 322"/><path d="M180 324 C204 320 230 328 244 340"/>
+        </g>
+        <path d="M214 352 L216 388 C216 398 240 400 244 390 L246 352"
+              fill="#E6D3C2" stroke="#CDB49F" stroke-width="6"/>
+      </svg>`);
+  // 카피
+  add(`<div class="abs" style="left:100px;top:74px;display:flex;align-items:center;gap:28px">
+        <div class="sq" style="font-size:38px;color:#2C3648;letter-spacing:-.02em">3분 과학 소통</div>
+        <div style="width:640px;height:2px;background:#B9C3D2"></div></div>`);
+  add(`<div class="sq abs" style="left:96px;top:262px;font-size:126px;color:#141A26;
+        letter-spacing:-.055em;line-height:1.14">오늘 먹은 간식</div>`);
+  add(`<div class="sq abs" style="left:96px;top:406px;font-size:126px;color:#1A56DB;
+        letter-spacing:-.055em;line-height:1.14">내 몸을 바꾼다</div>`);
+  add(`<div class="abs" style="left:100px;top:596px;display:flex;gap:18px">
+        <div class="sq" style="background:#1A56DB;color:#fff;font-size:40px;padding:18px 36px;border-radius:10px">혈당 스파이크</div>
+        <div class="sq" style="background:#3A424F;color:#fff;font-size:40px;padding:18px 36px;border-radius:10px">뇌 과학의 비밀</div>
+      </div>`);
+  add(`<div class="abs" style="left:100px;top:900px;display:flex;align-items:center;gap:18px">
+        <div style="width:5px;height:34px;background:#1A56DB"></div>
+        <div style="font-size:30px;color:#5A6577;letter-spacing:.05em">혈당 &nbsp;×&nbsp; 집중력</div></div>`);
+}
+
+// ───────────────────────── 2. 단색 플랫 ─────────────────────────
+if (V === 2) {
+  add(`<div class="abs" style="inset:0;background:#1E7BE8"></div>`);
+  add(`<svg class="abs" style="left:0;top:0" width="1920" height="1080">
+        <path d="M980 1080 C1180 860 1120 620 1400 470 C1620 350 1780 380 1920 300 L1920 1080 Z"
+              fill="#fff" opacity=".07"/>
+        <path d="M1180 1080 C1340 900 1300 700 1520 590 C1700 500 1820 520 1920 470"
+              fill="none" stroke="#fff" stroke-opacity=".13" stroke-width="26"/>
+      </svg>`);
+  // 초록 캐릭터 둘. 레퍼런스의 블롭 캐릭터 자리를 우리 소재로 채운다.
+  const blob = (x,y,s,flip) => `<g transform="translate(${x},${y}) scale(${flip?-s:s},${s})">
+      <path d="M4 -168 C78 -160 118 -96 108 -20 C100 46 62 118 -6 126 C-74 134 -116 76 -114 6 C-112 -70 -70 -176 4 -168 Z" fill="#28E070"/>
+      <ellipse cx="-38" cy="-8" rx="27" ry="31" fill="#fff"/><ellipse cx="38" cy="-8" rx="27" ry="31" fill="#fff"/>
+      <circle cx="-32" cy="0" r="14" fill="#0E2E1C"/><circle cx="44" cy="0" r="14" fill="#0E2E1C"/>
+      <path d="M-24 52 Q0 74 24 52" stroke="#0E2E1C" stroke-width="9" fill="none" stroke-linecap="round"/>
+    </g>`;
+  add(`<svg class="abs" style="left:0;top:0" width="1920" height="1080">
+        ${blob(1600,270,1.0,false)}
+        ${blob(1300,690,0.72,true)}
+        <g transform="translate(1470,742)">
+          <rect x="-30" y="-150" width="60" height="210" rx="12" fill="#fff"/>
+          <rect x="-30" y="-40" width="60" height="100" rx="0" fill="#7FE6FF"/>
+          <rect x="-46" y="56" width="92" height="20" rx="8" fill="#fff"/>
+        </g>
+        <g transform="translate(1620,760)">
+          <rect x="-26" y="-120" width="52" height="180" rx="10" fill="#fff"/>
+          <rect x="-26" y="-14" width="52" height="74" fill="#FFE066"/>
+          <rect x="-40" y="56" width="80" height="18" rx="7" fill="#fff"/>
+        </g>
+        <g fill="#fff" opacity=".9">
+          <circle cx="1424" cy="510" r="11"/><circle cx="1466" cy="452" r="8"/><circle cx="1392" cy="452" r="7"/>
+        </g>
+        <g transform="translate(140,700)">
+          <rect width="196" height="126" rx="14" fill="#fff" opacity=".92"/>
+          <rect width="196" height="60" rx="14" fill="#fff" opacity=".7"/>
+          <g stroke="#1E7BE8" stroke-width="7" opacity=".55">
+            <line x1="65" y1="0" x2="65" y2="126"/><line x1="131" y1="0" x2="131" y2="126"/>
+            <line x1="0" y1="63" x2="196" y2="63"/></g>
+        </g>
+        <g transform="translate(392,708)">
+          <rect width="104" height="132" rx="16" fill="#fff" opacity=".92"/>
+          <rect y="38" width="104" height="34" fill="#1E7BE8" opacity=".35"/>
+        </g>
+      </svg>`);
+  add(`<div class="sq abs" style="left:120px;top:322px;background:#fff;color:#1256B0;
+        font-size:104px;padding:16px 44px;border-radius:22px;letter-spacing:-.05em">오늘 먹은 간식</div>`);
+  add(`<div class="sq abs" style="left:120px;top:470px;background:#fff;color:#1256B0;
+        font-size:104px;padding:16px 44px;border-radius:22px;letter-spacing:-.05em">내 몸을 바꾼다</div>`);
+  add(`<div class="abs" style="left:132px;top:626px;font-size:38px;color:#CFE4FF">혈당 스파이크와 뇌 과학 알아보기</div>`);
+  add(`<div class="abs" style="left:132px;top:906px;font-size:30px;color:#A8CEFF">○○중학교 · 교내 과학대회</div>`);
+}
+
+// ───────────────────────── 3. 플랫 일러스트 ─────────────────────────
+if (V === 3) {
+  add(`<div class="abs" style="inset:0;background:#3B2B72"></div>`);
+  add(`<svg class="abs" style="left:0;top:0" width="1920" height="1080">
+        <path d="M980 0 L1420 0 L1620 812 L780 812 Z" fill="#6A52C4" opacity=".30"/>
+        <g opacity=".9">
+          <rect x="1140" y="0" width="120" height="54" fill="#241A4A"/>
+          <path d="M1080 54 L1320 54 L1372 150 L1028 150 Z" fill="#8A6FE0"/>
+        </g>
+        <g transform="translate(1660,470)">
+          <rect x="-150" y="0" width="300" height="16" rx="6" fill="#5A4499"/>
+          <g>
+            <rect x="-124" y="-96" width="52" height="96" rx="10" fill="#D9E6FF"/>
+            <rect x="-124" y="-44" width="52" height="44" fill="#FF6B7A"/>
+            <rect x="-54" y="-124" width="44" height="124" rx="10" fill="#D9E6FF"/>
+            <rect x="-54" y="-56" width="44" height="56" fill="#4ADE9B"/>
+            <rect x="14" y="-84" width="48" height="84" rx="10" fill="#D9E6FF"/>
+            <rect x="14" y="-40" width="48" height="40" fill="#FFC93C"/>
+          </g>
+        </g>
+        <rect x="0" y="812" width="1920" height="268" fill="#2C2056"/>
+        <rect x="0" y="796" width="1920" height="20" fill="#5A4499"/>
+        <!-- 책상 위 실험 도구 -->
+        <g transform="translate(1180,548)">
+          <rect x="-24" y="0" width="48" height="150" rx="10" fill="#D9E6FF"/>
+          <rect x="-24" y="72" width="48" height="78" fill="#FF6B7A"/>
+          <path d="M-56 150 L56 150 L38 236 L-38 236 Z" fill="#D9E6FF"/>
+          <path d="M-42 186 L42 186 L30 236 L-30 236 Z" fill="#FFC93C"/>
+          <g fill="#fff" opacity=".55"><circle cx="-4" cy="-22" r="12"/><circle cx="22" cy="-52" r="9"/><circle cx="-26" cy="-58" r="7"/></g>
+        </g>
+        <g transform="translate(1480,620)">
+          <rect x="-28" y="0" width="56" height="164" rx="12" fill="#D9E6FF"/>
+          <rect x="-28" y="86" width="56" height="78" fill="#4ADE9B"/>
+          <rect x="-44" y="160" width="88" height="18" rx="7" fill="#D9E6FF"/>
+        </g>
+        <!-- 아이 캐릭터. 영상에 나오는 아이를 흰 가운 차림으로 -->
+        <g transform="translate(700,392) scale(1.24)">
+          <ellipse cx="0" cy="352" rx="150" ry="20" fill="#000" opacity=".22"/>
+          <path d="M-118 344 Q-104 176 0 166 Q104 176 118 344 Z" fill="#FFFFFF"/>
+          <path d="M-30 168 L0 250 L30 168 Z" fill="#DCE6F7"/>
+          <rect x="-14" y="248" width="28" height="96" fill="#2F7BE8"/>
+          <circle cx="0" cy="72" r="82" fill="#F5CBA6"/>
+          <path d="M-82 62 Q-72 -22 0 -22 Q72 -22 82 62 Q46 22 0 26 Q-46 22 -82 62 Z" fill="#26202E"/>
+          <circle cx="-28" cy="78" r="9" fill="#26202E"/><circle cx="28" cy="78" r="9" fill="#26202E"/>
+          <path d="M-18 116 Q0 132 18 116" stroke="#26202E" stroke-width="7" fill="none" stroke-linecap="round"/>
+        </g>
+        <!-- 손에 든 시험관 -->
+        <g transform="translate(920,700) rotate(18) scale(1.2)">
+          <rect x="-19" y="-118" width="38" height="150" rx="9" fill="#EAF2FF"/>
+          <rect x="-19" y="-44" width="38" height="76" fill="#FF6B7A"/>
+        </g>
+      </svg>`);
+  add(`<div class="sq abs" style="left:100px;top:132px;font-size:104px;color:#fff;
+        letter-spacing:-.05em;line-height:1.16">오늘 먹은 간식</div>`);
+  add(`<div class="sq abs" style="left:100px;top:256px;font-size:104px;color:#FFD54A;
+        letter-spacing:-.05em;line-height:1.16">내 몸을 바꾼다</div>`);
+  add(`<div class="abs" style="left:106px;top:400px;font-size:36px;color:#CDBEFF">혈당 스파이크와 뇌 과학의 비밀</div>`);
+  add(`<div class="abs" style="left:106px;top:920px;font-size:30px;color:#A899E0">○○중학교 · 교내 과학대회 출품작</div>`);
+}
+
+// ───────────────────────── 4. 다큐멘터리 ─────────────────────────
+if (V === 4) {
+  add(`<div class="abs" style="inset:0;background:radial-gradient(ellipse 70% 60% at 50% 48%,#0B1A24 0%,#03080D 78%)"></div>`);
+  // 발광 입자. 포도당 알갱이를 어둠 속에 흩뿌린 느낌.
+  let dots = '';
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for (let i = 0; i < 46; i++) {
+    const x = 60 + rnd() * 1800, y = 60 + rnd() * 960, r = 12 + rnd() * 44;
+    const c = rnd() > .45 ? '86,240,208' : '96,190,255';
+    dots += `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r.toFixed(0)}"
+              fill="rgba(${c},${(0.10 + rnd() * 0.22).toFixed(2)})"/>
+             <circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(r * .34).toFixed(0)}"
+              fill="rgba(${c},${(0.45 + rnd() * 0.4).toFixed(2)})"/>`;
+  }
+  add(`<svg class="abs" style="left:0;top:0" width="1920" height="1080">${dots}</svg>`);
+  add(`<div class="abs" style="inset:0;background:radial-gradient(ellipse 46% 34% at 50% 50%,rgba(3,8,13,.94) 0%,rgba(3,8,13,0) 76%)"></div>`);
+  add(`<div class="abs" style="left:96px;top:80px;display:flex;align-items:center;gap:18px">
+        <div style="width:52px;height:52px;border:3px solid #7FE6C8;border-radius:50%"></div>
+        <div style="font-size:29px;color:#8FB6AE;letter-spacing:.1em">○○중학교 과학대회</div></div>`);
+  add(`<div class="sq abs" style="left:0;right:0;top:404px;text-align:center;font-size:104px;
+        color:transparent;-webkit-text-stroke:3px #CFEFE6;letter-spacing:-.02em">오늘 먹은 간식</div>`);
+  add(`<div class="sq abs" style="left:0;right:0;top:534px;text-align:center;font-size:132px;
+        color:#FFFFFF;letter-spacing:-.045em">내 몸을 바꾼다</div>`);
+  add(`<div class="abs" style="left:0;right:0;top:722px;text-align:center;font-size:34px;
+        color:#7FA79E;letter-spacing:.24em">혈당 스파이크와 뇌 과학</div>`);
+}
+
+// ───────────────────────── 5. 블로그형 ─────────────────────────
+if (V === 5) {
+  add(`<div class="abs" style="inset:0;background:#0E1116"></div>`);
+  // 반복 패턴 — 레퍼런스의 필름 스트립 자리에 초콜릿 조각을 깐다
+  let tiles = '';
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 10; c++) {
+    const x = 40 + c * 196, y = 60 + r * 250;
+    tiles += `<g transform="translate(${x},${y})" opacity="${r % 2 ? .40 : .56}">
+      <rect width="164" height="206" rx="10" fill="#4A2E1C"/>
+      <rect width="164" height="96" rx="10" fill="#63402A"/>
+      <g stroke="#33200F" stroke-width="5">
+        <line x1="55" y1="0" x2="55" y2="206"/><line x1="110" y1="0" x2="110" y2="206"/>
+        <line x1="0" y1="103" x2="164" y2="103"/></g></g>`;
+  }
+  add(`<svg class="abs" style="left:0;top:0" width="1920" height="1080">${tiles}</svg>`);
+  add(`<div class="abs" style="inset:0;background:linear-gradient(90deg,
+        rgba(8,10,14,.96) 0%,rgba(8,10,14,.86) 38%,rgba(8,10,14,.46) 60%,rgba(8,10,14,.34) 100%)"></div>`);
+  // 원형 렌즈 안의 혈당 곡선
+  add(`<svg class="abs" style="left:1150px;top:212px" width="660" height="660" viewBox="0 0 660 660">
+        <circle cx="316" cy="300" r="252" fill="#0B1622" stroke="#E4E9F0" stroke-width="16"/>
+        <circle cx="316" cy="300" r="238" fill="none" stroke="#31435C" stroke-width="3"/>
+        <g transform="translate(76,196) scale(1.0,0.86)">
+          <path d="${CURVE}" fill="none" stroke="#FF4D6D" stroke-width="13" stroke-linecap="round"/>
+        </g>
+        <g stroke="#3A4C68" stroke-width="2" stroke-dasharray="9 9">
+          <line x1="96" y1="392" x2="536" y2="392"/></g>
+        <rect x="470" y="470" width="150" height="34" rx="17" fill="#E4E9F0" transform="rotate(42,470,470)"/>
+      </svg>`);
+  add(`<div class="abs" style="left:104px;top:706px;font-size:30px;color:#8B97A8;letter-spacing:.02em">○○중학교 교내 과학대회</div>`);
+  add(`<div class="sq abs" style="left:100px;top:756px;font-size:96px;color:#FFFFFF;
+        letter-spacing:-.05em;line-height:1.16">오늘 먹은 간식</div>`);
+  add(`<div class="sq abs" style="left:100px;top:872px;font-size:96px;color:#4D9BFF;
+        letter-spacing:-.05em;line-height:1.16">내 몸을 바꾼다</div>`);
+}
+</script>
