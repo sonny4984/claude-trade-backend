@@ -1,0 +1,85 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>썸네일</title>
+<style>
+/* 글꼴은 영상과 같은 고딕 계열로 맞춘다. 나눔스퀘어는 제목용, 나눔고딕은 잔글씨용. */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#0A1024}
+body{font-family:'NanumGothic',sans-serif;-webkit-font-smoothing:antialiased;position:relative}
+.sq{font-family:'NanumSquare','NanumGothic',sans-serif;font-weight:700}
+
+img.plate{position:absolute;image-rendering:auto}
+#vig{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 82% 74% at 50% 46%,rgba(0,0,0,0) 52%,rgba(0,0,0,.40) 100%)}
+
+/* 학교 슬레이트 — 실제 출품작 썸네일이 흔히 쓰는 형태 */
+.slate{position:absolute;display:flex;align-items:center;gap:20px}
+.slate i{display:block;width:7px;height:52px;border-radius:2px;background:#FFD54A}
+.slate .a{font-family:'NanumGothic';font-weight:700;font-size:33px;color:#E6EDFF;letter-spacing:-.01em}
+.slate .b{font-family:'NanumGothic';font-size:26px;color:#8FA3C4;margin-top:6px}
+
+/* 제목 — 두꺼운 어두운 외곽선을 둘러 어느 배경에서도 읽히게 한다 */
+.h1,.h2{letter-spacing:-.045em;line-height:1.02;white-space:nowrap;
+  -webkit-text-stroke:12px #060B1A;paint-order:stroke fill}
+.h1{font-size:82px;-webkit-text-stroke-width:7px;color:#D9E4FF}
+.h2{font-size:152px;color:#FFFFFF}
+.y{color:#FFD54A}
+.r{color:#FF4D6D}
+.sub{position:absolute;font-family:'NanumGothic';font-weight:700;font-size:38px;color:#8FA3C4;
+  letter-spacing:-.02em}
+.foot{position:absolute;font-family:'NanumGothic';font-size:28px;color:#7C8DAC}
+</style>
+<body></body>
+<script>
+const V = Number(new URLSearchParams(location.search).get('v') || 1);
+const B = document.body;
+const add = (html) => B.insertAdjacentHTML('beforeend', html);
+const slate = (x, y, extra) => add(
+  `<div class="slate" style="left:${x}px;top:${y}px">
+     <i></i><div><div class="a">○○중학교</div>
+     <div class="b">${extra || '교내 과학대회 출품작'}</div></div></div>`);
+
+if (V === 1) {
+  // 밤 책상 장면을 오른쪽에 두고 왼쪽에 제목. 실제 출품작 썸네일의 정공법.
+  add(`<img class="plate" src="plate_desk.png"
+        style="left:-180px;top:-58px;width:2265px;height:1274px">`);
+  add(`<div style="position:absolute;inset:0;background:linear-gradient(100deg,
+        rgba(5,9,22,.97) 0%,rgba(5,9,22,.94) 33%,rgba(5,9,22,.60) 49%,rgba(5,9,22,0) 66%)"></div>`);
+  add(`<div id="vig"></div>`);
+  slate(100, 96);
+  add(`<div class="sq h1" style="position:absolute;left:100px;top:300px">당 충전 했는데,</div>`);
+  add(`<div class="sq h2" style="position:absolute;left:96px;top:396px">
+        <span class="y">왜</span> 더 졸릴까?</div>`);
+  add(`<div class="sub" style="left:104px;top:600px">혈당 스파이크와 뇌 과학의 비밀</div>`);
+
+} else if (V === 2) {
+  // 뇌 스위치가 꺼지는 장면 하나만 크게. 색을 빨강 하나로 몰아준다.
+  add(`<div id="vig"></div>`);
+  add(`<img class="plate" src="plate_on.png"
+        style="left:1130px;top:214px;width:640px;opacity:.42">`);
+  add(`<div style="position:absolute;left:1408px;top:452px;width:0;height:0;
+        border-left:26px solid transparent;border-right:26px solid transparent;
+        border-top:40px solid #FF4D6D"></div>`);
+  add(`<img class="plate" src="plate_off.png" style="left:980px;top:534px;width:880px">`);
+  slate(100, 96);
+  add(`<div class="sq" style="position:absolute;left:100px;top:300px;font-size:62px;
+        color:#9DB0D6;letter-spacing:-.03em">초콜릿 한 조각에</div>`);
+  add(`<div class="sq h2" style="position:absolute;left:96px;top:392px;font-size:130px">뇌 스위치가</div>`);
+  add(`<div class="sq h2" style="position:absolute;left:96px;top:540px;font-size:172px"
+        ><span class="r">꺼졌다</span></div>`);
+  add(`<div class="foot" style="left:104px;top:800px">각성도 100% → 24%</div>`);
+
+} else {
+  // 그래프를 주인공으로. 과학 대회에 어울리는 데이터 중심 구성.
+  add(`<div id="vig"></div>`);
+  add(`<img class="plate" src="plate_graph.png" style="left:300px;top:384px;width:1320px">`);
+  add(`<div class="sq h1" style="position:absolute;left:100px;top:110px;font-size:70px">당은 채웠는데</div>`);
+  add(`<div class="sq h2" style="position:absolute;left:96px;top:196px;font-size:124px">
+        30분 뒤 머릿속이 <span class="y">하얘진다</span></div>`);
+  // 곡선이 바닥을 치는 자리에 주석 하나. 장식이 아니라 설명이다.
+  add(`<div style="position:absolute;left:1130px;top:792px;width:5px;height:92px;background:#FF4D6D"></div>`);
+  add(`<div style="position:absolute;left:920px;top:736px;font-family:'NanumGothic';
+        font-weight:700;font-size:36px;color:#FF4D6D">여기서 집중력이 떨어진다</div>`);
+  slate(100, 900, '교내 과학대회 출품작');
+}
+</script>

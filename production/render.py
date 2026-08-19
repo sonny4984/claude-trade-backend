@@ -55,12 +55,15 @@ def main():
     ap.add_argument("--school", action="store_true")
     ap.add_argument("--name", default="○○중학교")
     ap.add_argument("--who", default="")
+    ap.add_argument("--nosub", action="store_true")
     a = ap.parse_args()
 
     query = ""
     if a.school:
         from urllib.parse import urlencode
-        query = "?" + urlencode({"school": 1, "name": a.name, "who": a.who})
+        q = {"school": 1, "name": a.name, "who": a.who}
+        if a.nosub: q["nosub"] = 1
+        query = "?" + urlencode(q)
 
     tl = json.loads((D / a.timeline).read_text())
     fps = a.fps or tl.get("fps", 30)
