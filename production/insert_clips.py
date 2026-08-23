@@ -46,10 +46,11 @@ def main():
         n = min(c["to"], a.dur) if a.dur else c["to"]
         span = round(n - c["at"], 3)
         # 클립에서 쓸 구간만 잘라, 영상 시각 c["at"] 자리로 옮긴다
+        g = c.get("grade", grade)      # 낮에 찍은 컷은 따로 지정한다
         parts.append(
             f"[{i}:v]trim=start={c['from']}:duration={span},setpts=PTS-STARTPTS+{c['at']}/TB,"
             f"scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,"
-            f"{grade},format=yuv420p[c{i}]")
+            f"{g},format=yuv420p[c{i}]")
         out = f"[o{i}]"
         chain.append(f"{prev}[c{i}]overlay=0:0:enable='between(t,{c['at']},{n})'{out}")
         prev = out
