@@ -204,8 +204,9 @@ def check_comic(path):
         det.append(f"{c['at']:6.2f}초  {c['clip']}  {scores[c['clip']]:.3f}"
                    f" (다음 후보 {second:.3f})  {'○' if good else '×'}   {c['line'][:20]}")
     if ok:
-        c4 = next(x for x in cuts if x["clip"] == "IMG_1474")
-        c5 = next(x for x in cuts if x["clip"] == "IMG_1480")
+        # 클립 이름이 아니라 컷 번호로 찾는다. 테이크가 바뀌어도 안 깨진다.
+        c4 = next(x for x in cuts if x.get("컷") == 4)
+        c5 = next(x for x in cuts if x.get("컷") == 5)
         det.append(f"엄지척({c4['at']:.2f}초)과 고개 떨어짐({c5['at']:.2f}초)이 붙어 있어 "
                    f"웃음이 만들어집니다.")
     else:
