@@ -178,32 +178,39 @@ def check4(a):
 # ── 5) 목소리 높이 ─────────────────────────────────────────────────
 def check5(a):
     from scipy.signal import butter, sosfiltfilt
-    SOS = butter(4, 150, "highpass", fs=16000, output="sos")
+    FS = 32000
+    # 목소리 대역만 남긴다. 아래로는 배경음악 베이스, 위로는 아르페지오를 뺀다.
+    SOS = butter(4, [170, 400], "bandpass", fs=FS, output="sos")
 
-    def f0(x, sr=16000):
-        # 배경음악 베이스가 87~130Hz 에 있다. 걸러내지 않으면 그쪽을 목소리로
-        # 잘못 잡아 "음이 낮아졌다" 는 헛경보가 난다.
+    def f0(x, sr=FS):
+        # 16kHz 로 재면 240Hz 근처 눈금 간격이 1.5% 라, 한 칸만 밀려도 "음이
+        # 달라졌다" 는 헛경보가 난다. 표본율을 올리고 봉우리 주변을 포물선으로
+        # 맞춰 눈금 사이를 읽는다.
         x = sosfiltfilt(SOS, x)
-        w, out = 1024, []
+        w, out = 2048, []
         for i in range(0, len(x) - w, w):
             s = x[i:i + w]
             if np.abs(s).mean() < 0.02:
                 continue
             s = s - s.mean()
             c = np.correlate(s, s, mode="full")[w - 1:]
-            lo, hi = sr // 350, sr // 150          # 150~350Hz. 베이스는 뺀다
-            if hi >= len(c):
+            lo, hi = sr // 350, sr // 170
+            if hi >= len(c) - 1:
                 continue
             k = lo + int(np.argmax(c[lo:hi]))
-            if c[k] > 0.3 * c[0]:
-                out.append(sr / k)
+            if c[k] <= 0.3 * c[0] or k <= 0 or k >= len(c) - 1:
+                continue
+            y0, y1, y2 = c[k - 1], c[k], c[k + 1]
+            den = y0 - 2 * y1 + y2
+            d = 0.5 * (y0 - y2) / den if abs(den) > 1e-12 else 0.0
+            out.append(sr / (k + np.clip(d, -0.5, 0.5)))
         return np.median(out) if out else 0.0
 
-    a16 = pcm_from_array(a)
+    a16 = pcm(PATH, FS)
     det, ok = [], True
     for name, f, at in SEC:
-        o = wav(f, 16000)
-        s = int(at * 16000)
+        o = wav(f, FS)
+        s = int(at * FS)
         got = f0(a16[s:s + len(o)])
         want = f0(o)
         if want == 0 or got == 0:
@@ -215,10 +222,6 @@ def check5(a):
     det.append("배속을 걸면 목소리가 그만큼 높아집니다. 높이가 그대로입니다."
                if ok else "목소리 높이가 달라졌습니다.")
     say(5, "목소리 높이 대조", ok, det)
-
-
-def pcm_from_array(_):
-    return pcm(PATH, 16000)
 
 
 if __name__ == "__main__":

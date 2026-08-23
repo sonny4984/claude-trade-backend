@@ -81,10 +81,19 @@ def midi(m):
 
 # ---------------- 음악 ----------------
 if ARGS.bright:
-    # C – G – Am – F. 으뜸화음으로 시작해 장조로 들린다. 빠르기도 조금 올린다.
-    BPM = 94.0
-    PROG = [[48, 55, 64], [55, 59, 62], [57, 60, 64], [53, 57, 60]]
-    BASS = [48, 43, 45, 41]
+    # 앞서 쓰던 C–G–Am–F 는 어두운 판 Am–F–C–G 와 같은 네 화음을 순서만 돌린
+    # 것이라 귀로는 구분이 안 됐다. 단조 화음(Am)을 아예 빼고 I–IV–V–I 로 간다.
+    # 도로 돌아와 끝나는 진행이라 밝게 들린다. 음도 한 옥타브 올리고 9음을 더해
+    # 트이게 만든다.
+    BPM = 100.0
+    # 패드를 한 옥타브 올려 목소리(약 240Hz) 위에 앉힌다. 도4·파4·솔4 에 두면
+    # 나레이션 기본 주파수와 정면으로 겹쳐 말이 묻힌다. 베이스는 아래로 내려
+    # 170~400Hz 를 목소리에게 비워 준다.
+    PROG = [[72, 79, 88, 86],      # Cadd9
+            [77, 84, 93, 91],      # Fadd9
+            [79, 86, 95, 90],      # G
+            [72, 79, 88, 86]]      # Cadd9 로 돌아온다
+    BASS = [48, 41, 43, 48]
 else:
     # Am – F – C – G  (담담하고 사색적인 진행)
     BPM = 84.0
@@ -141,9 +150,12 @@ for b in range(nbars):
             h = rng.normal(0, 1, n_) * np.exp(-t_of(n_) * 90)
             add(perc, h * 0.035, at + e * BAR / 8)
 
-pad = lp_fast(pad, 2600 if ARGS.bright else 1700)
-arp = lp_fast(arp, 6000 if ARGS.bright else 4200)
-music = pad * 0.9 + bass * 0.85 + arp * (1.5 if ARGS.bright else 1.0) + perc
+# 밝은 판은 높은 쪽을 훨씬 많이 남긴다. 이게 '밝다' 는 느낌의 대부분이다.
+pad = lp_fast(pad, 5200 if ARGS.bright else 1700)
+arp = lp_fast(arp, 11000 if ARGS.bright else 4200)
+# 밝은 판은 베이스를 줄이고 아르페지오를 키운다. 저음이 무거우면 어둡게 들린다.
+music = (pad * 0.9 + bass * (0.55 if ARGS.bright else 0.85)
+         + arp * (2.2 if ARGS.bright else 1.0) + perc)
 
 # 간단한 잔향 (슈뢰더 근사)
 rev = np.zeros(N)

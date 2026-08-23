@@ -12,7 +12,7 @@
 
   python3 check_request.py out/파일.mp4
 """
-import json, pathlib, subprocess, sys, tempfile
+import json, pathlib, subprocess, sys, tempfile, wave
 import numpy as np
 import imageio_ffmpeg
 from PIL import Image
@@ -128,11 +128,51 @@ def check_bgm(path):
         res[tag] = float(np.corrcoef(env(a[:n]), env(b[:n]))[0, 1])
         (D / "audio" / f).unlink(missing_ok=True)
     pick = max(res, key=res.get)
-    ok = pick == "밝은 판"
+
+    # 어느 파일을 썼는지만 봐서는 모자란다. 앞서 만든 밝은 판은 어두운 판과
+    # 같은 네 화음을 순서만 돌린 것이라, 파일은 맞는데 귀로는 구분이 안 됐다.
+    # 그래서 실제로 밝게 들리는지를 따로 잰다. 스펙트럼 무게중심이 높을수록
+    # 높은 소리가 많아 밝게 들린다.
+    def centroid(x, sr=8000):
+        o = []
+        for i in range(0, len(x) - sr, sr):
+            w = x[i:i + sr] * np.hanning(sr)
+            sp = np.abs(np.fft.rfft(w))
+            fr = np.fft.rfftfreq(sr, 1 / sr)
+            if sp.sum() > 1e-6:
+                o.append((fr * sp).sum() / sp.sum())
+        return float(np.median(o)) if o else 0.0
+
+    def wide(p):
+        r = subprocess.run([FF, "-v", "error", "-i", str(p), "-ac", "1", "-ar", "8000",
+                            "-f", "f32le", "-"], capture_output=True)
+        return np.frombuffer(r.stdout, dtype=np.float32).astype(np.float64)
+
+    # 나레이션이 없는 자리에서만 잰다. 말소리가 섞이면 밝기가 흐려진다.
+    tl = json.loads((D / "timeline.json").read_text())
+    ends = []
+    for x in tl["audio"]:
+        w = wave.open(x["file"])
+        ends.append((x["at"], x["at"] + w.getnframes() / w.getframerate()))
+    holes = [(0.3, ends[0][0] - 0.3)]
+    holes += [(ends[i][1] + 0.3, ends[i + 1][0] - 0.3) for i in range(len(ends) - 1)]
+    a8 = wide(path)
+    seg = np.concatenate([a8[int(t0 * 8000):int(t1 * 8000)]
+                          for t0, t1 in holes if t1 - t0 > 0.8])
+    subprocess.run([sys.executable, str(D / "bgm.py"), "--out", "_cmp_dark.wav"],
+                   capture_output=True, check=True)
+    dark_c = centroid(wide(D / "audio" / "_cmp_dark.wav"))
+    (D / "audio" / "_cmp_dark.wav").unlink(missing_ok=True)
+    got_c = centroid(seg)
+    gain = got_c / dark_c - 1
+    ok = pick == "밝은 판" and gain > 0.25
     say(3, "배경음악 밝게", ok, [
-        f"어두운 판(단조 Am–F–C–G)과 닮은 정도 {res['어두운 판']:+.3f}",
-        f"밝은 판(장조 C–G–Am–F)과 닮은 정도 {res['밝은 판']:+.3f}",
-        f"→ {pick}이 들어가 있습니다." if ok else f"→ {pick}이 들어가 있습니다. 밝은 판이 아닙니다."])
+        f"어두운 판과 닮은 정도 {res['어두운 판']:+.3f} · 밝은 판과 {res['밝은 판']:+.3f}"
+        f"  →  {pick}",
+        f"밝기(스펙트럼 무게중심)  어두운 판 {dark_c:.0f}Hz  →  완성본 {got_c:.0f}Hz"
+        f"   {gain*100:+.0f}%",
+        "화음도 단조를 빼고 도–파–솔–도로 바꿔 도로 돌아와 끝납니다."
+        if ok else "밝기가 충분히 오르지 않았습니다. 귀로 구분이 안 됩니다."])
 
 
 def check_comic(path):
