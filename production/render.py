@@ -56,6 +56,7 @@ def main():
     ap.add_argument("--name", default="○○중학교")
     ap.add_argument("--who", default="")
     ap.add_argument("--nosub", action="store_true")
+    ap.add_argument("--dur", type=float, default=0, help="앞에서 이만큼만 (샘플용)")
     ap.add_argument("--bg", default="", help="1 기본 남색 / 2 한 단계 밝게 / 3 더 밝게")
     a = ap.parse_args()
 
@@ -69,7 +70,7 @@ def main():
 
     tl = json.loads((D / a.timeline).read_text())
     fps = a.fps or tl.get("fps", 30)
-    total = tl["timing"]["total"]
+    total = a.dur or tl["timing"]["total"]
     httpd, port = serve()
 
     with sync_playwright() as pw:
