@@ -73,8 +73,9 @@ def render_refs():
     base = [sys.executable, str(D / "render.py"), "--stills",
             ",".join(str(t) for t in REF_T), "--timeline", "timeline_school.json",
             "--school", "--name", "신정중학교", "--who", "차민"]
+    lv = json.loads((D / "cuts.json").read_text())["설정"]["배경밝기"]
     for tag, extra in (("bg1", ["--nosub"]), ("bg2", ["--bg", "2", "--nosub"]),
-                       ("bg3", ["--bg", "3", "--nosub"]), ("sub", ["--bg", "2"])):
+                       ("bg3", ["--bg", "3", "--nosub"]), ("sub", ["--bg", lv])):
         subprocess.run(base + extra, capture_output=True, check=True)
         outs[tag] = {t: np.asarray(Image.open(D / "stills" / f"t{t:06.1f}.png")
                                    .convert("RGB")).astype(float) for t in REF_T}
@@ -90,8 +91,10 @@ def check_bg(path, refs):
         votes.append(pick)
         det.append(f"{t:5.0f}초  1단계와 차이 {d['bg1']:5.2f} · "
                    f"2단계 {d['bg2']:5.2f} · 3단계 {d['bg3']:5.2f}  →  {pick[-1]}단계")
-    ok = all(v == "bg2" for v in votes)
-    det.append("남색(1단계)보다 한 단계 밝은 2단계입니다." if ok
+    want = "bg" + json.loads((D / "cuts.json").read_text())["설정"]["배경밝기"]
+    globals()["WANT"] = want
+    ok = all(v == want for v in votes)
+    det.append(f"남색(1단계)보다 밝은 {want[-1]}단계입니다." if ok
                else f"고른 단계가 {set(v[-1] for v in votes)} 로 나옵니다.")
     say(1, "남색보다 밝은 색", ok, det)
 
@@ -100,7 +103,7 @@ def check_sub(path, refs):
     det, ok = [], True
     for t in REF_T:
         got = frame(path, t)
-        dn = np.abs(got - refs["bg2"][t]).mean()      # 자막 끈 기준
+        dn = np.abs(got - refs[WANT][t]).mean()       # 자막 끈 기준
         dy = np.abs(got - refs["sub"][t]).mean()      # 자막 켠 기준
         ok &= dn < dy
         det.append(f"{t:5.0f}초  자막 끈 화면과 차이 {dn:5.2f} · 켠 화면과 {dy:5.2f}"

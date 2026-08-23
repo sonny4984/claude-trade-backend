@@ -26,10 +26,11 @@ MUXED = OUT / "muxed.mp4"
 FINAL = OUT / "신정중학교_차민_교내대회_최종.mp4"
 
 # 고객이 요청한 네 가지가 여기서 결정된다
+_CFG = json.loads((D / "cuts.json").read_text())["설정"]
 SCHOOL = ["--school", "--name", "신정중학교", "--who", "차민",
-          "--bg", "2",          # 남색보다 밝은 색
-          "--nosub"]            # 자막 없애기
-BED = "bed_marimba.wav"        # 배경음악 밝게 — 마림바와 피치카토 편성
+          "--bg", _CFG["배경밝기"],   # 남색보다 밝은 색
+          "--nosub"]                  # 자막 없애기
+BED = _CFG["배경음악"]                # 배경음악 밝게 — 마림바와 피치카토
 #  코믹하게 — cuts.json 의 엄지척·고개뚝 컷으로 살린다
 
 
