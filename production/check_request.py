@@ -160,8 +160,13 @@ def check_comic(path):
         ok &= good
         det.append(f"{c['at']:6.2f}초  {c['clip']}  {scores[c['clip']]:.3f}"
                    f" (다음 후보 {second:.3f})  {'○' if good else '×'}   {c['line'][:20]}")
-    det.append("엄지척(14.07초)과 고개 떨어짐(18.18초)이 붙어 있어 웃음이 만들어집니다."
-               if ok else "제자리에 없는 컷이 있습니다.")
+    if ok:
+        c4 = next(x for x in cuts if x["clip"] == "IMG_1474")
+        c5 = next(x for x in cuts if x["clip"] == "IMG_1480")
+        det.append(f"엄지척({c4['at']:.2f}초)과 고개 떨어짐({c5['at']:.2f}초)이 붙어 있어 "
+                   f"웃음이 만들어집니다.")
+    else:
+        det.append("제자리에 없는 컷이 있습니다.")
     say(4, "코믹하게 — 촬영분이 제자리에 들어갔는가", ok, det)
 
 
