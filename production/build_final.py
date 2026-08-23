@@ -29,7 +29,7 @@ FINAL = OUT / "신정중학교_차민_교내대회_최종.mp4"
 SCHOOL = ["--school", "--name", "신정중학교", "--who", "차민",
           "--bg", "2",          # 남색보다 밝은 색
           "--nosub"]            # 자막 없애기
-BED = "bed_bright.wav"          # 배경음악 밝게
+BED = "bed_marimba.wav"        # 배경음악 밝게 — 마림바와 피치카토 편성
 #  코믹하게 — cuts.json 의 엄지척·고개뚝 컷으로 살린다
 
 

@@ -112,8 +112,8 @@ def check_sub(path, refs):
 def check_bgm(path):
     subprocess.run([sys.executable, str(D / "bgm.py"), "--out", "_cmp_dark.wav"],
                    capture_output=True, check=True)
-    subprocess.run([sys.executable, str(D / "bgm.py"), "--bright", "--out", "_cmp_bright.wav"],
-                   capture_output=True, check=True)
+    subprocess.run([sys.executable, str(D / "bgm.py"), "--style", "marimba",
+                    "--out", "_cmp_bright.wav"], capture_output=True, check=True)
     def env(v, h=400):
         m = len(v) // h
         return np.abs(v[:m * h]).reshape(m, h).mean(axis=1)
@@ -122,7 +122,7 @@ def check_bgm(path):
     # 표본을 그대로 견주면 필터가 위상을 틀어 0 이 나온다. 소리 세기로 견준다.
     a = band(path, 60, 200)
     res = {}
-    for tag, f in (("어두운 판", "_cmp_dark.wav"), ("밝은 판", "_cmp_bright.wav")):
+    for tag, f in (("원래 신스 판", "_cmp_dark.wav"), ("마림바 판", "_cmp_bright.wav")):
         b = band(D / "audio" / f, 60, 200)
         n = min(len(a), len(b))
         res[tag] = float(np.corrcoef(env(a[:n]), env(b[:n]))[0, 1])
@@ -165,13 +165,13 @@ def check_bgm(path):
     (D / "audio" / "_cmp_dark.wav").unlink(missing_ok=True)
     got_c = centroid(seg)
     gain = got_c / dark_c - 1
-    ok = pick == "밝은 판" and gain > 0.25
+    ok = pick == "마림바 판" and gain > 0.25
     say(3, "배경음악 밝게", ok, [
-        f"어두운 판과 닮은 정도 {res['어두운 판']:+.3f} · 밝은 판과 {res['밝은 판']:+.3f}"
-        f"  →  {pick}",
-        f"밝기(스펙트럼 무게중심)  어두운 판 {dark_c:.0f}Hz  →  완성본 {got_c:.0f}Hz"
+        f"원래 신스 판과 닮은 정도 {res['원래 신스 판']:+.3f} · "
+        f"마림바 판과 {res['마림바 판']:+.3f}  →  {pick}",
+        f"밝기(스펙트럼 무게중심)  원래 판 {dark_c:.0f}Hz  →  완성본 {got_c:.0f}Hz"
         f"   {gain*100:+.0f}%",
-        "화음도 단조를 빼고 도–파–솔–도로 바꿔 도로 돌아와 끝납니다."
+        "편성 자체를 바꿨습니다. 나무 건반과 튕기는 베이스라 소리가 짧게 끊겨 말을 덮지 않습니다."
         if ok else "밝기가 충분히 오르지 않았습니다. 귀로 구분이 안 됩니다."])
 
 
