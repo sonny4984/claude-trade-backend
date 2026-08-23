@@ -16,7 +16,12 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--video", default=str(OUT / "video_raw.mp4"))
 ap.add_argument("--out", default=str(OUT / "혈당스파이크와_뇌과학의_비밀_FHD.mp4"))
 ap.add_argument("--bed", default="bed.wav")
+# 요강이 "3분 이내" 를 요구한다. 끝을 조금 당겨 끊고 여운을 남긴다.
+ap.add_argument("--dur", type=float, default=0, help="이 길이로 끊는다")
+ap.add_argument("--fade", type=float, default=0, help="끝에서 이만큼 소리를 줄인다")
 args = ap.parse_args()
+if args.dur:
+    TOTAL = args.dur
 
 vid = pathlib.Path(args.video)
 bed = D / "audio" / args.bed
@@ -42,7 +47,10 @@ fc += "[voice]asplit=2[voice_out][voice_sc];"
 fc += f"[1:a]aresample=48000,atrim=0:{TOTAL},asetpts=N/SR/TB,volume=0.60[bedv];"
 fc += "[bedv][voice_sc]sidechaincompress=threshold=0.055:ratio=9:attack=12:release=460:makeup=1[bedduck];"
 fc += "[voice_out][bedduck]amix=inputs=2:normalize=0:duration=first[premix];"
-fc += "[premix]loudnorm=I=-14:TP=-1.0:LRA=11,alimiter=level_in=1:level_out=0.97:limit=0.98[aout]"
+fade = (f"afade=t=out:st={TOTAL - args.fade:.3f}:d={args.fade}," if args.fade else "")
+# loudnorm 은 표본율을 올려놓는 버릇이 있어 뒤에 48000 을 다시 못박는다
+fc += ("[premix]loudnorm=I=-14:TP=-1.0:LRA=11,aresample=48000," + fade +
+       "alimiter=level_in=1:level_out=0.97:limit=0.98[aout]")
 
 cmd = [FF, "-y", "-loglevel", "error", *inputs,
        "-filter_complex", fc,
