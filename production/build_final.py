@@ -19,7 +19,12 @@ FF = imageio_ffmpeg.get_ffmpeg_exe()
 
 DUR = 179.0            # 요강이 3분 이내를 요구한다
 FADE = 0.85            # 끝 여운
-VBIT = "1080k"         # 30MiB 안에 들어가는 화질
+# 요강은 「1분에 100MB를 기본으로 하며 전체 용량이 300MB 넘지 않도록」이다.
+# 3분이면 300MB 까지 쓸 수 있는데 1080k 는 30MB 밖에 안 쓴다. 그건 카톡
+# 첨부 한도(30MiB)에 맞춘 값이지 요강에 맞춘 값이 아니었다.
+#   --hq   제출용. 8000k → 약 185MB. 300MB 안에 넉넉히 든다
+#   기본   미리보기용. 1080k → 약 30MB. 폰으로 바로 열어 볼 수 있다
+VBIT = "8000k" if "--hq" in sys.argv else "1080k"
 # 대회가 둘이라 판이 둘이다.
 #   교내대회      — 어머님이 자막을 빼 달라고 하셨다
 #   3분과학축전   — 요강이 "한 화면 10자 내외, 굴림·고딕·명조체만" 을 요구한다
@@ -27,7 +32,8 @@ SUB = "--sub" in sys.argv
 GRAPH = OUT / "g_full.mp4"        # 자막은 그래픽에 넣지 않는다
 COMP = OUT / "full_cut.mp4"
 MUXED = OUT / "muxed.mp4"
-FINAL = OUT / ("신정중학교_차민_과학축전_자막판.mp4" if SUB
+HQ = "--hq" in sys.argv
+FINAL = OUT / (("신정중학교_차민_과학축전_자막판%s.mp4" % ("_제출용" if HQ else "")) if SUB
                else "신정중학교_차민_교내대회_최종.mp4")
 
 # 고객이 요청한 네 가지가 여기서 결정된다
@@ -53,6 +59,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--regraph", action="store_true")
     ap.add_argument("--sub", action="store_true", help="자막을 넣는다 (과학축전용)")
+    ap.add_argument("--hq", action="store_true",
+                    help="제출용 화질 (8000k). 요강 300MB 한도 안에서 최대한 쓴다")
     a = ap.parse_args()
 
     if a.regraph or not GRAPH.exists():
