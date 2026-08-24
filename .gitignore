@@ -10,3 +10,7 @@ proposal/proposal.html
 # 제안서 폴더는 루트 프로젝트와 별개다
 proposal/node_modules/
 proposal/package-lock.json
+
+# 2패스 인코딩이 남기는 임시 파일. build_final.py 가 끝나면 지우지만
+# 인코딩 도중에는 남아 있다.
+production/ffmpeg2pass-*
