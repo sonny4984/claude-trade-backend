@@ -59,8 +59,8 @@
       "clip": "IMG_1512",
       "from": 1.9,
       "line": "오늘부터 혈당을 지키는 과학적인 식습관을 시작해 보세요.",
-      "why": "낮에 찍은 컷. 초콜릿에 손이 갔다 멈칫하고 견과류로 방향을 튼 뒤 카메라를 본다.",
-      "grade": "eq=brightness=0.02:contrast=1.02:saturation=1.03,colorbalance=bs=0.03,vignette=PI/10"
+      "why": "낮에 찍은 컷. 초콜릿에 손이 갔다 멈칫하고 견과류로 방향을 튼 뒤 카메라를 본다. 어머님이 더 밝게 해 달라고 하셔서 이 컷만 따로 올렸다. 낮에 찍은 컷이라 다음 날 아침으로 넘어가는 느낌도 살아난다.",
+      "grade": "eq=brightness=0.10:contrast=0.99:saturation=1.07,colorbalance=bs=0.02,vignette=PI/15"
     }
   ],
   "여분테이크": [
