@@ -24,7 +24,7 @@ VBIT = "1080k"         # 30MiB 안에 들어가는 화질
 #   교내대회      — 어머님이 자막을 빼 달라고 하셨다
 #   3분과학축전   — 요강이 "한 화면 10자 내외, 굴림·고딕·명조체만" 을 요구한다
 SUB = "--sub" in sys.argv
-GRAPH = OUT / ("g_full_sub.mp4" if SUB else "g_full.mp4")
+GRAPH = OUT / "g_full.mp4"        # 자막은 그래픽에 넣지 않는다
 COMP = OUT / "full_cut.mp4"
 MUXED = OUT / "muxed.mp4"
 FINAL = OUT / ("신정중학교_차민_과학축전_자막판.mp4" if SUB
@@ -33,9 +33,9 @@ FINAL = OUT / ("신정중학교_차민_과학축전_자막판.mp4" if SUB
 # 고객이 요청한 네 가지가 여기서 결정된다
 _CFG = json.loads((D / "cuts.json").read_text())["설정"]
 SCHOOL = ["--school", "--name", "신정중학교", "--who", "차민",
-          "--bg", _CFG["배경밝기"]]   # 남색보다 밝은 색
-if not SUB:
-    SCHOOL.append("--nosub")          # 교내대회는 자막을 뺀다
+          "--bg", _CFG["배경밝기"],   # 남색보다 밝은 색
+          "--nosub"]                  # 자막은 마지막에 따로 구워 얹는다
+ASS = OUT / "자막.ass"
 BED = _CFG["배경음악"]                # 배경음악 밝게 — 마림바와 피치카토
 #  코믹하게 — cuts.json 의 엄지척·고개뚝 컷으로 살린다
 
@@ -70,6 +70,11 @@ def main():
                "--out", str(MUXED)], "나레이션 + 배경음악"))
 
     vf = f"fade=t=out:st={DUR - FADE - 0.05:.2f}:d={FADE}"
+    if SUB:
+        # 촬영분을 덮은 뒤에 얹어야 자막이 가려지지 않는다. scene.html 이
+        # 그리는 자막은 그래픽 층에 있어서 촬영분에 22.9초 동안 덮였다.
+        run([sys.executable, str(D / "make_ass.py")], "자막 파일 만들기")
+        vf = f"subtitles={ASS.as_posix()}:fontsdir=/usr/share/fonts," + vf
     for p in (1, 2):
         tail = (["-an", "-f", "mp4", "/dev/null"] if p == 1
                 else ["-c:a", "copy", "-movflags", "+faststart", str(FINAL)])

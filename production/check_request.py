@@ -103,14 +103,36 @@ def check_sub(path, refs):
     """자막이 있어야 하는 판인지 없어야 하는 판인지에 따라 판정을 뒤집는다."""
     want_sub = "--sub" in sys.argv
     det, ok = [], True
-    for t in REF_T:
-        got = frame(path, t)
-        dn = np.abs(got - refs[WANT][t]).mean()       # 자막 끈 기준
-        dy = np.abs(got - refs["sub"][t]).mean()      # 자막 켠 기준
-        on = dy < dn
-        ok &= (on == want_sub)
-        det.append(f"{t:5.0f}초  자막 끈 화면과 차이 {dn:5.2f} · 켠 화면과 {dy:5.2f}"
-                   f"  →  {'켬' if on else '끔'}")
+    if want_sub:
+        # 자막은 화면을 다 합친 뒤 구워 얹으므로 scene.html 이 그린 기준 화면과
+        # 모양이 조금 다르다. 그래서 무자막판과 견준다. 자막 띠만 크게 다르고
+        # 나머지가 같으면 자막이 얹힌 것이다. 촬영분 위에서도 이 방법은 통한다.
+        twin = D / "out" / "신정중학교_차민_교내대회_최종.mp4"
+        if not twin.exists():
+            say(2, "자막 넣기", False, ["견줄 무자막판이 없습니다"]); return
+        cuts = json.loads((D / "cuts.json").read_text())["cuts"]
+        subs = json.loads((D / "timeline_school.json").read_text())["subs"]
+        # 그래픽 위 한 자리, 촬영분 위 한 자리를 골라 둘 다 본다
+        on_cut = [round((c["a"] + c["b"]) / 2, 2) for c in subs
+                  if any(x["at"] <= c["a"] and c["b"] <= x["to"] for x in cuts)]
+        spots = [(REF_T[0], "그래픽 위"), (REF_T[1], "그래픽 위")]
+        spots += [(t, "촬영분 위") for t in on_cut[:2]]
+        for t, lab in spots:
+            a, b = frame(path, t), frame(twin, t)
+            top = np.abs(a[100:300] - b[100:300]).mean()      # 자막이 없는 자리
+            bot = np.abs(a[880:1010] - b[880:1010]).mean()    # 자막 띠
+            on = bot > top * 2.5
+            ok &= on
+            det.append(f"{t:6.2f}초 {lab}  자막 없는 자리 차이 {top:4.2f} · "
+                       f"자막 띠 {bot:5.2f}  →  {'자막 있음' if on else '★ 자막 없음'}")
+    else:
+        for t in REF_T:
+            got = frame(path, t)
+            dn = np.abs(got - refs[WANT][t]).mean()       # 자막 끈 기준
+            dy = np.abs(got - refs["sub"][t]).mean()      # 자막 켠 기준
+            ok &= dn < dy
+            det.append(f"{t:5.0f}초  자막 끈 화면과 차이 {dn:5.2f} · 켠 화면과 {dy:5.2f}"
+                       f"  →  {'끔' if dn < dy else '켬'}")
     if want_sub:
         subs = json.loads((D / "timeline_school.json").read_text())["subs"]
         import re
