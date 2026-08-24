@@ -13,16 +13,26 @@
 import argparse, json, pathlib, re
 
 D = pathlib.Path(__file__).parent
-MAX = 10          # 한 화면 최대 글자 수 (공백 제외)
+MAX = 13          # 한 화면 최대 글자 수 (공백·쉼표 제외).
+                  # 요강은 「한 화면 당 10자 내외」다. 10 으로 못박으면 평균이
+                  # 7.5자로 내려앉아 아흔네 장이 되고, 「눈꺼풀은」 「됩니다.」
+                  # 처럼 한 마디만 뜨는 장이 열다섯이나 생긴다. 13 으로 두면
+                  # 일흔여섯 장에 평균 9.3자다. 「내외」 안에 든다고 본다.
 MIN_DUR = 0.55    # 너무 빨리 지나가지 않게
 GAP = 0.06        # 자막 사이 간격
 
 
 def nlen(s):
-    return len(s.replace(" ", ""))
+    # 쉼표는 화면에 안 나가므로(show 참조) 글자 수에도 안 센다. 세었더니
+    # 「범인은 바로 내 몸속 시한폭탄,」이 13자로 잡혀 막히고, 대신 「시한폭탄」
+    # 네 글자만 뜨는 장이 생겼다.
+    return len(s.replace(" ", "").replace(",", ""))
 
 
-TARGET = 8       # 이 정도 길이가 읽기 좋다
+TARGET = 11      # 이 정도 길이가 읽기 좋다.
+# 8자로 잡았더니 평균 7.6자에 아흔네 장이 되어, 「눈꺼풀은」 「됩니다.」 처럼
+# 한 마디만 뜨는 장이 자꾸 생겼다. 읽는 사람이 계속 끊긴다.
+MIN_N = 6        # 이보다 짧은 토막은 앞뒤에 붙인다
 
 # 이 말들로 줄을 끝내면 다음 줄에 붙을 말을 기다리게 된다
 HANG = {"더", "좀", "못", "안", "잘", "또", "막", "바로", "거의", "자꾸", "계속",
@@ -50,7 +60,9 @@ TERMS = ["혈당 스파이크", "뇌 세포", "오렉신 스위치", "혈당 크
          "안개가 낀", "낀 것처럼", "먹은 달콤한", "달콤한 간식",
          "기면증 환자", "시작해 보세요", "거꾸로 식사법만으로도",
          "소화 과정", "과학적인 식습관", "가짜 피로",
-         "깨어있게 만드는", "소비하는 기관이니까요."]
+         "깨어있게 만드는", "소비하는 기관이니까요.",
+         # 앞뒤가 HANG 에 걸려 「우리가」 세 글자만 0.63초 뜨는 장이 생겼다.
+         "우리가 쓰는"]
 
 
 def break_cost(words, i, j, last):
@@ -83,6 +95,11 @@ def break_cost(words, i, j, last):
         pair = words[j - 1] + " " + words[j] if j < len(words) else ""
         if any(pair in t or t in pair for t in TERMS if " " in t):
             c += 120
+    if n < MIN_N:
+        c += 50                                 # 한 마디만 뜨는 장을 막는다.
+                                                # 마지막 줄 할인 뒤에 더해야 한다.
+                                                # 앞에 두면 0.35 가 벌점까지 깎아
+                                                # 「됩니다.」 같은 장이 남는다
     return c
 
 
@@ -109,10 +126,19 @@ def chunks(tx):
     return out[::-1]
 
 
+def show(p):
+    """화면에 내보낼 글자. 쉼표는 뺀다.
+
+    쉼표는 끊을 자리를 고르는 데는 쓸모가 있어(break_cost 에서 -26) 계산이
+    끝날 때까지 남겨 두고, 화면에 얹기 직전에만 뗀다. 자막은 장이 바뀌는
+    것으로 이미 쉼을 나타내므로 줄 끝의 쉼표는 겹치는 표시다."""
+    return re.sub(r"\s+", " ", p.replace(",", " ")).strip()
+
+
 def split_cue(c):
-    parts = chunks(c["tx"])
+    parts = [show(x) for x in chunks(c["tx"])]
     if len(parts) == 1:
-        return [dict(c)]
+        return [{**c, "tx": parts[0]}]          # 한 토막이어도 쉼표는 뗀다
     span = c["b"] - c["a"] - GAP * (len(parts) - 1)
     tot = sum(nlen(p) for p in parts)
     out, at = [], c["a"]
@@ -147,7 +173,7 @@ def main():
     print(f"자막 {len(tl['subs'])}개 → {len(new)}개")
     print(f"  평균 {sum(nlen(c['tx']) for c in new)/len(new):.1f}자 · "
           f"최장 {max(nlen(c['tx']) for c in new)}자")
-    print(f"  10자 초과 {len(bad)}개 · {MIN_DUR}초 미만 {len(short)}개 · 겹침 {len(overlap)}곳")
+    print(f"  {MAX}자 초과 {len(bad)}개 · {MIN_DUR}초 미만 {len(short)}개 · 겹침 {len(overlap)}곳")
     for c in bad:
         print(f"    초과: {nlen(c['tx'])}자  {c['tx']}")
     for c in short:
