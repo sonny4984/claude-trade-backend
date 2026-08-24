@@ -20,16 +20,22 @@ FF = imageio_ffmpeg.get_ffmpeg_exe()
 DUR = 179.0            # 요강이 3분 이내를 요구한다
 FADE = 0.85            # 끝 여운
 VBIT = "1080k"         # 30MiB 안에 들어가는 화질
-GRAPH = OUT / "g_full.mp4"
+# 대회가 둘이라 판이 둘이다.
+#   교내대회      — 어머님이 자막을 빼 달라고 하셨다
+#   3분과학축전   — 요강이 "한 화면 10자 내외, 굴림·고딕·명조체만" 을 요구한다
+SUB = "--sub" in sys.argv
+GRAPH = OUT / ("g_full_sub.mp4" if SUB else "g_full.mp4")
 COMP = OUT / "full_cut.mp4"
 MUXED = OUT / "muxed.mp4"
-FINAL = OUT / "신정중학교_차민_교내대회_최종.mp4"
+FINAL = OUT / ("신정중학교_차민_과학축전_자막판.mp4" if SUB
+               else "신정중학교_차민_교내대회_최종.mp4")
 
 # 고객이 요청한 네 가지가 여기서 결정된다
 _CFG = json.loads((D / "cuts.json").read_text())["설정"]
 SCHOOL = ["--school", "--name", "신정중학교", "--who", "차민",
-          "--bg", _CFG["배경밝기"],   # 남색보다 밝은 색
-          "--nosub"]                  # 자막 없애기
+          "--bg", _CFG["배경밝기"]]   # 남색보다 밝은 색
+if not SUB:
+    SCHOOL.append("--nosub")          # 교내대회는 자막을 뺀다
 BED = _CFG["배경음악"]                # 배경음악 밝게 — 마림바와 피치카토
 #  코믹하게 — cuts.json 의 엄지척·고개뚝 컷으로 살린다
 
@@ -46,6 +52,7 @@ def run(cmd, what):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--regraph", action="store_true")
+    ap.add_argument("--sub", action="store_true", help="자막을 넣는다 (과학축전용)")
     a = ap.parse_args()
 
     if a.regraph or not GRAPH.exists():
@@ -76,7 +83,8 @@ def main():
     print(f"→ {FINAL.name}  {FINAL.stat().st_size/1048576:.2f} MiB")
 
     for script in ("check_request.py", "check_audio5.py"):
-        print(subprocess.run([sys.executable, str(D / script), str(FINAL)],
+        extra = ["--sub"] if SUB else []
+        print(subprocess.run([sys.executable, str(D / script), str(FINAL), *extra],
                              capture_output=True, text=True).stdout)
 
 

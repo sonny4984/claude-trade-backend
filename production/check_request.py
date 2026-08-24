@@ -100,16 +100,30 @@ def check_bg(path, refs):
 
 
 def check_sub(path, refs):
+    """자막이 있어야 하는 판인지 없어야 하는 판인지에 따라 판정을 뒤집는다."""
+    want_sub = "--sub" in sys.argv
     det, ok = [], True
     for t in REF_T:
         got = frame(path, t)
         dn = np.abs(got - refs[WANT][t]).mean()       # 자막 끈 기준
         dy = np.abs(got - refs["sub"][t]).mean()      # 자막 켠 기준
-        ok &= dn < dy
+        on = dy < dn
+        ok &= (on == want_sub)
         det.append(f"{t:5.0f}초  자막 끈 화면과 차이 {dn:5.2f} · 켠 화면과 {dy:5.2f}"
-                   f"  →  {'끔' if dn < dy else '켬'}")
-    det.append("세 자리 모두 자막이 없습니다." if ok else "자막이 보이는 자리가 있습니다.")
-    say(2, "자막 없애기", ok, det)
+                   f"  →  {'켬' if on else '끔'}")
+    if want_sub:
+        subs = json.loads((D / "timeline_school.json").read_text())["subs"]
+        import re
+        ln = [len(re.sub(r"\s", "", c["tx"])) for c in subs]
+        over = sum(1 for x in ln if x > 10)
+        ok &= over == 0
+        det.append(f"자막 {len(subs)}장, 평균 {sum(ln)/len(ln):.1f}자, 최대 {max(ln)}자, "
+                   f"10자 초과 {over}장  ·  글꼴 나눔고딕")
+        det.append("요강의 「한 화면 10자 내외, 굴림·고딕·명조체만」을 지킵니다."
+                   if ok else "자막 규정에 어긋납니다.")
+    else:
+        det.append("세 자리 모두 자막이 없습니다." if ok else "자막이 보이는 자리가 있습니다.")
+    say(2, "자막 " + ("넣기" if want_sub else "없애기"), ok, det)
 
 
 def check_bgm(path):
@@ -215,7 +229,8 @@ def check_comic(path):
 
 
 if __name__ == "__main__":
-    P = pathlib.Path(sys.argv[1] if len(sys.argv) > 1
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    P = pathlib.Path(args[0] if args
                      else D / "out" / "신정중학교_차민_교내대회_최종.mp4")
     print(f"요청 사항 확인: {P.name}")
     refs = render_refs()
