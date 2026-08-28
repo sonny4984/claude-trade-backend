@@ -1,0 +1,166 @@
+{
+ "마디": [
+  {
+   "이름": "도입",
+   "길이": 30.0
+  },
+  {
+   "이름": "전개",
+   "길이": 90.0
+  },
+  {
+   "이름": "결말",
+   "길이": 50.0
+  },
+  {
+   "이름": "엔딩",
+   "길이": 10.0
+  }
+ ],
+ "줄": [
+  {
+   "번호": "1+2",
+   "영어": "Every day, we throw away countless things at school. But where do they really go?",
+   "한국어": "우리는 매일 학교에서 수많은 물건을 버립니다. 하지만 버려진 것들은 진짜 어디로 갈까요?",
+   "음절": 20,
+   "말하는시간": 7.41,
+   "마디": "도입"
+  },
+  {
+   "번호": "3",
+   "영어": "Let's take a look at the reality of waste and recycling at Shin Jeong Middle School.",
+   "한국어": "신정중학교의 쓰레기와 분리수거 실태를 살펴봅시다.",
+   "음절": 21,
+   "말하는시간": 7.78,
+   "마디": "도입"
+  },
+  {
+   "번호": "4-Q",
+   "영어": "Do students recycle well at our school?",
+   "한국어": "우리 학교 학생들은 분리수거를 잘하나요?",
+   "음절": 10,
+   "말하는시간": 3.7,
+   "마디": "전개"
+  },
+  {
+   "번호": "4-A",
+   "영어": "Most students do, but some bottles are not rinsed and the labels not removed. I think we can do better.",
+   "한국어": "대부분 잘하지만, 헹구지 않거나 라벨을 떼지 않은 페트병도 있어요. 조금 더 잘할 수 있다고 생각해요.",
+   "음절": 27,
+   "말하는시간": 10.0,
+   "마디": "전개"
+  },
+  {
+   "번호": "5",
+   "영어": "Some students throw away plastic bottles without rinsing them or removing their labels.",
+   "한국어": "일부 학생들은 페트병을 헹구지도 않고, 라벨도 떼지 않은 채 버립니다.",
+   "음절": 22,
+   "말하는시간": 8.15,
+   "마디": "전개"
+  },
+  {
+   "번호": "6",
+   "영어": "Incorrect sorting means that recyclable materials end up in landfills.",
+   "한국어": "잘못된 분리수거는 재활용 가능한 자원이 매립지로 가게 만듭니다.",
+   "음절": 19,
+   "말하는시간": 7.04,
+   "마디": "전개"
+  },
+  {
+   "번호": "7",
+   "영어": "But this problem is not limited to our school.",
+   "한국어": "하지만 이 문제는 우리 학교만의 문제가 아닙니다.",
+   "음절": 12,
+   "말하는시간": 4.44,
+   "마디": "전개"
+  },
+  {
+   "번호": "8",
+   "영어": "Waste is a global problem.",
+   "한국어": "쓰레기는 전 세계적인 문제입니다.",
+   "음절": 7,
+   "말하는시간": 2.59,
+   "마디": "전개"
+  },
+  {
+   "번호": "9",
+   "영어": "What we do at school can make a difference beyond our community.",
+   "한국어": "우리가 학교에서 하는 일은 우리 공동체를 넘어 커다란 변화를 만들어낼 수 있습니다.",
+   "음절": 17,
+   "말하는시간": 6.3,
+   "마디": "전개"
+  },
+  {
+   "번호": "10",
+   "영어": "Empty completely.",
+   "한국어": "내용물을 완전히 비우기",
+   "음절": 6,
+   "말하는시간": 2.22,
+   "마디": "결말"
+  },
+  {
+   "번호": "11",
+   "영어": "Rinse with water.",
+   "한국어": "물로 헹구기",
+   "음절": 4,
+   "말하는시간": 1.48,
+   "마디": "결말"
+  },
+  {
+   "번호": "12",
+   "영어": "Remove the label.",
+   "한국어": "라벨 제거하기",
+   "음절": 5,
+   "말하는시간": 1.85,
+   "마디": "결말"
+  },
+  {
+   "번호": "13",
+   "영어": "Sort it into the correct recycling bin.",
+   "한국어": "올바르게 분리해서 버리기",
+   "음절": 11,
+   "말하는시간": 4.07,
+   "마디": "결말"
+  },
+  {
+   "번호": "14",
+   "영어": "As global citizens, change begins with our small habits.",
+   "한국어": "세계시민으로서, 변화는 우리의 작은 습관에서 시작됩니다.",
+   "음절": 14,
+   "말하는시간": 5.19,
+   "마디": "결말"
+  },
+  {
+   "번호": "15",
+   "영어": "Empty, rinse, remove, and sort!",
+   "한국어": "비우고, 헹구고, 떼고, 분리하기!",
+   "음절": 7,
+   "말하는시간": 2.59,
+   "마디": "결말"
+  },
+  {
+   "번호": "16",
+   "영어": "Let's protect our Earth together, starting from our Shinjeong Middle School.",
+   "한국어": "우리 신정중학교부터 함께 지구를 지켜 봐요!",
+   "음절": 17,
+   "말하는시간": 6.3,
+   "마디": "결말"
+  },
+  {
+   "번호": "17",
+   "영어": "Small actions. Big changes.",
+   "한국어": "작은 행동, 큰 변화.",
+   "음절": 6,
+   "말하는시간": 2.22,
+   "마디": "엔딩"
+  },
+  {
+   "번호": "18",
+   "영어": "Start with Shinjeong Middle School.",
+   "한국어": "신정중부터 시작합니다.",
+   "음절": 7,
+   "말하는시간": 2.59,
+   "마디": "엔딩"
+  }
+ ]
+}
