@@ -59,15 +59,15 @@
   "a": 97.5,
   "b": 104.0,
   "kind": "video",
-  "src": "footage/3-1_세면대_A_13.5초.mov",
-  "from": 1.5
+  "src": "footage/3-1_세면대_C_15.5초.mov",
+  "from": 2.0
  },
  {
   "a": 104.0,
   "b": 110.5,
   "kind": "video",
-  "src": "footage/3-1_세면대_C_15.5초.mov",
-  "from": 2.0
+  "src": "footage/3-1_세면대_A_13.5초.mov",
+  "from": 1.5
  },
  {
   "a": 110.5,
