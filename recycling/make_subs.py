@@ -18,7 +18,7 @@ TXT = {
  "2":  "But where do they really go?",
  "3":  "Let's take a look at the reality of waste and recycling\\Nat Shinjeong Middle School.",
  "4Q": "Q.  Do students recycle well at our school?",
- "4A": "A.  Most students do, but some bottles are not rinsed\\Nand the labels are not removed. I think we can do better.",
+ "4A": "A.  Most people do a good job, but some plastic bottles\\Nare not rinsed or still have their labels on.\\NI think we can do a little better.",
  "5":  "Some students throw away plastic bottles\\Nwithout rinsing them or removing their labels.",
  "6":  "Incorrect sorting means that recyclable materials\\Nend up in landfills.",
  "7":  "But this problem is not limited to our school.",
