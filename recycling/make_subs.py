@@ -5,8 +5,18 @@
   · 영상 내 모든 대사·설명·자막은 영어
   · 글꼴은 굴림·고딕·명조체만 → 나눔고딕
   · 화면의 1/3(=360px)을 넘지 않고 하단에 삽입
+
+자막이 뜨는 시각은 녹음 파일이 시작하는 시각이 아니라
+파일 안에서 목소리가 실제로 나오기 시작하는 시각에 맞춘다.
+녹음 파일 앞에는 숨소리와 방 소리가 최대 1.6초까지 남아 있어서
+파일 시작에 맞추면 자막이 목소리보다 그만큼 먼저 뜬다.
 """
-import json, pathlib
+import json, pathlib, subprocess
+import numpy as np
+import imageio_ffmpeg
+
+FF = imageio_ffmpeg.get_ffmpeg_exe()
+SR = 48000
 
 W, H = 1920, 1080
 FONT_SIZE = 48
@@ -34,7 +44,39 @@ TXT = {
  "17": "SMALL ACTIONS.  BIG CHANGES.",
  "18": "START WITH SHINJEONG MIDDLE SCHOOL",
 }
-LEAD, HOLD = 0.25, 0.45   # 말보다 조금 먼저 뜨고 조금 더 머문다
+
+LEAD = 0.04    # 한 프레임. 반올림 때문에 자막이 한 박자 늦게 뜨는 것만 막는다
+HOLD = 0.50    # 말이 끝나고 이만큼 더 머문다
+CPS  = 17      # 읽는 속도 — 초당 글자 수. 이보다 빨리 지나가지 않게 한다
+
+
+def voice_span(path):
+    """파일 안에서 목소리가 시작하고 끝나는 자리를 잰다.
+
+    큰 소리(hi)로 먼저 말의 한복판을 찾고, 거기서 앞뒤로 되짚어 나가면서
+    방 소리(lo)보다 큰 동안 계속 늘린다. 되짚지 않으면 s·f 같은
+    바람 소리로 시작하는 줄에서 첫 자음이 잘린다(13번 75ms, 17번 105ms).
+    """
+    raw = subprocess.run([FF, "-v", "error", "-i", path, "-ac", "1",
+                          "-ar", str(SR), "-f", "f32le", "-"],
+                         capture_output=True).stdout
+    x = np.frombuffer(raw, dtype=np.float32)
+    h = SR // 200                                   # 5ms 창
+    n = len(x) // h
+    e = np.sqrt((x[:n * h].reshape(n, h) ** 2).mean(axis=1))
+
+    peak = e.max()
+    floor = np.median(np.sort(e)[:max(4, n // 5)])  # 조용한 쪽 20%가 방 소리
+    hi = max(peak * 0.10, 0.008)
+    lo = max(floor * 3.0, peak * 0.02)
+
+    i = int(np.argmax(e > hi))
+    j = n - 1 - int(np.argmax(e[::-1] > hi))
+    while i > 0 and e[i - 1] > lo:
+        i -= 1
+    while j < n - 1 and e[j + 1] > lo:
+        j += 1
+    return i * h / SR, (j + 1) * h / SR
 
 
 def t(s):
@@ -46,6 +88,13 @@ def t(s):
 
 def main():
     T = json.loads(pathlib.Path("build/timeline.json").read_text())
+
+    # 줄마다 목소리가 실제로 나오는 시각을 잰다
+    span = []
+    for r in T["lines"]:
+        on, off = voice_span(f"build/nar/{r['n']}.wav")
+        span.append((r["a"] + on, r["a"] + off, on))
+
     head = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {W}
@@ -61,21 +110,38 @@ Style: Base,NanumGothic,{FONT_SIZE},&H00FFFFFF,&H00FFFFFF,&H64141414,&H64141414,
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = [head]
+    rows = []
     prev_b = 0.0
     for i, r in enumerate(T["lines"]):
-        a = max(prev_b + 0.05, r["a"] - LEAD)
-        b = r["b"] + HOLD
-        nxt = T["lines"][i + 1]["a"] - LEAD if i + 1 < len(T["lines"]) else 1e9
-        b = min(b, nxt - 0.1)
+        vs, ve, lag = span[i]
+        nxt = span[i + 1][0] - LEAD if i + 1 < len(span) else 1e9
+
+        a = max(prev_b + 0.05, vs - LEAD)
+        chars = len(TXT[r["n"]].replace("\\N", " "))
+        b = max(ve + HOLD, a + chars / CPS)         # 읽을 시간은 남겨 둔다
+        b = min(b, nxt - 0.1)                       # 다음 자막과 겹치지 않게
+
         lines.append(f"Dialogue: 0,{t(a)},{t(b)},Base,,0,0,0,,{TXT[r['n']]}\n")
+        rows.append((r["n"], r["a"], a, vs, lag, b - a))
         prev_b = b
+
     p = pathlib.Path("build/subs.ass")
     p.write_text("".join(lines), encoding="utf-8")
+
+    print(f"→ {p}  자막 {len(rows)}장")
+    print(f"{'줄':>4} {'파일시작':>8} {'자막':>8} {'목소리':>8} {'앞여백':>7} {'떠있는시간':>9}")
+    for n, fa, a, vs, lag, dur in rows:
+        print(f"{n:>4} {fa:8.2f} {a:8.2f} {vs:8.2f} {lag:7.2f} {dur:9.2f}")
+    gap = max(abs(a - vs) for _, _, a, vs, _, _ in rows)
+    print(f"\n자막과 목소리가 어긋난 최대 폭 {gap*1000:.0f}ms "
+          f"(30프레임 한 장 {1000/30:.0f}ms)")
+    tight = min((dur / (len(TXT[n].replace("\\N", " ")) / CPS), n)
+                for n, _, _, _, _, dur in rows)
+    print(f"읽을 시간이 가장 빡빡한 줄 {tight[1]}번 — 필요한 시간의 {tight[0]:.2f}배"
+          f" ({'모자란 줄 없음' if tight[0] >= 1 else '모자람'})")
     n2 = sum(1 for v in TXT.values() if "\\N" in v)
-    print(f"→ {p}  자막 {len(T['lines'])}장 (두 줄짜리 {n2}장)")
-    print(f"   글꼴 나눔고딕 {FONT_SIZE}px · 아래에서 {MARGIN_V}px · 좌우 여백 {SIDE}px")
-    h2 = FONT_SIZE * 1.35 * 2 + MARGIN_V
-    print(f"   두 줄일 때 차지하는 높이 약 {h2:.0f}px — 화면 1/3({H//3}px) 안")
+    print(f"글꼴 나눔고딕 {FONT_SIZE}px · 아래에서 {MARGIN_V}px · 좌우 여백 {SIDE}px "
+          f"· 두 줄 이상 {n2}장")
 
 
 if __name__ == "__main__":
