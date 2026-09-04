@@ -1,0 +1,32 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Base,NanumGothic,48,&H00FFFFFF,&H00FFFFFF,&H64141414,&H64141414,0,0,0,0,100,100,0,0,4,16,0,2,210,210,62,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:04.75,0:00:11.82,Base,,0,0,0,,Every day, we throw away countless things at school.
+Dialogue: 0,0:00:12.72,0:00:16.53,Base,,0,0,0,,But where do they really go?
+Dialogue: 0,0:00:19.03,0:00:27.73,Base,,0,0,0,,Let's take a look at the reality of waste and recycling\Nat Shinjeong Middle School.
+Dialogue: 0,0:00:32.03,0:00:37.14,Base,,0,0,0,,Q.  Do students recycle well at our school?
+Dialogue: 0,0:00:37.64,0:00:47.53,Base,,0,0,0,,A.  Most students do, but some bottles are not rinsed\Nand the labels are not removed. I think we can do better.
+Dialogue: 0,0:00:51.33,0:00:58.74,Base,,0,0,0,,Some students throw away plastic bottles\Nwithout rinsing them or removing their labels.
+Dialogue: 0,0:01:02.54,0:01:09.73,Base,,0,0,0,,Incorrect sorting means that recyclable materials\Nend up in landfills.
+Dialogue: 0,0:01:13.53,0:01:19.12,Base,,0,0,0,,But this problem is not limited to our school.
+Dialogue: 0,0:01:21.02,0:01:25.29,Base,,0,0,0,,Waste is a global problem.
+Dialogue: 0,0:01:29.09,0:01:34.72,Base,,0,0,0,,What we do at school can make a difference\Nbeyond our community.
+Dialogue: 0,0:01:39.22,0:01:42.19,Base,,0,0,0,,①  Empty completely
+Dialogue: 0,0:01:44.69,0:01:47.73,Base,,0,0,0,,②  Rinse with water
+Dialogue: 0,0:01:50.23,0:01:53.55,Base,,0,0,0,,③  Remove the label
+Dialogue: 0,0:01:56.05,0:02:00.56,Base,,0,0,0,,④  Sort it into the correct recycling bin
+Dialogue: 0,0:02:04.36,0:02:11.21,Base,,0,0,0,,As global citizens, change begins with our small habits.
+Dialogue: 0,0:02:15.01,0:02:21.11,Base,,0,0,0,,Empty, rinse, remove, and sort!
+Dialogue: 0,0:02:23.61,0:02:31.66,Base,,0,0,0,,Let's protect our Earth together,\Nstarting from our Shinjeong Middle School.
+Dialogue: 0,0:02:36.16,0:02:41.06,Base,,0,0,0,,SMALL ACTIONS.  BIG CHANGES.
+Dialogue: 0,0:02:42.96,0:02:48.46,Base,,0,0,0,,START WITH SHINJEONG MIDDLE SCHOOL
