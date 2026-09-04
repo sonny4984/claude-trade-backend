@@ -24,10 +24,11 @@ for i, r in enumerate(rows):
     if r["kind"] == "image" or r["kind"] == "title":
         bg = pathlib.Path("build/bg") / pathlib.Path(src).name
         if r["kind"] == "title":
-            # 제목 카드는 16:9 라 그대로 쓴다
-            vf = "scale=1920:1080,format=yuv420p"
+            # 5초를 멈춰 세워 두면 죽어 보인다. 아주 천천히 밀어 넣는다.
+            vf=("scale=2112:1188,zoompan=z='min(1+0.0004*on,1.06)':"
+                "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1920x1080:fps=30,format=yuv420p")
             run([FF,"-y","-v","error","-loop","1","-t",str(d),"-i",src,
-                 "-vf",vf,"-r","30","-c:v","libx264","-preset","veryfast","-crf","20",str(out)])
+                 "-vf",vf,"-r","30","-t",str(d),"-c:v","libx264","-preset","veryfast","-crf","20",str(out)])
         else:
             # 흐린 배경 위에 원본 전체를 얹고 아주 천천히 확대한다
             fc=("[1:v]scale=1782:1188,zoompan=z='min(1+0.00025*on,1.09)':"
