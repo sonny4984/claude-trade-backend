@@ -51,9 +51,8 @@
  {
   "a": 89.0,
   "b": 99.0,
-  "kind": "image",
-  "src": "assets/2-2_2-5_학생셋_분리수거.png",
-  "from": 0.0
+  "kind": "full",
+  "src": "build/2-5_네단계.png"
  },
  {
   "a": 99.0,

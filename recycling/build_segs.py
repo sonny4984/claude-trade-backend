@@ -21,7 +21,15 @@ for i, r in enumerate(rows):
     d = round(r["b"] - r["a"], 3)
     out = SEG / f"{i:02d}.mp4"
     src = r["src"]
-    if r["kind"] == "image" or r["kind"] == "title":
+    if r["kind"] == "full":
+        # 이미 1920x1080 으로 짜 놓은 그림. 흐린 배경을 두르지 않고 그대로 쓴다.
+        # z=1 일 때 원본 그대로라 글자가 무르지 않는다. 10초에 4% 만 민다.
+        vf=("zoompan=z='min(1+0.00013*on,1.04)':x='iw/2-(iw/zoom/2)':"
+            "y='ih/2-(ih/zoom/2)':d=1:s=1920x1080:fps=30,format=yuv420p")
+        run([FF,"-y","-v","error","-framerate","30","-loop","1","-t",str(d+1),"-i",src,
+             "-vf",vf,"-r","30","-frames:v",str(round(d*30)),
+             "-c:v","libx264","-preset","veryfast","-crf","20",str(out)])
+    elif r["kind"] == "image" or r["kind"] == "title":
         bg = pathlib.Path("build/bg") / pathlib.Path(src).name
         if r["kind"] == "title":
             # 5초를 멈춰 세워 두면 죽어 보인다. 아주 천천히 밀어 넣는다.
@@ -29,7 +37,7 @@ for i, r in enumerate(rows):
                 "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1920x1080:fps=30,format=yuv420p")
             # zoompan 은 -t 만으로는 프레임 수를 안 지킨다. 5.00초짜리가 4.17초로
             # 나와 뒤의 모든 화면이 0.83초씩 앞당겨졌다. 낼 장수를 못박는다.
-            run([FF,"-y","-v","error","-loop","1","-t",str(d+1),"-i",src,
+            run([FF,"-y","-v","error","-framerate","30","-loop","1","-t",str(d+1),"-i",src,
                  "-vf",vf,"-r","30","-frames:v",str(round(d*30)),
                  "-c:v","libx264","-preset","veryfast","-crf","20",str(out)])
         else:
@@ -37,8 +45,8 @@ for i, r in enumerate(rows):
             fc=("[1:v]scale=1782:1188,zoompan=z='min(1+0.00025*on,1.09)':"
                 "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1620x1080:fps=30[fg];"
                 "[0:v][fg]overlay=(W-w)/2:0,format=yuv420p")
-            run([FF,"-y","-v","error","-loop","1","-t",str(d+1),"-i",str(bg),
-                 "-loop","1","-t",str(d+1),"-i",src,"-filter_complex",fc,
+            run([FF,"-y","-v","error","-framerate","30","-loop","1","-t",str(d+1),"-i",str(bg),
+                 "-framerate","30","-loop","1","-t",str(d+1),"-i",src,"-filter_complex",fc,
                  "-r","30","-frames:v",str(round(d*30)),
                  "-c:v","libx264","-preset","veryfast","-crf","20",str(out)])
     else:
