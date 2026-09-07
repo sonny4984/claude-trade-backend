@@ -31,6 +31,11 @@ for i, r in enumerate(rows):
              "-c:v","libx264","-preset","veryfast","-crf","20",str(out)])
     elif r["kind"] == "image" or r["kind"] == "title":
         bg = pathlib.Path("build/bg") / pathlib.Path(src).name
+        if r["kind"] == "image" and not bg.exists():
+            bg.parent.mkdir(parents=True, exist_ok=True)
+            run([FF,"-y","-v","error","-i",src,"-vf",
+                 "scale=1920:1080:force_original_aspect_ratio=increase,"
+                 "crop=1920:1080,gblur=sigma=40","-frames:v","1",str(bg)])
         if r["kind"] == "title":
             # 5초를 멈춰 세워 두면 죽어 보인다. 아주 천천히 밀어 넣는다.
             vf=("scale=2112:1188,zoompan=z='min(1+0.0004*on,1.06)':"

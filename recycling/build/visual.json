@@ -30,8 +30,8 @@
  {
   "a": 49.45,
   "b": 61.5,
-  "kind": "image",
-  "src": "assets/2-2_2-5_학생셋_분리수거.png",
+  "kind": "video",
+  "src": "footage/2-2_노란바구니_분리수거장.mov",
   "from": 0.0
  },
  {
@@ -51,8 +51,8 @@
  {
   "a": 89.0,
   "b": 99.0,
-  "kind": "full",
-  "src": "build/2-5_네단계.png"
+  "kind": "image",
+  "src": "assets/2-5_네단계_고객제공.png"
  },
  {
   "a": 99.0,
