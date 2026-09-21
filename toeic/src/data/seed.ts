@@ -150,6 +150,31 @@ const mcq: McqCard[] = [
     explanation: '머지않아',
     rule: 'Now that은 절이 필요해 콤마 앞 단독 불가',
   },
+  {
+    id: 'rc1000-4-117', kind: 'mcq', source: 'RC1000 4권-117', part: 'Part 5', number: '117',
+    category: '어휘·연어',
+    sentence: 'The costumes were not received ___ enough to be used in the first dress rehearsal.',
+    choices: ['far', 'very', 'almost', 'soon'], answer: 'soon', myAnswer: 'almost',
+    explanation: 'soon enough to V = V할 수 있을 만큼 충분히 일찍',
+    rule: '___ enough to V 에서 시간의 「일찍」이 필요하면 soon·early',
+  },
+  {
+    id: 'rc1000-4-127', kind: 'mcq', source: 'RC1000 4권-127', part: 'Part 5', number: '127',
+    category: '어휘·연어',
+    sentence: 'The project ___ the collaboration of several teams across the company.',
+    choices: ['passed', 'decided', 'required', 'performed'], answer: 'required', myAnswer: 'decided',
+    explanation: 'require + 명사 = ~을 필요로 하다',
+    rule: '뒤에 명사가 있다고 고르지 말고 동사와 목적어가 의미로 붙는지 본다',
+  },
+  {
+    id: 'rc1000-4-129', kind: 'mcq', source: 'RC1000 4권-129', part: 'Part 5', number: '129',
+    category: '고정 전치사',
+    sentence: '___ the closure of Vertigold Transport Services, we are looking for a new shipping company.',
+    choices: ['In spite of', 'Just as', 'In light of', 'According to'],
+    answer: 'In light of', myAnswer: 'According to',
+    explanation: 'in light of + 명사 = ~을 고려하여 / ~ 때문에',
+    rule: 'according to 뒤에는 정보의 출처(report·survey)가 온다',
+  },
 ]
 
 /** 빈칸 입력 */
@@ -358,6 +383,54 @@ const cloze: ClozeCard[] = [
     explanation: 'docking = 접안 → 배',
     rule: 'Docking·port·onboard 가 들리면 ferry',
   },
+  {
+    id: 'cz-117a', kind: 'cloze', source: 'RC1000 4권-117', category: '어휘·연어',
+    prefix: 'The costumes were not received ___ enough to be used', answer: 'soon', meaning: '충분히 일찍',
+    explanation: 'soon enough to V = V할 수 있을 만큼 충분히 일찍',
+    rule: 'enough 앞에 시간의 「일찍」이 필요하면 soon',
+  },
+  {
+    id: 'cz-117b', kind: 'cloze', source: 'RC1000 4권-117', category: '어휘·연어',
+    prefix: 'arrived ___ enough to join the opening (충분히 일찍)', answer: 'early', meaning: '충분히 일찍',
+    explanation: 'early enough to V = V할 수 있을 만큼 충분히 일찍',
+    rule: 'soon 과 early 는 이 자리에서 같은 역할',
+  },
+  {
+    id: 'cz-127a', kind: 'cloze', source: 'RC1000 4권-127', category: '어휘·연어',
+    prefix: 'The project ___ the collaboration of several teams', answer: 'required', meaning: '~을 필요로 했다',
+    explanation: 'require + 명사',
+    rule: 'collaboration 을 목적어로 받는 동사는 require',
+  },
+  {
+    id: 'cz-127b', kind: 'cloze', source: 'RC1000 4권-127', category: '어휘·연어',
+    prefix: 'We decided ___ postpone the meeting', answer: 'to', meaning: '~하기로 결정하다',
+    explanation: 'decide to V',
+    rule: 'decide 는 to부정사를 받는다',
+  },
+  {
+    id: 'cz-127c', kind: 'cloze', source: 'RC1000 4권-127', category: '고정 전치사',
+    prefix: 'We decided ___ a new strategy', answer: 'on', meaning: '~으로 결정하다',
+    explanation: 'decide on + 명사',
+    rule: '명사를 「결정하다」로 받을 때는 decide on',
+  },
+  {
+    id: 'cz-129a', kind: 'cloze', source: 'RC1000 4권-129', category: '고정 전치사',
+    prefix: '___ light of the report (그 보고서를 고려하면)', answer: 'in', meaning: '~을 고려하여',
+    explanation: 'in light of + 명사',
+    rule: '원인·고려면 in light of',
+  },
+  {
+    id: 'cz-129b', kind: 'cloze', source: 'RC1000 4권-129', category: '고정 전치사',
+    prefix: '___ to the report, sales increased (그 보고서에 따르면)', answer: 'According', meaning: '~에 따르면',
+    explanation: 'according to + 정보의 출처',
+    rule: '출처·근거면 according to',
+  },
+  {
+    id: 'cz-129c', kind: 'cloze', source: 'RC1000 4권-129', category: '고정 전치사',
+    prefix: '___ spite of the delay (지연에도 불구하고)', answer: 'In', meaning: '~에도 불구하고',
+    explanation: 'in spite of + 명사',
+    rule: '양보면 in spite of',
+  },
 ]
 
 /* 혼동 짝 — 두 표현을 나란히 놓고 단서에 맞는 쪽을 고른다.
@@ -470,6 +543,48 @@ const pair: PairCard[] = [
     prompt: '단수 명사를 되받는다', left: 'that', right: 'those', answer: 'left',
     explanation: '단수는 that',
     rule: '비교 대상 되받기: 단수 that / 복수 those',
+  },
+  {
+    id: 'pr-soon-almost', kind: 'pair', source: 'RC1000 4권-117', category: '어휘·연어',
+    prompt: '사용될 수 있을 만큼 충분히 일찍', left: 'soon enough', right: 'almost enough', answer: 'left',
+    explanation: '시간의 「일찍」이므로 soon enough',
+    rule: 'almost enough 는 양이 거의 충분하다는 뜻',
+  },
+  {
+    id: 'pr-almost-soon', kind: 'pair', source: 'RC1000 4권-117', category: '어휘·연어',
+    prompt: '돈이 거의 충분하다 (양)', left: 'soon enough', right: 'almost enough', answer: 'right',
+    explanation: 'We have almost enough money',
+    rule: 'almost enough 자체가 틀린 표현은 아니다 — 양에 쓴다',
+  },
+  {
+    id: 'pr-require-decide', kind: 'pair', source: 'RC1000 4권-127', category: '어휘·연어',
+    prompt: 'the collaboration of several teams 를 목적어로', left: 'required', right: 'decided', answer: 'left',
+    explanation: 'require + 명사 = 필요로 하다',
+    rule: 'decide the collaboration 은 어휘 결합이 부자연스럽다',
+  },
+  {
+    id: 'pr-decide-to-on', kind: 'pair', source: 'RC1000 4권-127', category: '고정 전치사',
+    prompt: '뒤에 명사가 와서 「~으로 결정하다」', left: 'decide to', right: 'decide on', answer: 'right',
+    explanation: 'decide on + 명사',
+    rule: 'decide to V / decide on + N',
+  },
+  {
+    id: 'pr-inlight-according', kind: 'pair', source: 'RC1000 4권-129', category: '고정 전치사',
+    prompt: '폐쇄를 고려하여 / 폐쇄 때문에', left: 'In light of', right: 'According to', answer: 'left',
+    explanation: 'in light of = 고려하여',
+    rule: '원인·고려면 in light of',
+  },
+  {
+    id: 'pr-according-inlight', kind: 'pair', source: 'RC1000 4권-129', category: '고정 전치사',
+    prompt: '그 보고서에 따르면 (정보의 출처)', left: 'In light of', right: 'According to', answer: 'right',
+    explanation: 'according to = ~에 따르면',
+    rule: 'according to 뒤에는 report·survey 같은 출처가 온다',
+  },
+  {
+    id: 'pr-inspite-inlight', kind: 'pair', source: 'RC1000 4권-129', category: '고정 전치사',
+    prompt: '지연에도 불구하고', left: 'In spite of', right: 'In light of', answer: 'left',
+    explanation: 'in spite of = ~에도 불구하고',
+    rule: '양보 in spite of / 고려 in light of',
   },
 ]
 
