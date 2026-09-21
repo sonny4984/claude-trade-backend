@@ -45,6 +45,13 @@ npm run build    # 타입 검사 + 빌드
 
 18개 미만이면 "내일 반복"이 뜨고, 다음에 드릴 화면을 열 때 안내가 남는다.
 
+## 참고 화면
+
+**[참고]** 탭에 두 장이 들어 있다.
+
+- **Part 7 체크** — 마킹 전 확인 문장, 함정 3유형(목록 바꿔치기 · 인물 역할 · 수식어 무시)
+- **Part 6 접속부사** — A그룹(콤마 앞 단독 가능) 19개 / B그룹(보이면 즉시 탈락) 15개
+
 ## 오답 추가
 
 앱의 **[추가]** 탭에서 넣으면 `localStorage` 에 쌓인다.
@@ -68,15 +75,25 @@ npm run build    # 타입 검사 + 빌드
 
 - `mcq` — `sentence` / `choices` / `answer`
 - `cloze` — `prefix` / `answer` / `meaning`
-- `pair` — `sentence` / `left` / `right` / `answer: 'left' | 'right'`
+- `pair` — `prompt`(뜻·조건 단서) / `left` / `right` / `answer: 'left' | 'right'`
 
 ## 구조
 
 ```
 src/
-  data/seed.ts      오답 원본 (27장)
+  data/seed.ts      오답 원본 (72장 — 4지선다 20 · 빈칸 34 · 혼동 짝 18)
   lib/srs.ts        간격 반복·졸업·품사 규칙 매칭
   lib/storage.ts    localStorage 입출력
-  screens/          Home · Review · Drill · AddCard · Stats · Part7
+  screens/          Home · Review · Drill · AddCard · Stats · Reference
   components/ui.tsx 버튼·카드·막대 등 공용 조각
+```
+
+## 혼동 짝
+
+문장 대신 **단서**(뜻이나 조건)를 보여주고 좌우 중 맞는 쪽을 고른다.
+같은 짝이라도 방향을 바꿔 두 장으로 넣어 양쪽 다 물어본다.
+
+```
+단서: "~ 후에 — 빈칸 뒤에 명사가 바로 온다"   → following
+단서: "~가 뒤따르다 — 빈칸 뒤에 by가 온다"     → followed
 ```

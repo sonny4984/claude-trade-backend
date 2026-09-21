@@ -81,7 +81,7 @@ export default function AddCard({
     } else {
       if (!sentence.trim() || !left.trim() || !right.trim()) return
       card = {
-        ...base, kind: 'pair', sentence: sentence.trim(),
+        ...base, kind: 'pair', prompt: sentence.trim(),
         left: left.trim(), right: right.trim(), answer: pairAnswer,
       }
     }
@@ -146,7 +146,7 @@ export default function AddCard({
             </div>
           </>
         ) : (
-          <Field label="문장 (빈칸은 ___ 로)">
+          <Field label={mode === 'pair' ? '단서 (뜻이나 조건)' : '문장 (빈칸은 ___ 로)'}>
             <textarea
               className={`${inputCls} min-h-[104px]`}
               value={sentence}

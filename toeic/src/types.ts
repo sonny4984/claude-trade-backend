@@ -56,7 +56,8 @@ export interface ClozeCard extends CardBase {
 /** 혼동 짝 */
 export interface PairCard extends CardBase {
   kind: 'pair'
-  sentence: string
+  /** 어느 쪽인지 묻는 단서 — 문장이거나 뜻·조건 */
+  prompt: string
   left: string
   right: string
   answer: 'left' | 'right'

@@ -85,7 +85,10 @@ export default function Review({
         </div>
       )}
       {card.kind === 'pair' && (
-        <p className="text-[19px] leading-relaxed">{card.sentence}</p>
+        <div>
+          <p className="text-[13px] text-black/50">단서</p>
+          <p className="mt-1 text-[19px] leading-relaxed">{card.prompt}</p>
+        </div>
       )}
 
       {phase === 'ask' ? (

@@ -95,7 +95,7 @@ export default function Stats({ cards, state }: { cards: Card[]; state: AppState
                 </span>
               </div>
               <p className="mt-1 text-[15px] leading-snug">
-                {r.card.kind === 'cloze' ? r.card.prefix : r.card.sentence}
+                {r.card.kind === 'cloze' ? r.card.prefix : r.card.kind === 'pair' ? r.card.prompt : r.card.sentence}
               </p>
               <p className="mt-1 text-[13px] text-black/55">{r.card.rule}</p>
             </li>

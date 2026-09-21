@@ -6,16 +6,16 @@ import Review from './screens/Review'
 import Drill from './screens/Drill'
 import AddCard from './screens/AddCard'
 import Stats from './screens/Stats'
-import Part7 from './screens/Part7'
+import Reference from './screens/Reference'
 
-export type Tab = 'home' | 'review' | 'drill' | 'add' | 'stats' | 'part7'
+export type Tab = 'home' | 'review' | 'drill' | 'add' | 'stats' | 'ref'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'home', label: '복습' },
   { id: 'drill', label: '품사' },
   { id: 'add', label: '추가' },
   { id: 'stats', label: '통계' },
-  { id: 'part7', label: 'Part 7' },
+  { id: 'ref', label: '참고' },
 ]
 
 export default function App() {
@@ -60,7 +60,7 @@ export default function App() {
       {tab === 'drill' && <Drill cards={cards} state={state} setState={setState} />}
       {tab === 'add' && <AddCard state={state} setState={setState} cards={cards} />}
       {tab === 'stats' && <Stats cards={cards} state={state} />}
-      {tab === 'part7' && <Part7 />}
+      {tab === 'ref' && <Reference />}
 
       <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-black/15 bg-white pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto grid max-w-[720px] grid-cols-5">
