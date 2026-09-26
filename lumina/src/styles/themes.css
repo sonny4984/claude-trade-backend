@@ -1,0 +1,391 @@
+/*
+ * 테마 — 색만이 아니라 테이블·랙·타일 재질·그림자·버튼·선택 상태·배경·움직임의 결까지 바꾼다.
+ * data-theme 속성으로 전환. 기본(루미나)은 tokens.css.
+ */
+
+/* ── 02 Classic Ivory: 밝은 린넨 테이블, 참나무 랙, 따뜻한 오후 빛 ── */
+:root[data-theme='ivory'] {
+  color-scheme: light;
+  --room-0: #e9e1d2;
+  --room-1: rgba(255, 236, 200, 0.55);
+  --vignette: rgba(120, 96, 60, 0.18);
+  --felt-0: #efe6d4;
+  --felt-1: #f7f1e4;
+  --felt-grain: 0.05;
+  --felt-edge: rgba(120, 96, 60, 0.18);
+  --rail-0: #a37b4f;
+  --rail-1: #c29a6a;
+  --rail-inner: #8f6b35;
+  --rack-0: #a57c4d;
+  --rack-1: #c49b69;
+  --rack-lip: rgba(255, 246, 225, 0.35);
+  --rack-well: #e2d4b8;
+  --rack-well-shade: rgba(90, 64, 30, 0.22);
+  --tile-0: #fffdf6;
+  --tile-1: #f2e8d4;
+  --tile-hi: #ffffff;
+  --tile-lo: rgba(150, 120, 70, 0.3);
+  --tile-edge: #d9c49b;
+  --tile-edge-2: #c0a878;
+  --tile-shadow: rgba(80, 60, 30, 0.22);
+  --tile-lift-shadow: rgba(80, 60, 30, 0.3);
+  --ink-red: #b1202e;
+  --ink-blue: #1f55b3;
+  --ink-orange: #cf6a10;
+  --ink-black: #1b1a18;
+  --text: #2a241c;
+  --text-dim: rgba(42, 36, 28, 0.66);
+  --text-faint: rgba(42, 36, 28, 0.42);
+  --panel: rgba(255, 251, 243, 0.9);
+  --panel-solid: #fbf6ec;
+  --panel-line: rgba(143, 107, 53, 0.25);
+  --accent: #8f6b35;
+  --accent-2: #a9824a;
+  --accent-ink: #fffaf0;
+  --accent-soft: rgba(143, 107, 53, 0.12);
+  --btn: rgba(143, 107, 53, 0.06);
+  --btn-line: rgba(143, 107, 53, 0.45);
+  --btn-hover: rgba(143, 107, 53, 0.1);
+  --overlay: rgba(240, 232, 218, 0.78);
+  --valid: rgba(143, 107, 53, 0.55);
+  --valid-glow: rgba(143, 107, 53, 0.12);
+  --incomplete: rgba(160, 140, 110, 0.45);
+  --invalid: rgba(176, 72, 72, 0.75);
+  --invalid-glow: rgba(176, 72, 72, 0.1);
+  --select: #a9824a;
+  --fresh: #a9824a;
+  --focus: #8f6b35;
+  --danger: #b04848;
+}
+
+/* ── 03 Midnight: 거의 검은 방, 은은한 조명, 타일이 떠오르는 구조 ── */
+:root[data-theme='midnight'] {
+  --room-0: #06080c;
+  --room-1: rgba(120, 150, 220, 0.08);
+  --vignette: rgba(0, 0, 0, 0.7);
+  --felt-0: #10151d;
+  --felt-1: #151c27;
+  --felt-grain: 0.05;
+  --felt-edge: rgba(0, 0, 0, 0.5);
+  --rail-0: #0a0d12;
+  --rail-1: #141a23;
+  --rail-inner: #5d6e8c;
+  --rack-0: #0e131b;
+  --rack-1: #19212d;
+  --rack-lip: rgba(160, 185, 230, 0.12);
+  --rack-well: #0b1017;
+  --tile-0: #f2efe8;
+  --tile-1: #dfd9cd;
+  --tile-edge: #9a948a;
+  --tile-edge-2: #7d776d;
+  --tile-shadow: rgba(0, 0, 0, 0.6);
+  --tile-lift-shadow: rgba(0, 0, 0, 0.7);
+  --ink-red: #c2303d;
+  --ink-blue: #2c66d0;
+  --ink-orange: #dd7a1e;
+  --ink-black: #141414;
+  --joker-a: #9aa9c8;
+  --joker-b: #8a2632;
+  --text: #e4e8ef;
+  --text-dim: rgba(228, 232, 239, 0.62);
+  --text-faint: rgba(228, 232, 239, 0.36);
+  --panel: rgba(12, 15, 21, 0.86);
+  --panel-solid: #0d1117;
+  --panel-line: rgba(143, 168, 216, 0.2);
+  --accent: #8fa8d8;
+  --accent-2: #b3c6ea;
+  --accent-ink: #0a0e16;
+  --accent-soft: rgba(143, 168, 216, 0.12);
+  --btn: rgba(200, 215, 240, 0.05);
+  --btn-line: rgba(143, 168, 216, 0.38);
+  --btn-hover: rgba(143, 168, 216, 0.08);
+  --overlay: rgba(4, 6, 10, 0.78);
+  --valid: rgba(160, 188, 236, 0.55);
+  --valid-glow: rgba(160, 188, 236, 0.14);
+  --incomplete: rgba(170, 176, 190, 0.4);
+  --invalid: rgba(214, 110, 120, 0.8);
+  --select: #b3c6ea;
+  --fresh: #b3c6ea;
+  --focus: #cfe0ff;
+}
+
+/* ── 04 Natural Wood: 호두나무 원목 테이블, 상아 타일, 숲빛 포인트 ── */
+:root[data-theme='walnut'] {
+  --room-0: #140e09;
+  --room-1: rgba(255, 190, 110, 0.1);
+  --felt-0: #5b3a22;
+  --felt-1: #6e472b;
+  --felt-grain: 0.12;
+  --felt-edge: rgba(0, 0, 0, 0.4);
+  --rail-0: #2e1d10;
+  --rail-1: #4a2f1b;
+  --rail-inner: #d3b06a;
+  --rack-0: #2f1e11;
+  --rack-1: #452c19;
+  --rack-well: #24392c;
+  --tile-0: #f7ecd4;
+  --tile-1: #ead8b3;
+  --tile-edge: #c9a96c;
+  --accent: #d3b06a;
+  --accent-2: #e6c98d;
+  --panel-line: rgba(211, 176, 106, 0.24);
+  --valid: rgba(170, 214, 150, 0.6);
+  --valid-glow: rgba(170, 214, 150, 0.16);
+  --select: #e6c98d;
+  --fresh: #a9d28f;
+}
+
+/* ── 05 Modern Glass: 슬레이트 배경, 절제된 반투명 패널 ── */
+:root[data-theme='glass'] {
+  --room-0: #0e1526;
+  --room-1: rgba(130, 180, 240, 0.12);
+  --vignette: rgba(3, 6, 16, 0.55);
+  --felt-0: rgba(255, 255, 255, 0.05);
+  --felt-1: rgba(255, 255, 255, 0.09);
+  --felt-grain: 0;
+  --felt-edge: rgba(255, 255, 255, 0.12);
+  --rail-0: rgba(255, 255, 255, 0.08);
+  --rail-1: rgba(255, 255, 255, 0.14);
+  --rail-inner: rgba(200, 225, 255, 0.35);
+  --rack-0: rgba(255, 255, 255, 0.07);
+  --rack-1: rgba(255, 255, 255, 0.11);
+  --rack-lip: rgba(255, 255, 255, 0.2);
+  --rack-well: rgba(8, 12, 24, 0.35);
+  --rack-well-shade: rgba(0, 0, 0, 0.3);
+  --tile-0: #ffffff;
+  --tile-1: #eef1f6;
+  --tile-hi: #ffffff;
+  --tile-lo: rgba(100, 116, 139, 0.3);
+  --tile-edge: #c7cfdb;
+  --tile-edge-2: #aab4c3;
+  --tile-shadow: rgba(2, 6, 23, 0.45);
+  --ink-red: #d1344a;
+  --ink-blue: #2563eb;
+  --ink-orange: #e8781a;
+  --ink-black: #111827;
+  --joker-a: #4f8fd8;
+  --joker-b: #c2415d;
+  --text: #e8ecf5;
+  --text-dim: rgba(232, 236, 245, 0.64);
+  --text-faint: rgba(232, 236, 245, 0.38);
+  --panel: rgba(20, 28, 48, 0.55);
+  --panel-solid: #141c30;
+  --panel-line: rgba(255, 255, 255, 0.14);
+  --panel-blur: 14px;
+  --accent: #9cc4ec;
+  --accent-2: #c3dcf5;
+  --accent-ink: #0e1526;
+  --accent-soft: rgba(156, 196, 236, 0.12);
+  --btn: rgba(255, 255, 255, 0.06);
+  --btn-line: rgba(255, 255, 255, 0.22);
+  --btn-hover: rgba(255, 255, 255, 0.1);
+  --overlay: rgba(8, 12, 24, 0.6);
+  --valid: rgba(156, 196, 236, 0.6);
+  --valid-glow: rgba(156, 196, 236, 0.16);
+  --select: #c3dcf5;
+  --fresh: #c3dcf5;
+  --focus: #e3efff;
+}
+
+/* ── 06 Minimal Studio: 장식 없는 흰 작업대, 타일만 ── */
+:root[data-theme='studio'] {
+  color-scheme: light;
+  --room-0: #f3f3f1;
+  --room-1: rgba(255, 255, 255, 0);
+  --vignette: rgba(0, 0, 0, 0);
+  --felt-0: #fbfbfa;
+  --felt-1: #fbfbfa;
+  --felt-grain: 0;
+  --felt-edge: rgba(0, 0, 0, 0.08);
+  --rail-0: #e6e6e2;
+  --rail-1: #e6e6e2;
+  --rail-inner: rgba(0, 0, 0, 0);
+  --rack-0: #ecece8;
+  --rack-1: #ecece8;
+  --rack-lip: rgba(255, 255, 255, 0);
+  --rack-well: #e2e2dd;
+  --rack-well-shade: rgba(0, 0, 0, 0.06);
+  --tile-0: #ffffff;
+  --tile-1: #ffffff;
+  --tile-hi: #ffffff;
+  --tile-lo: rgba(0, 0, 0, 0.1);
+  --tile-edge: #d9d9d3;
+  --tile-edge-2: #c9c9c2;
+  --tile-shadow: rgba(0, 0, 0, 0.1);
+  --tile-lift-shadow: rgba(0, 0, 0, 0.18);
+  --tile-grain: 0;
+  --ink-red: #c6242f;
+  --ink-blue: #1f5ebd;
+  --ink-orange: #d46d0e;
+  --ink-black: #151515;
+  --ink-emboss-hi: rgba(255, 255, 255, 0);
+  --ink-emboss-lo: rgba(0, 0, 0, 0);
+  --joker-a: #151515;
+  --joker-b: #c6242f;
+  --text: #151515;
+  --text-dim: rgba(21, 21, 21, 0.62);
+  --text-faint: rgba(21, 21, 21, 0.38);
+  --panel: rgba(255, 255, 255, 0.94);
+  --panel-solid: #ffffff;
+  --panel-line: rgba(0, 0, 0, 0.1);
+  --accent: #151515;
+  --accent-2: #3a3a3a;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(0, 0, 0, 0.05);
+  --btn: rgba(0, 0, 0, 0.03);
+  --btn-line: rgba(0, 0, 0, 0.18);
+  --btn-hover: rgba(0, 0, 0, 0.05);
+  --overlay: rgba(243, 243, 241, 0.82);
+  --valid: rgba(21, 21, 21, 0.4);
+  --valid-glow: rgba(0, 0, 0, 0);
+  --incomplete: rgba(21, 21, 21, 0.18);
+  --invalid: rgba(198, 36, 47, 0.7);
+  --invalid-glow: rgba(198, 36, 47, 0.06);
+  --select: #151515;
+  --fresh: #1f5ebd;
+  --focus: #1f5ebd;
+  --danger: #c6242f;
+  --dur-fast: 110ms;
+  --dur: 190ms;
+  --dur-slow: 320ms;
+}
+
+/* ── 07 Soft Pastel: 피치·민트·크림, 부드러운 그림자 (보라 없음) ── */
+:root[data-theme='pastel'] {
+  color-scheme: light;
+  --room-0: #f8f1ec;
+  --room-1: rgba(255, 214, 196, 0.5);
+  --vignette: rgba(200, 140, 120, 0.12);
+  --felt-0: #d3e9de;
+  --felt-1: #e4f2ea;
+  --felt-grain: 0.03;
+  --felt-edge: rgba(90, 150, 125, 0.16);
+  --rail-0: #efc4b1;
+  --rail-1: #f7dccf;
+  --rail-inner: #fff4ec;
+  --rack-0: #f2d2bf;
+  --rack-1: #f8e1d3;
+  --rack-lip: rgba(255, 255, 255, 0.55);
+  --rack-well: #fbeee6;
+  --rack-well-shade: rgba(180, 120, 100, 0.14);
+  --tile-0: #fffdfb;
+  --tile-1: #f7efea;
+  --tile-hi: #ffffff;
+  --tile-lo: rgba(170, 130, 120, 0.25);
+  --tile-edge: #ecd6cb;
+  --tile-edge-2: #dcc0b3;
+  --tile-shadow: rgba(160, 110, 95, 0.22);
+  --tile-lift-shadow: rgba(160, 110, 95, 0.3);
+  --ink-red: #d23c56;
+  --ink-blue: #3f6ccf;
+  --ink-orange: #e5782a;
+  --ink-black: #3b3230;
+  --ink-emboss-hi: rgba(255, 255, 255, 0.6);
+  --ink-emboss-lo: rgba(120, 90, 80, 0.12);
+  --joker-a: #e0a33a;
+  --joker-b: #d2566e;
+  --text: #3b3230;
+  --text-dim: rgba(59, 50, 48, 0.66);
+  --text-faint: rgba(59, 50, 48, 0.42);
+  --panel: rgba(255, 252, 250, 0.9);
+  --panel-solid: #fffaf7;
+  --panel-line: rgba(173, 88, 102, 0.2);
+  --accent: #ad5866;
+  --accent-2: #b8646f;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(173, 88, 102, 0.1);
+  --btn: rgba(173, 88, 102, 0.05);
+  --btn-line: rgba(173, 88, 102, 0.38);
+  --btn-hover: rgba(173, 88, 102, 0.1);
+  --overlay: rgba(248, 241, 236, 0.8);
+  --valid: rgba(90, 170, 135, 0.75);
+  --valid-glow: rgba(90, 170, 135, 0.16);
+  --incomplete: rgba(190, 160, 150, 0.5);
+  --invalid: rgba(210, 86, 110, 0.8);
+  --invalid-glow: rgba(210, 86, 110, 0.1);
+  --select: #ad5866;
+  --fresh: #4fa47f;
+  --focus: #ad5866;
+  --danger: #c23a52;
+  --radius: 18px;
+  --dur: 260ms;
+  --dur-slow: 460ms;
+}
+
+/* ── 08 Cozy Matcha: 세이지 펠트, 크림, 버터 옐로, 원목 ── */
+:root[data-theme='matcha'] {
+  color-scheme: light;
+  --room-0: #efe9dc;
+  --room-1: rgba(255, 228, 160, 0.45);
+  --vignette: rgba(90, 80, 50, 0.16);
+  --felt-0: #a7b79a;
+  --felt-1: #b7c6aa;
+  --felt-grain: 0.06;
+  --felt-edge: rgba(60, 70, 40, 0.22);
+  --rail-0: #7f5f41;
+  --rail-1: #9a7552;
+  --rail-inner: #e8c86e;
+  --rack-0: #b48d62;
+  --rack-1: #cba77b;
+  --rack-lip: rgba(255, 244, 214, 0.4);
+  --rack-well: #dfe6d3;
+  --rack-well-shade: rgba(60, 70, 40, 0.16);
+  --tile-0: #fffaee;
+  --tile-1: #f3e8d0;
+  --tile-hi: #ffffff;
+  --tile-lo: rgba(130, 100, 60, 0.28);
+  --tile-edge: #dcc79d;
+  --tile-edge-2: #c7ae7c;
+  --tile-shadow: rgba(60, 50, 30, 0.25);
+  --ink-red: #b7303a;
+  --ink-blue: #2c5d9e;
+  --ink-orange: #d27a22;
+  --ink-black: #2a251f;
+  --joker-a: #6b8e4e;
+  --joker-b: #b7303a;
+  --text: #2f2a22;
+  --text-dim: rgba(47, 42, 34, 0.66);
+  --text-faint: rgba(47, 42, 34, 0.42);
+  --panel: rgba(251, 248, 240, 0.92);
+  --panel-solid: #fbf8f0;
+  --panel-line: rgba(107, 142, 78, 0.25);
+  --accent: #6b8e4e;
+  --accent-2: #7fa45f;
+  --accent-ink: #fbf8f0;
+  --accent-soft: rgba(107, 142, 78, 0.12);
+  --btn: rgba(107, 142, 78, 0.06);
+  --btn-line: rgba(107, 142, 78, 0.42);
+  --btn-hover: rgba(107, 142, 78, 0.1);
+  --overlay: rgba(239, 233, 220, 0.8);
+  --valid: rgba(232, 200, 110, 0.8);
+  --valid-glow: rgba(232, 200, 110, 0.2);
+  --incomplete: rgba(150, 140, 110, 0.45);
+  --invalid: rgba(183, 48, 58, 0.72);
+  --select: #6b8e4e;
+  --fresh: #d9a93a;
+  --focus: #6b8e4e;
+  --danger: #b7303a;
+}
+
+/* ── 접근성: 고대비 ── */
+:root[data-contrast='high'] {
+  --ink-emboss-hi: rgba(255, 255, 255, 0);
+  --ink-emboss-lo: rgba(0, 0, 0, 0);
+  --text-dim: var(--text);
+  --panel-line: var(--accent);
+  --valid: var(--accent);
+  --invalid: #ff5a5a;
+}
+:root[data-contrast='high']:not([data-theme='ivory']):not([data-theme='studio']):not([data-theme='pastel']):not([data-theme='matcha']) {
+  --tile-0: #ffffff;
+  --tile-1: #f4f0e6;
+  --ink-black: #000000;
+}
+
+/* ── 접근성: 색각 보조 팔레트 (빨강·주황을 멀리, 파랑은 청록 쪽으로) ── */
+:root[data-cvd='on'] {
+  --ink-red: #b0005a;
+  --ink-orange: #e09a00;
+  --ink-blue: #0068b0;
+  --ink-black: #111111;
+}

@@ -7,7 +7,7 @@ import type { RuleSet } from './rules';
 import { createRng, shuffle } from './rng';
 import { TILES, isJoker, tile } from './tiles';
 import { analyzeSet } from './sets';
-import { containsAll } from './table';
+import { canonicalTable, containsAll } from './table';
 import {
   beginTurn,
   checkCommit,
@@ -298,7 +298,7 @@ function applyCommit(state: GameState, check: CommitCheck, endTurn: boolean, eve
     longestRun: Math.max(st.longestRun, longestRunWith(w.sets, played)),
     turns: st.turns + (endTurn ? 1 : 0),
   });
-  let next: GameState = { ...state, players, stats, table: w.sets, nextSetId: w.nextSetId, passes: 0 };
+  let next: GameState = { ...state, players, stats, table: canonicalTable(w.sets), nextSetId: w.nextSetId, passes: 0 };
 
   if (check.kind === 'meld') {
     events.push({ type: 'melded', p, points: check.meldPoints, continues: !endTurn && w.rack.length > 0 });
@@ -315,7 +315,7 @@ function applyCommit(state: GameState, check: CommitCheck, endTurn: boolean, eve
 
   if (!endTurn) {
     // 하우스 룰 "등록 후 계속": 등록한 타일은 확정되고, 여기서부터 새 기준점으로 계속한다
-    const cp = { ...w, staging: [] as TileId[] };
+    const cp = { ...w, sets: next.table, staging: [] as TileId[] };
     return {
       ok: true,
       state: {

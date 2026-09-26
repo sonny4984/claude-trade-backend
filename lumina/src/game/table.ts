@@ -1,4 +1,4 @@
-import type { TableSet, TileId } from './types';
+import { COLORS, type TableSet, type TileId } from './types';
 import { analyzeSet, type SetAnalysis } from './sets';
 
 export interface TableCheck {
@@ -40,4 +40,21 @@ export function sameMembers(a: readonly TileId[], b: readonly TileId[]): boolean
 export function containsAll(b: readonly TileId[], a: readonly TileId[]): boolean {
   const s = new Set(b);
   return a.every((t) => s.has(t));
+}
+
+/**
+ * 확정된 테이블의 정돈 순서: 런은 색(빨강·파랑·주황·검정)별로 시작 숫자 순, 그 다음 그룹은 숫자 순.
+ * 내기 순간 테이블이 이 순서로 "안착"한다 — 차례마다 같은 자리에서 같은 세트를 찾을 수 있게.
+ */
+export function canonicalTable(sets: readonly TableSet[]): TableSet[] {
+  const keyOf = (s: TableSet): [number, number, number] => {
+    const a = analyzeSet(s.tiles);
+    if (a.ok && a.kind === 'run') return [0, COLORS.indexOf(a.color ?? 'red'), a.start ?? 0];
+    if (a.ok && a.kind === 'group') return [1, a.value ?? 0, 0];
+    return [2, 0, 0];
+  };
+  return sets
+    .map((s, i) => ({ s, i, k: keyOf(s) }))
+    .sort((x, y) => x.k[0] - y.k[0] || x.k[1] - y.k[1] || x.k[2] - y.k[2] || x.i - y.i)
+    .map((x) => x.s);
 }

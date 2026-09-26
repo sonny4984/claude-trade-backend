@@ -491,3 +491,45 @@ export function proposeTable(turn: Turn, proposal: readonly (readonly TileId[])[
   const rackLeft = turn.start.rack.filter((t) => !seen.has(t));
   return { ok: true, turn: push(turn, { sets, rack: rackLeft, staging: [], nextSetId }) };
 }
+
+// ─────────────────────────────── UI 도우미 (순수) ───────────────────────────────
+
+/** 드래그 미리보기: 이 이동을 하면 대상 세트가 어떻게 되는가 (상태는 바꾸지 않는다) */
+export function previewMove(
+  turn: Turn,
+  tiles: readonly TileId[],
+  to: MoveTarget,
+): { ok: true; turn: Turn; affected: readonly string[] } | { ok: false; error: MoveError } {
+  const r = moveTiles(turn, tiles, to);
+  if (!r.ok) return r;
+  const before = new Map(turn.work.sets.map((s) => [s.id, s.tiles] as const));
+  const affected = r.turn.work.sets
+    .filter((s) => {
+      const b = before.get(s.id);
+      return !b || b.length !== s.tiles.length || b.some((t, i) => t !== s.tiles[i]);
+    })
+    .map((s) => s.id);
+  return { ok: true, turn: r.turn, affected };
+}
+
+/** 두 번 탭 자동 배치: 이 타일을 넣어 바로 합법이 되는 세트들 */
+export function quickTargets(turn: Turn, id: TileId): string[] {
+  const out: string[] = [];
+  const table = startTableTiles(turn);
+  const manip = canManipulate(turn);
+  for (const s of turn.work.sets) {
+    if (s.tiles.includes(id)) continue;
+    if (!manip && s.tiles.some((t) => table.has(t))) continue;
+    if (!analyzeSet(s.tiles).ok) continue;
+    const r = insertIntoSet(s.tiles, [id]);
+    if (r.length === 1 && analyzeSet(r[0] as TileId[]).ok) out.push(s.id);
+  }
+  return out;
+}
+
+/** 이 타일을 지금 옮길 수 있는가 (드래그 시작 전에 부드럽게 거절하려고) */
+export function canMoveTile(turn: Turn, id: TileId): MoveError | null {
+  if (!locate(turn.work, id)) return 'not-yours';
+  if (startTableTiles(turn).has(id) && !canManipulate(turn)) return 'locked-before-meld';
+  return null;
+}

@@ -1,0 +1,104 @@
+/*
+ * LUMINA 디자인 토큰 — 기본값 = "루미나" 테마 (저녁 카페의 펠트 테이블).
+ * 모든 색·재질·움직임은 여기의 변수로만 쓴다. 테마는 themes.css에서 이 값들을 바꿔 끼운다.
+ */
+:root {
+  /* 글꼴 */
+  --font-ui: 'Figtree', 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+  --font-ko: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+  --font-display: 'Instrument Serif', 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-num: 'Fraunces', 'Source Serif 4', Georgia, serif;
+
+  /* 방 */
+  --room-0: #0b1210;
+  --room-1: rgba(255, 196, 120, 0.1);
+  --vignette: rgba(0, 0, 0, 0.55);
+
+  /* 테이블 펠트 */
+  --felt-0: #163328;
+  --felt-1: #1c3e30;
+  --felt-grain: 0.07;
+  --felt-edge: rgba(0, 0, 0, 0.35);
+  --rail-0: #3b2616;
+  --rail-1: #5a3a22;
+  --rail-inner: #c9a45c;
+
+  /* 랙 (호두나무 트레이 + 펠트 안감) */
+  --rack-0: #3a2415;
+  --rack-1: #52341f;
+  --rack-lip: rgba(255, 220, 170, 0.14);
+  --rack-well: #122a21;
+  --rack-well-shade: rgba(0, 0, 0, 0.4);
+
+  /* 타일 (상아) */
+  --tile-0: #f3e6c8;
+  --tile-1: #e7d3a8;
+  --tile-hi: rgba(255, 252, 240, 0.9);
+  --tile-lo: rgba(120, 88, 40, 0.35);
+  --tile-edge: #c4a56a;
+  --tile-edge-2: #a88a52;
+  --tile-shadow: rgba(0, 0, 0, 0.35);
+  --tile-lift-shadow: rgba(0, 0, 0, 0.42);
+  --tile-grain: 0.05;
+
+  /* 새김 숫자 잉크 */
+  --ink-red: #9e1b2a;
+  --ink-blue: #1d4e9e;
+  --ink-orange: #c45a12;
+  --ink-black: #1a1714;
+  --ink-emboss-hi: rgba(255, 255, 255, 0.55);
+  --ink-emboss-lo: rgba(60, 40, 10, 0.22);
+  --joker-a: #b58a3c;
+  --joker-b: #7a1f2a;
+
+  /* 화면 요소 */
+  --text: #f4ecdc;
+  --text-dim: rgba(244, 236, 220, 0.66);
+  --text-faint: rgba(244, 236, 220, 0.4);
+  --panel: rgba(18, 16, 13, 0.82);
+  --panel-solid: #16130f;
+  --panel-line: rgba(201, 164, 92, 0.22);
+  --panel-blur: 0px;
+  --accent: #c9a45c;
+  --accent-2: #e2c27f;
+  --accent-ink: #1d1509;
+  --accent-soft: rgba(201, 164, 92, 0.14);
+  --btn: rgba(255, 244, 222, 0.06);
+  --btn-line: rgba(201, 164, 92, 0.45);
+  --btn-hover: rgba(201, 164, 92, 0.08);
+  --overlay: rgba(6, 8, 7, 0.72);
+
+  /* 세트 상태 테두리 */
+  --valid: rgba(226, 194, 127, 0.55);
+  --valid-glow: rgba(226, 194, 127, 0.18);
+  --incomplete: rgba(214, 196, 160, 0.45);
+  --invalid: rgba(201, 110, 110, 0.8);
+  --invalid-glow: rgba(201, 110, 110, 0.14);
+  --select: #e2c27f;
+  --fresh: #e2c27f;
+  --focus: #ffe2a8;
+  --danger: #d08070;
+
+  /* 캐릭터 초상화 배경 (맑은 하늘색) */
+  --portrait-bg: linear-gradient(180deg, #b9daf4 0%, #dcecf9 62%, #f1f7fc 100%);
+  --portrait-ring: rgba(201, 164, 92, 0.7);
+
+  /* 움직임 */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.2, 1);
+  --dur-fast: 140ms;
+  --dur: 240ms;
+  --dur-slow: 420ms;
+  --dur-celebrate: 900ms;
+
+  /* 크기 */
+  --radius: 14px;
+  --radius-sm: 10px;
+  --gutter: 16px;
+  --hud-h: 58px;
+  --tw: 38px; /* 테이블 타일 너비 (JS가 화면에 맞춘다) */
+  --rw: 46px; /* 랙 타일 너비 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: dark;
+}
