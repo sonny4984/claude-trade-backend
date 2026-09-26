@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useGame } from '../../store/game';
+import { useGame, currentSeatIsHuman } from '../../store/game';
 import { Icon } from '../components/Icon';
 import { useT, subj, useLang } from '../../i18n';
 
@@ -51,7 +51,7 @@ export function Hud() {
   if (!session) return null;
   const g = session.match.game;
   const cur = session.match.seats[g.current];
-  const mine = cur?.seat === 'human';
+  const mine = currentSeatIsHuman(session);
   const label =
     g.phase !== 'playing'
       ? ''

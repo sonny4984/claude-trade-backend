@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useGame, type Session } from '../../store/game';
+import { useGame, mySeatOf, type Session } from '../../store/game';
 import type { Expression } from '../../characters/draw2d';
 import type { CharacterId } from '../../characters/roster';
 import { usePortrait } from '../../characters/portrait3d';
@@ -44,7 +44,7 @@ export function Curtain() {
   );
 }
 
-function Sheet({ children, label, onClose }: { children: React.ReactNode; label: string; onClose?: () => void }) {
+export function Sheet({ children, label, onClose }: { children: React.ReactNode; label: string; onClose?: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape' && onClose) onClose();
@@ -62,6 +62,7 @@ function Sheet({ children, label, onClose }: { children: React.ReactNode; label:
 export function MenuSheet() {
   const t = useT();
   const overlay = useGame((s) => s.overlay);
+  const online = useGame((s) => !!s.session?.online);
   const [confirm, setConfirm] = useState(false);
   if (overlay !== 'menu') return null;
   const store = useGame.getState();
@@ -85,7 +86,7 @@ export function MenuSheet() {
         </div>
       ) : (
         <div className="sheet-list">
-          <p className="sheet-text">{t('confirm.quit')}</p>
+          <p className="sheet-text">{t(online ? 'online.confirmLeave' : 'confirm.quit')}</p>
           <button type="button" className="btn btn-danger" onClick={() => store.quit()}>
             {t('action.quit')}
           </button>
@@ -164,14 +165,15 @@ export function GameOver() {
   const session = useGame((s) => s.session);
   const [card, setCard] = useState<string | null>(null);
   const winners = session?.match.game.result?.winners ?? [];
-  const meIdx = useMemo(() => (session ? Math.max(0, session.match.seats.findIndex((p) => p.seat === 'human')) : 0), [session]);
+  const meIdx = useMemo(() => (session ? mySeatOf(session) : 0), [session]);
   if (overlay !== 'gameover' && overlay !== 'share') return null;
   if (!session || !session.match.game.result) return null;
   const m = session.match;
   const g = m.game;
   const r = g.result as NonNullable<typeof g.result>;
   const store = useGame.getState();
-  const solo = session.mode === 'solo';
+  const solo = session.mode === 'solo' || session.mode === 'online';
+  const guest = session.online?.role === 'guest';
   const iWon = solo && winners.includes(meIdx);
   const winnerNames = winners.map((w) => m.seats[w]?.name ?? '').join(', ');
   const title = r.reason === 'stalemate' ? t('result.stalemate') : solo ? (iWon ? t('result.youWin') : t('result.youLose', { name: winnerNames })) : t('result.winner', { name: winnerNames });
@@ -283,7 +285,9 @@ export function GameOver() {
           </table>
         )}
         <div className="result-actions">
-          {!m.over ? (
+          {guest ? (
+            <p className="result-wait">{t('online.waitHost')}</p>
+          ) : !m.over ? (
             <button type="button" className="btn btn-primary btn-lg" autoFocus onClick={() => store.nextGame()}>
               {t('action.nextGame')}
             </button>
@@ -296,7 +300,7 @@ export function GameOver() {
             <Icon name="share" size={18} /> {t('action.share')}
           </button>
           <button type="button" className="btn btn-ghost" onClick={() => store.quit()}>
-            {t('action.home')}
+            {session.online ? t('online.leave') : t('action.home')}
           </button>
         </div>
       </div>

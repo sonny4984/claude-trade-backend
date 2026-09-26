@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { canManipulate, playedTiles, sameMembers, tilesOf, type TileId } from '../../game';
-import { useGame } from '../../store/game';
+import { useGame, currentSeatIsHuman } from '../../store/game';
 import { useDrag } from '../dnd';
 import { SetView } from '../components/SetView';
 import { useTableFit } from './fit';
@@ -30,7 +30,7 @@ export function TableArea() {
   const startMap = new Map(turn.start.sets.map((s) => [s.id, s.tiles] as const));
   const hintTile = hint.level >= 1 ? hint.data?.focus ?? null : null;
   const hintSet = hint.level >= 2 ? hint.data?.targetSetId ?? null : null;
-  const humanTurn = session?.match.seats[g.current]?.seat === 'human';
+  const humanTurn = !!session && currentSeatIsHuman(session);
 
   return (
     <main className="felt" aria-label={t('table.label')} style={{ ['--tw' as string]: `${tw}px` }}>

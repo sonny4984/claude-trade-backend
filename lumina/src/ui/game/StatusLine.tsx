@@ -9,6 +9,7 @@ export function StatusLine() {
   const selection = useGame((s) => s.selection);
   const ai = useGame((s) => s.ai);
   const lastEvent = useGame((s) => s.lastEventText);
+  const waiting = useGame((s) => s.waiting);
   if (!session || curtain) return <p className="status" aria-live="polite" />;
   const g = session.match.game;
   if (g.phase !== 'playing') return <p className="status" aria-live="polite" />;
@@ -18,13 +19,15 @@ export function StatusLine() {
   if (session.mode === 'lesson' && session.lesson !== null) {
     // 레슨 안내는 무대 위 말풍선이 맡는다
   }
-  if (ai) {
+  if (waiting) {
+    text = t('online.sending');
+  } else if (ai) {
     // AI가 생각하는 동안은 그 AI 이름, 타일이 날아가는 동안은 방금 둔 수
     const name = session.match.seats[ai.seat]?.name ?? '';
     text = ai.phase === 'moving' && lastEvent ? lastEvent : t('status.aiThinking', { subj: subj(lang, name) });
   } else if (!currentSeatIsHuman(session)) {
     const name = session.match.seats[g.current]?.name ?? '';
-    text = lastEvent ?? t('status.aiThinking', { subj: subj(lang, name) });
+    text = session.online ? t('online.turnOf', { subj: subj(lang, name) }) : (lastEvent ?? t('status.aiThinking', { subj: subj(lang, name) }));
   } else {
     const { changed, check, meld } = turnSummary(g);
     if (selection.length) {

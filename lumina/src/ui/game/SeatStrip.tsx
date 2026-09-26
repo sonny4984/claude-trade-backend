@@ -1,4 +1,4 @@
-import { useGame, type Session } from '../../store/game';
+import { useGame, mySeatOf, currentSeatIsHuman, type Session } from '../../store/game';
 import type { Expression } from '../../characters/draw2d';
 import type { CharacterId } from '../../characters/roster';
 import { usePortrait } from '../../characters/portrait3d';
@@ -17,7 +17,7 @@ export function SeatStrip({ session }: { session: Session }) {
   const reactions = useGame((s) => s.reactions);
   const g = session.match.game;
   const n = g.players.length;
-  const me = session.mode === 'local' ? g.current : Math.max(0, session.match.seats.findIndex((p) => p.seat === 'human'));
+  const me = session.mode === 'local' ? g.current : mySeatOf(session);
   const order = Array.from({ length: n - 1 }, (_, k) => (me + 1 + k) % n);
   const exprOf = (seat: number): Expression => {
     const last = [...reactions].reverse().find((r) => r.seat === seat);
@@ -42,7 +42,7 @@ export function SeatStrip({ session }: { session: Session }) {
                 {p.melded ? ` · ${t('hud.melded')}` : ''}
               </span>
             </div>
-            {current && ai?.seat === i && <span className="thinking" aria-label={t('ai.thinking')}><i /><i /><i /></span>}
+            {current && (ai?.seat === i || (session.online && !currentSeatIsHuman(session))) && <span className="thinking" aria-label={t('ai.thinking')}><i /><i /><i /></span>}
             {current && session.match.seats[i]?.seat === 'human' && <TimerRing size={24} />}
           </div>
         );

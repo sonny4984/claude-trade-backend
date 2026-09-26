@@ -1,22 +1,55 @@
 /**
- * 3D 캐릭터 무대 (React 쪽).
- * three.js 장면은 StageScene이 맡고, 여기서는 게임 상태를 장면에 전하고
- * 이름표·말풍선·타일 출발점(data-seat-origin) 같은 DOM 조각을 앵커 위치에 붙인다.
+ * 3D 캐릭터 무대 (React 쪽) — 게임 종류와 무관하다.
+ * three.js 장면은 StageScene이 맡고, 여기서는 받은 상태(이름판·차례·반응)를 장면에 전하고
+ * 이름판·말풍선·타일 출발점(data-seat-origin) 같은 DOM 조각을 앵커 위치에 붙인다.
+ * LUMINA(ui/game/Stage.tsx)와 다빈치 코드(coda/ui/CodaStage.tsx)가 각자 어댑터로 연결한다.
  */
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useGame, type Reaction } from '../store/game';
+import type { CharacterId } from '../characters/roster';
+import type { ReactionKind } from '../store/game';
 import { useSettings, prefersReducedMotion } from '../store/settings';
-import { translateList, useLang, useT } from '../i18n';
+import { translateList, useLang } from '../i18n';
 import { StageScene, type Anchor, type CastMember } from './scene';
 
-/** 캐릭터가 한마디 하는 반응과 그 확률 */
-const SAY: Partial<Record<Reaction['kind'], number>> = { combo: 1, meld: 1, win: 1, lose: 1, surprise: 0.35, draw: 0.2 };
+export interface StagePlate {
+  readonly seat: number;
+  readonly character: CharacterId;
+  readonly name: string;
+  /** 이름판 오른쪽 숫자 (LUMINA: 남은 타일, 다빈치 코드: 숨은 타일) */
+  readonly count: number;
+  /** 이름판 왼쪽 점 (LUMINA: 등록함) */
+  readonly dot?: boolean;
+  /** 탈락해서 흐리게 */
+  readonly out?: boolean;
+  readonly aria: string;
+}
 
-export default function Stage3D({ onFail }: { onFail: () => void }) {
-  const t = useT();
+export interface StageReaction {
+  readonly id: number;
+  readonly seat: number;
+  readonly kind: ReactionKind;
+  /** 말풍선에 띄울 말 (없으면 반응에 맞는 말을 가끔 고른다) */
+  readonly say?: string;
+  readonly sayMs?: number;
+}
+
+export interface StageViewProps {
+  /** 무대에 앉을 사람들 (왼쪽부터) */
+  readonly plates: readonly StagePlate[];
+  readonly current: number | null;
+  readonly thinking: number | null;
+  readonly moving: number | null;
+  /** 새 판이 시작되면 바뀌는 값 — 승패 표정을 푼다 */
+  readonly roundKey: string;
+  readonly subscribe: (fn: (r: StageReaction) => void) => () => void;
+  readonly onFail: () => void;
+}
+
+/** 캐릭터가 저절로 한마디 하는 반응과 그 확률 */
+const SAY: Partial<Record<ReactionKind, number>> = { combo: 1, meld: 1, win: 1, lose: 1, surprise: 0.35, draw: 0.2 };
+
+export default function Stage3D({ plates, current, thinking, moving, roundKey, subscribe, onFail }: StageViewProps) {
   const lang = useLang();
-  const session = useGame((s) => s.session);
-  const ai = useGame((s) => s.ai);
   const theme = useSettings((s) => s.theme);
   const contrast = useSettings((s) => s.highContrast);
   const motion = useSettings((s) => s.motion);
@@ -29,18 +62,17 @@ export default function Stage3D({ onFail }: { onFail: () => void }) {
   failRef.current = onFail;
   const langRef = useRef(lang);
   langRef.current = lang;
+  const subRef = useRef(subscribe);
+  subRef.current = subscribe;
   const [lines, setLines] = useState<Readonly<Record<number, string>>>({});
 
-  const g = session?.match.game;
-  const n = g?.players.length ?? 0;
-  const me = !session || !g ? 0 : session.mode === 'local' ? g.current : Math.max(0, session.match.seats.findIndex((p) => p.seat === 'human'));
-  const castKey = session ? Array.from({ length: Math.max(0, n - 1) }, (_, k) => (me + 1 + k) % n).map((i) => `${i}:${session.seatsMeta[i]?.character ?? 'hwigi'}`).join('|') : '';
+  const castKey = plates.map((p) => `${p.seat}:${p.character}`).join('|');
   const cast = useMemo<CastMember[]>(
     () =>
       castKey
         ? castKey.split('|').map((part) => {
             const [seat, character] = part.split(':');
-            return { seat: Number(seat), character: character as CastMember['character'] };
+            return { seat: Number(seat), character: character as CharacterId };
           })
         : [],
     [castKey],
@@ -120,22 +152,18 @@ export default function Stage3D({ onFail }: { onFail: () => void }) {
   useLayoutEffect(place);
 
   // 차례·생각 중·움직이는 중
-  const current = g && g.phase === 'playing' ? g.current : null;
   useEffect(() => {
     sceneRef.current?.setCurrent(current);
   }, [current, castKey]);
-  const thinkingSeat = ai && ai.phase === 'thinking' ? ai.seat : null;
-  const movingSeat = ai && ai.phase === 'moving' ? ai.seat : null;
   useEffect(() => {
-    sceneRef.current?.setThinking(thinkingSeat);
-    sceneRef.current?.setMoving(movingSeat);
-  }, [thinkingSeat, movingSeat, castKey]);
+    sceneRef.current?.setThinking(thinking);
+    sceneRef.current?.setMoving(moving);
+  }, [thinking, moving, castKey]);
 
   // 새 판이 시작되면 승패 표정 풀기
-  const phase = g?.phase;
   useEffect(() => {
-    if (phase === 'playing') sceneRef.current?.clearOver();
-  }, [phase, session?.match.gameNo]);
+    sceneRef.current?.clearOver();
+  }, [roundKey]);
 
   // 테마 강조색 (App이 <html> 속성을 바꾼 다음에 읽는다)
   useEffect(() => {
@@ -151,31 +179,34 @@ export default function Stage3D({ onFail }: { onFail: () => void }) {
 
   // 반응 구독
   useEffect(() => {
-    let last = useGame.getState().reactions.at(-1)?.id ?? 0;
     const timers = new Map<number, number>();
-    const unsub = useGame.subscribe((st, prev) => {
-      if (st.reactions === prev.reactions) return;
-      for (const r of st.reactions) {
-        if (r.id <= last) continue;
-        last = r.id;
-        sceneRef.current?.react(r.seat, r.kind);
-        const chance = SAY[r.kind];
-        if (chance && Math.random() < chance) {
-          const list = translateList(langRef.current, `stage.${r.kind}`);
-          const text = list[Math.floor(Math.random() * list.length)];
-          if (text) {
-            setLines((l) => ({ ...l, [r.seat]: text }));
-            window.clearTimeout(timers.get(r.seat));
-            timers.set(
-              r.seat,
-              window.setTimeout(() => setLines((l) => {
-                const next = { ...l };
-                delete next[r.seat];
-                return next;
-              }), r.kind === 'win' || r.kind === 'lose' ? 2600 : 1500),
-            );
-          }
-        }
+    const say = (seat: number, text: string, ms: number): void => {
+      setLines((l) => ({ ...l, [seat]: text }));
+      window.clearTimeout(timers.get(seat));
+      timers.set(
+        seat,
+        window.setTimeout(
+          () =>
+            setLines((l) => {
+              const next = { ...l };
+              delete next[seat];
+              return next;
+            }),
+          ms,
+        ),
+      );
+    };
+    const unsub = subRef.current((r) => {
+      sceneRef.current?.react(r.seat, r.kind);
+      if (r.say) {
+        say(r.seat, r.say, r.sayMs ?? 1500);
+        return;
+      }
+      const chance = SAY[r.kind];
+      if (chance && Math.random() < chance) {
+        const list = translateList(langRef.current, `stage.${r.kind}`);
+        const text = list[Math.floor(Math.random() * list.length)];
+        if (text) say(r.seat, text, r.kind === 'win' || r.kind === 'lose' ? 2600 : 1500);
       }
     });
     return () => {
@@ -184,44 +215,32 @@ export default function Stage3D({ onFail }: { onFail: () => void }) {
     };
   }, []);
 
-  if (!session || !g) return null;
   return (
     <div className="stage stage-3d" ref={stageRef}>
       <canvas ref={canvasRef} aria-hidden="true" />
       <div className="stage-labels">
-        {cast.map(({ seat }) => {
-          const p = g.players[seat];
-          const info = session.match.seats[seat];
-          if (!p || !info) return null;
-          const isCurrent = current === seat;
-          const thinking = thinkingSeat === seat;
-          const line = lines[seat];
+        {plates.map((p) => {
+          const line = lines[p.seat];
+          const isThinking = thinking === p.seat;
           return (
-            <Fragment key={seat}>
-              <div
-                className="stage-tag"
-                ref={ref(`tag:${seat}`)}
-                data-current={isCurrent || undefined}
-                aria-label={`${info.name}, ${t('hud.tiles', { n: p.rack.length })}${p.melded ? `, ${t('hud.melded')}` : ''}`}
-              >
-                {p.melded && <i className="meld-dot" aria-hidden="true" />}
-                <span className="tag-name">{info.name}</span>
+            <Fragment key={p.seat}>
+              <div className="stage-tag" ref={ref(`tag:${p.seat}`)} data-current={current === p.seat || undefined} data-out={p.out || undefined} aria-label={p.aria}>
+                {p.dot && <i className="meld-dot" aria-hidden="true" />}
+                <span className="tag-name">{p.name}</span>
                 <span className="tag-count" aria-hidden="true">
-                  {p.rack.length}
+                  {p.count}
                 </span>
               </div>
-              <div className="bubble" ref={ref(`bubble:${seat}`)} hidden={!thinking && !line} aria-hidden="true">
-                {thinking ? (
+              <div className="bubble" ref={ref(`bubble:${p.seat}`)} hidden={!line && !isThinking} aria-hidden="true">
+                {line ?? (
                   <span className="dots">
                     <i />
                     <i />
                     <i />
                   </span>
-                ) : (
-                  line
                 )}
               </div>
-              <div className="seat-origin" ref={ref(`origin:${seat}`)} data-seat-origin={seat} />
+              <div className="seat-origin" ref={ref(`origin:${p.seat}`)} data-seat-origin={p.seat} />
             </Fragment>
           );
         })}

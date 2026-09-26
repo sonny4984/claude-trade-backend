@@ -7,7 +7,7 @@
  */
 import { create } from 'zustand';
 import { analyzeSet, canMoveTile, previewMove, isJoker, type MoveTarget, type TileId } from '../game';
-import { useGame, visibleRack } from '../store/game';
+import { useGame, visibleRack, currentSeatIsHuman } from '../store/game';
 import * as flip from './flip';
 import { sfx, unlockAudio } from '../audio/sfx';
 import { buzz } from './haptics';
@@ -341,7 +341,7 @@ export function tilePointerDown(e: React.PointerEvent<HTMLElement>, id: TileId):
   if (g) return;
   unlockAudio();
   const store = useGame.getState();
-  if (!store.session || store.curtain || store.ai) return;
+  if (!store.session || store.curtain || store.ai || store.waiting || !currentSeatIsHuman(store.session)) return;
   const el = e.currentTarget;
   const r = el.getBoundingClientRect();
   g = {

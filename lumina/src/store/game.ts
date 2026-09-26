@@ -36,6 +36,7 @@ import {
   type CommitCheck,
 } from '../game';
 import { TILE_COUNT, tile } from '../game/tiles';
+import { CLASSIC_RULES } from '../game/rules';
 import { readJSON, removeKey, throttledWriter } from './storage';
 import { aiSpeedFactor, prefersReducedMotion, useSettings, type SetupConfig } from './settings';
 import { useStats } from './stats';
@@ -45,8 +46,9 @@ import { buzz } from '../ui/haptics';
 import * as flip from '../ui/flip';
 import { commitIssueText, subj, tileLabel, translate } from '../i18n';
 import { LESSONS } from '../lessons/lessons';
+import { bridge, type OnlineInfo, type TableDoc } from '../net/bridge';
 
-export type Screen = 'home' | 'setup-solo' | 'setup-local' | 'game' | 'settings' | 'stats' | 'rules' | 'lessons';
+export type Screen = 'home' | 'setup-solo' | 'setup-local' | 'game' | 'settings' | 'stats' | 'rules' | 'lessons' | 'coda-setup' | 'coda' | 'online';
 export type Overlay = null | 'menu' | 'gameover' | 'hint' | 'share' | 'confirm-draw' | 'confirm-quit' | 'lesson-done';
 
 export interface SeatMeta {
@@ -55,7 +57,7 @@ export interface SeatMeta {
 
 export interface Session {
   readonly v: 1;
-  readonly mode: 'solo' | 'local' | 'lesson';
+  readonly mode: 'solo' | 'local' | 'lesson' | 'online';
   readonly lesson: number | null;
   readonly match: MatchState;
   readonly seatsMeta: readonly SeatMeta[];
@@ -66,6 +68,8 @@ export interface Session {
   readonly endedAt?: number | null;
   readonly hintsLeft: number;
   readonly timerLeftMs: number | null;
+  /** 온라인 대전이면 방 코드·역할·내 자리 */
+  readonly online?: OnlineInfo | null;
 }
 
 /** 3D 무대의 캐릭터 반응 */
@@ -84,6 +88,8 @@ export interface Toast {
 
 interface State {
   screen: Screen;
+  /** 바로 전 화면 (규칙·설정에서 돌아갈 곳) */
+  prevScreen: Screen;
   session: Session | null;
   selection: TileId[];
   curtain: boolean;
@@ -98,6 +104,8 @@ interface State {
   lastEventText: string | null;
   shake: { id: number; tiles: TileId[] } | null;
   lessonGoal: boolean;
+  /** 온라인 참가자: 방장에게 보낸 수의 답을 기다리는 중 */
+  waiting: boolean;
 }
 
 interface Actions {
@@ -127,6 +135,14 @@ interface Actions {
   toastMsg: (text: string, tone?: Toast['tone']) => void;
   shakeTiles: (tiles: TileId[]) => void;
   nextLesson: () => void;
+  /** 온라인 — 방장: 로비의 자리로 판 시작 */
+  startOnline: (table: TableDoc, info: OnlineInfo) => void;
+  /** 온라인 — 방장: 참가자가 보낸 수 (틀리면 false) */
+  applyRemote: (seat: number, payload: unknown) => boolean;
+  /** 온라인 — 참가자(또는 다시 들어온 방장): 방에 올라온 판을 받는다 */
+  adoptRemote: (payload: unknown, events: readonly unknown[], info: OnlineInfo) => void;
+  /** 온라인 — 방장: 나간 친구 자리를 AI가 이어 둔다 */
+  seatToAi: (seat: number) => boolean;
 }
 
 const SESSION_KEY = 'lumina.session.v1';
@@ -158,10 +174,40 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 // ─────────────────────────────── 도우미 ───────────────────────────────
 
+/** 이 기기가 둘 차례인가 (온라인이면 내 자리 차례만) */
 export function currentSeatIsHuman(s: Session): boolean {
   const g = s.match.game;
+  if (s.online) return g.current === s.online.mySeat;
   return s.match.seats[g.current]?.seat === 'human';
 }
+
+/** 이 기기에서 "나"인 자리 (기록·결과 화면) */
+export function mySeatOf(s: Session): number {
+  if (s.online) return s.online.mySeat;
+  return Math.max(0, s.match.seats.findIndex((p) => p.seat === 'human'));
+}
+
+/** 판을 방에 올릴 때 (이 기기에만 의미 있는 값은 뺀다) */
+function payloadOf(s: Session): Session {
+  const g = s.match.game;
+  // 되돌리기 기록은 둔 사람 기기에만 있으면 된다 — 문서 크기를 줄인다
+  const turn = { ...g.turn, past: [], future: [] };
+  return { ...s, match: { ...s.match, game: { ...g, turn } }, rackOrder: s.match.game.players.map(() => []), hintsLeft: 0, online: null, timerLeftMs: null };
+}
+
+/** 방장에게 보낼 수 (참가자 → 방장) */
+type RemoteMove = { readonly type: 'commit'; readonly sets: readonly (readonly TileId[])[] } | { readonly type: 'draw' };
+
+function isRemoteMove(x: unknown): x is RemoteMove {
+  if (!x || typeof x !== 'object') return false;
+  const a = x as Record<string, unknown>;
+  if (a.type === 'draw') return true;
+  if (a.type !== 'commit' || !Array.isArray(a.sets) || a.sets.length > 60) return false;
+  return a.sets.every((st) => Array.isArray(st) && st.length <= 13 && st.every((id) => Number.isInteger(id) && id >= 0 && id < TILE_COUNT));
+}
+
+/** 방에 알릴 만한 변화인지 (차례 안의 타일 옮기기는 올리지 않는다) */
+const PUBLISHED_EVENTS = new Set<GameEvent['type']>(['melded', 'played', 'drew', 'passed', 'timeout', 'turn', 'over']);
 
 function humanCount(s: Session): number {
   return s.match.seats.filter((p) => p.seat === 'human').length;
@@ -223,6 +269,7 @@ function validSession(x: unknown): x is Session {
     const g = s.match.game;
     if (!g || g.v !== 1 || !Array.isArray(g.players) || g.players.length < 2) return false;
     if (!Array.isArray(s.seatsMeta) || s.seatsMeta.length !== g.players.length) return false;
+    if (!Array.isArray(s.rackOrder) || !Array.isArray(s.drawn)) return false;
     if (!s.seatsMeta.every((m) => isCharacterId(m.character))) return false;
     // 타일 보존: 더미 + 다른 사람 랙 + 현재 작업본(테이블·랙·작업대)이 106장, 중복 없음
     const w = g.turn.work;
@@ -273,9 +320,29 @@ export function meldProgress(g: GameState): { points: number; need: number } | n
 export const useGame = create<State & Actions>((set, get) => {
   /** 세션을 바꾸고 저장 */
   const put = (session: Session | null, extra: Partial<State> = {}): void => {
+    const wasOnline = !!get().session?.online;
     set({ session, ...extra });
-    if (session) saveSession(session);
-    else removeKey(SESSION_KEY);
+    // 온라인 판은 방(db)이 기억한다 — 기기에 저장된 혼자 두기 판을 덮거나 지우지 않는다
+    if (session) {
+      if (!session.online) saveSession(session);
+    } else if (!wasOnline) removeKey(SESSION_KEY);
+  };
+
+  /** 방장: 바뀐 판을 방에 올린다 */
+  const publish = (s: Session, events: readonly GameEvent[]): void => {
+    if (s.online?.role === 'host') bridge.publish?.('lumina', payloadOf(s), events);
+  };
+
+  /** 다른 자리(AI·친구)에서 타일이 날아와 놓이는 연출. 걸리는 시간(ms)을 돌려준다 */
+  const flyFrom = (seat: number, next: GameState, played: readonly TileId[]): number => {
+    const origin = document.querySelector<HTMLElement>(`[data-seat-origin="${seat}"]`)?.getBoundingClientRect();
+    const order = next.table.flatMap((x) => x.tiles).filter((id) => played.includes(id));
+    const step = prefersReducedMotion() ? 0 : 110;
+    order.forEach((id, i) => {
+      if (origin) flip.from(id, origin, 140 + i * step, 380);
+      sfx('place', { delay: 140 + i * step + 360 });
+    });
+    return order.length ? 140 + order.length * step + 420 : 0;
   };
 
   const react = (seat: number, kind: ReactionKind): void => {
@@ -312,6 +379,16 @@ export const useGame = create<State & Actions>((set, get) => {
     const g = s.match.game;
     set({ selection: [], hint: { level: 0, data: null }, splitSet: null });
     if (g.phase !== 'playing') return;
+    if (s.online) {
+      // 온라인: AI는 방장만 돌리고, 친구 차례는 기다린다
+      set({ curtain: false });
+      if (currentSeatIsHuman(s)) startTimer(s, restartTimer);
+      else {
+        set({ deadline: null });
+        if (s.online.role === 'host' && s.match.seats[g.current]?.seat === 'ai') void runAi();
+      }
+      return;
+    }
     if (!currentSeatIsHuman(s)) {
       set({ curtain: false, deadline: null });
       if (s.mode !== 'lesson' || (s.lesson !== null && LESSONS[s.lesson]?.aiPlays)) void runAi();
@@ -331,11 +408,11 @@ export const useGame = create<State & Actions>((set, get) => {
     const g = s.match.game;
     if (!g.result) return;
     const humans = s.match.seats.map((p) => p.seat === 'human');
-    const me = Math.max(0, humans.indexOf(true));
+    const me = mySeatOf(s);
     const st = g.stats[me];
     useStats.getState().add({
       at: Date.now(),
-      mode: s.mode === 'local' ? 'local' : 'solo',
+      mode: s.mode === 'local' ? 'local' : s.mode === 'online' ? 'online' : 'solo',
       names: s.match.seats.map((p) => p.name),
       humans,
       me,
@@ -402,7 +479,7 @@ export const useGame = create<State & Actions>((set, get) => {
           break;
         case 'over': {
           const winners = e.result.winners;
-          const humanWon = winners.some((w) => s.match.seats[w]?.seat === 'human');
+          const humanWon = s.online ? winners.includes(s.online.mySeat) : winners.some((w) => s.match.seats[w]?.seat === 'human');
           sfx(humanWon || s.mode === 'local' ? 'win' : 'lose', { delay: 200 });
           buzz(humanWon ? 'success' : 'turn');
           s.match.seats.forEach((_, i) => react(i, winners.includes(i) ? 'win' : 'lose'));
@@ -436,6 +513,7 @@ export const useGame = create<State & Actions>((set, get) => {
     const turnChanged = next.current !== prev.current || next.turnNo !== prev.turnNo;
     const session: Session = { ...s, match, rackOrder, drawn, timerLeftMs: turnChanged ? null : s.timerLeftMs, endedAt: over ? Date.now() : (s.endedAt ?? null) };
     const text = handleEvents(session, events, byAi);
+    if (events.some((e) => PUBLISHED_EVENTS.has(e.type))) publish(session, events);
     put(session, {
       layoutTick: get().layoutTick + 1,
       lastEventText: text ?? get().lastEventText,
@@ -500,23 +578,13 @@ export const useGame = create<State & Actions>((set, get) => {
     if (!result) return;
     set({ ai: { seat, phase: 'moving' } });
     flip.capture();
-    let anim = 0;
-    if (decision.kind === 'play') {
-      const origin = document.querySelector<HTMLElement>(`[data-seat-origin="${seat}"]`)?.getBoundingClientRect();
-      const order = result.state.table.flatMap((x) => x.tiles).filter((id) => decision.kind === 'play' && decision.played.includes(id));
-      const step = prefersReducedMotion() ? 0 : 110;
-      order.forEach((id, i) => {
-        if (origin) flip.from(id, origin, 140 + i * step, 380);
-        sfx('place', { delay: 140 + i * step + 360 });
-      });
-      anim = 140 + order.length * step + 420;
-    }
+    const anim = decision.kind === 'play' ? flyFrom(seat, result.state, decision.played) : 0;
     applyGame(result.state, result.events, true);
     await sleep(anim);
     if (token !== aiToken) return;
     set({ ai: null });
     const after = get().session;
-    if (after && after.match.game.phase === 'playing' && after.match.game.current === seat && !currentSeatIsHuman(after)) {
+    if (after && after.match.game.phase === 'playing' && after.match.game.current === seat && after.match.seats[seat]?.seat === 'ai') {
       // 하우스 룰 "등록 후 계속": 같은 AI가 이어서 둔다
       void runAi();
     }
@@ -552,6 +620,7 @@ export const useGame = create<State & Actions>((set, get) => {
 
   return {
     screen: 'home',
+    prevScreen: 'home',
     session: null,
     selection: [],
     curtain: false,
@@ -566,15 +635,21 @@ export const useGame = create<State & Actions>((set, get) => {
     lastEventText: null,
     shake: null,
     lessonGoal: false,
+    waiting: false,
 
     go: (screen) => {
-      if (get().screen === 'game' && screen !== 'game') {
+      const from = get().screen;
+      const online = !!get().session?.online;
+      // 온라인 판은 다른 사람들이 기다리므로 화면을 옮겨도 AI를 멈추지 않는다
+      if (from === 'game' && screen !== 'game' && !online) {
         pauseTimer();
         aiToken++;
         set({ ai: null });
       }
-      set({ screen, overlay: null });
+      set({ screen, prevScreen: from, overlay: null });
       sfx('button');
+      // 설정·규칙에서 돌아오면 멈췄던 차례를 이어 간다
+      if (screen === 'game' && from !== 'game' && !online && get().session?.match.game.phase === 'playing') beginTurnFlow(false);
     },
 
     startMatch: (cfg) => {
@@ -669,7 +744,8 @@ export const useGame = create<State & Actions>((set, get) => {
 
     quit: () => {
       aiToken++;
-      put(null, { screen: 'home', overlay: null, ai: null, deadline: null, curtain: false, selection: [] });
+      if (get().session?.online) bridge.leave?.();
+      put(null, { screen: 'home', overlay: null, ai: null, deadline: null, curtain: false, selection: [], waiting: false });
     },
 
     reveal: () => {
@@ -685,11 +761,19 @@ export const useGame = create<State & Actions>((set, get) => {
       const s = get().session;
       if (!s) return false;
       const g = s.match.game;
-      if (g.phase !== 'playing' || !currentSeatIsHuman(s) || get().curtain || get().ai) return false;
+      if (g.phase !== 'playing' || !currentSeatIsHuman(s) || get().curtain || get().ai || get().waiting) return false;
       const r = reduce(g, action);
       if (!r.ok) {
         if (!opts.quiet) reportError(r.error, r.check);
         return false;
+      }
+      if (s.online?.role === 'guest' && (action.type === 'commit' || action.type === 'draw' || action.type === 'timeout')) {
+        // 참가자: 차례를 끝내는 수는 방장이 판정한다 (여기서는 미리 확인만)
+        const move: RemoteMove = action.type === 'commit' ? { type: 'commit', sets: g.turn.work.sets.map((x) => x.tiles.slice()) } : { type: 'draw' };
+        set({ waiting: true, selection: [] });
+        bridge.send?.('lumina', move);
+        sfx('button');
+        return true;
       }
       if (!opts.noCapture) flip.capture();
       applyGame(r.state, r.events, false);
@@ -698,7 +782,7 @@ export const useGame = create<State & Actions>((set, get) => {
 
     select: (id) => {
       const s = get().session;
-      if (!s || get().curtain || get().ai) return;
+      if (!s || get().curtain || get().ai || get().waiting || !currentSeatIsHuman(s)) return;
       const g = s.match.game;
       const err = canMoveTile(g.turn, id);
       if (err) {
@@ -866,7 +950,7 @@ export const useGame = create<State & Actions>((set, get) => {
 
     nextGame: () => {
       const s = get().session;
-      if (!s || !s.match.recorded || s.match.over) return;
+      if (!s || !s.match.recorded || s.match.over || s.online?.role === 'guest') return;
       const match = nextGameOf(s.match);
       aiToken++;
       put(
@@ -874,12 +958,13 @@ export const useGame = create<State & Actions>((set, get) => {
         { overlay: null, reactions: [], lastEventText: null, ai: null },
       );
       sfx('shuffle');
+      publish(get().session as Session, []);
       beginTurnFlow(true);
     },
 
     rematch: () => {
       const s = get().session;
-      if (!s) return;
+      if (!s || s.online?.role === 'guest') return;
       const match = rematchOf(s.match, randomSeed());
       aiToken++;
       put(
@@ -887,6 +972,7 @@ export const useGame = create<State & Actions>((set, get) => {
         { overlay: null, reactions: [], lastEventText: null, ai: null },
       );
       sfx('shuffle');
+      publish(get().session as Session, []);
       beginTurnFlow(true);
     },
 
@@ -906,6 +992,148 @@ export const useGame = create<State & Actions>((set, get) => {
         const r = reduce(session.match.game, { type: 'timeout' });
         if (r.ok) applyGame(r.state, r.events, false);
       }
+    },
+
+    startOnline: (table, info) => {
+      aiToken++;
+      const st = useSettings.getState();
+      // 규칙은 방장이 마지막으로 쓴 것, 온라인은 차례 시간 없이
+      const rules = { ...(st.lastSolo?.rules ?? st.lastLocal?.rules ?? CLASSIC_RULES), turnSeconds: null };
+      const seats: PlayerSetup[] = table.seats.map((x) => ({ name: x.name, seat: x.kind, ...(x.kind === 'ai' ? { ai: x.level ?? 'casual' } : {}) }));
+      const match = newMatch({ seats, rules, format: { kind: 'games', games: 1 }, seed: urlSeed() ?? randomSeed() });
+      const session: Session = {
+        v: 1,
+        mode: 'online',
+        lesson: null,
+        match,
+        seatsMeta: table.seats.map((x) => ({ character: x.character })),
+        rackOrder: initialOrders(match),
+        drawn: match.game.players.map(() => []),
+        startedAt: Date.now(),
+        endedAt: null,
+        hintsLeft: hintBudget('online'),
+        timerLeftMs: null,
+        online: info,
+      };
+      put(session, { screen: 'game', overlay: null, reactions: [], lastEventText: null, ai: null, lessonGoal: false, curtain: false, waiting: false, selection: [] });
+      sfx('shuffle');
+      publish(session, []);
+      beginTurnFlow(true);
+    },
+
+    applyRemote: (seat, payload) => {
+      const s = get().session;
+      if (!s?.online || s.online.role !== 'host' || !isRemoteMove(payload)) return false;
+      const g = s.match.game;
+      if (g.phase !== 'playing' || g.current !== seat || seat === s.online.mySeat || s.match.seats[seat]?.seat !== 'human' || get().ai) return false;
+      let result: { state: GameState; events: GameEvent[] } | null = null;
+      if (payload.type === 'draw') {
+        const r = reduce(g, g.turn.meldedNow ? { type: 'commit' } : { type: 'draw' });
+        if (r.ok) result = { state: r.state, events: [...r.events] };
+      } else {
+        const p = reduce(g, { type: 'propose', sets: payload.sets });
+        const c = p.ok ? reduce(p.state, { type: 'commit' }) : null;
+        if (c?.ok) result = { state: c.state, events: [...c.events] };
+      }
+      if (!result) return false;
+      flip.capture();
+      const before = new Set(g.table.flatMap((x) => x.tiles));
+      flyFrom(
+        seat,
+        result.state,
+        result.state.table.flatMap((x) => x.tiles).filter((id) => !before.has(id)),
+      );
+      applyGame(result.state, result.events, true);
+      return true;
+    },
+
+    adoptRemote: (payload, events, info) => {
+      const raw = payload as Session | null;
+      if (!raw || typeof raw !== 'object' || !validSession(raw) || raw.match.game.players.length <= info.mySeat) return;
+      const prev = get().session;
+      const pg = prev?.online ? prev.match.game : null;
+      const ng = raw.match.game;
+      const same = !!prev?.online && !!pg && prev.match.id === raw.match.id && prev.match.gameNo === raw.match.gameNo;
+      const me = info.mySeat;
+      const evs = (Array.isArray(events) ? events : []).filter((e): e is GameEvent => !!e && typeof e === 'object' && typeof (e as GameEvent).type === 'string');
+      // 내 차례에 옮겨 둔 타일은 지킨다 (방장이 자리 정보만 바꿔 다시 올린 경우)
+      const keepLocal =
+        same && !!pg && pg.phase === 'playing' && ng.phase === 'playing' && pg.current === me && ng.current === me && pg.turnNo === ng.turnNo && pg.turn.meldedNow === ng.turn.meldedNow && isChanged(pg.turn);
+      const game = keepLocal && pg ? { ...pg, players: pg.players.map((p, i) => ({ ...p, seat: ng.players[i]?.seat ?? p.seat, ...(ng.players[i]?.ai ? { ai: ng.players[i]?.ai } : {}) })) } : ng;
+      const myRack = game.current === me ? game.turn.work.rack : (game.players[me]?.rack ?? []);
+      const sortMode = useSettings.getState().autoSort;
+      const prevOrder = same && prev ? (prev.rackOrder[me] ?? []) : [];
+      const order = prevOrder.length ? syncOrder(prevOrder, myRack) : sortMode === 'off' ? myRack.slice() : sortIds(myRack, sortMode);
+      const myDraw = evs.find((e) => e.type === 'drew' && e.p === me);
+      const prevDrawn = same && prev && pg && !(pg.current === me && game.current !== me) ? (prev.drawn[me] ?? []) : [];
+      const drawn = game.players.map((_, i) => (i !== me ? [] : myDraw && myDraw.type === 'drew' ? myDraw.tiles : prevDrawn));
+      const newlyOver = ng.phase === 'over' && !(same && pg?.phase === 'over');
+      const session: Session = {
+        ...raw,
+        match: { ...raw.match, game },
+        rackOrder: game.players.map((_, i) => (i === me ? order : [])),
+        drawn,
+        online: info,
+        hintsLeft: same && prev ? prev.hintsLeft : hintBudget('online'),
+        timerLeftMs: null,
+        startedAt: same && prev ? prev.startedAt : Date.now(),
+        endedAt: ng.phase === 'over' ? (same && prev?.endedAt ? prev.endedAt : Date.now()) : null,
+      };
+      const turnChanged = !same || !pg || pg.current !== game.current || pg.turnNo !== game.turnNo;
+      // 다른 자리에서 낸 타일은 그 자리에서 날아온다
+      if (same && pg) {
+        flip.capture();
+        const mover = [...evs].reverse().find((e) => (e.type === 'played' || e.type === 'melded') && e.p !== me);
+        if (mover && 'p' in mover) {
+          const before = new Set(pg.table.flatMap((x) => x.tiles));
+          flyFrom(
+            mover.p,
+            game,
+            game.table.flatMap((x) => x.tiles).filter((id) => !before.has(id)),
+          );
+        }
+      }
+      const mine = evs.some((e) => (e.type === 'played' || e.type === 'melded' || e.type === 'drew' || e.type === 'passed') && e.p === me);
+      const text = handleEvents(session, evs, !mine);
+      aiToken++;
+      put(session, {
+        screen: 'game',
+        layoutTick: get().layoutTick + 1,
+        lastEventText: text ?? (same ? get().lastEventText : null),
+        selection: keepLocal ? get().selection : [],
+        hint: turnChanged ? { level: 0, data: null } : get().hint,
+        ai: null,
+        curtain: false,
+        ...(same ? {} : { reactions: [], overlay: null, lessonGoal: false, deadline: null }),
+      });
+      if (!same) sfx('shuffle');
+      if (ng.phase === 'over') {
+        set({ deadline: null });
+        if (newlyOver) {
+          recordStats(session);
+          setTimeout(() => {
+            if (get().session?.match.id === session.match.id) set({ overlay: 'gameover' });
+          }, prefersReducedMotion() ? 200 : 1300);
+        }
+        return;
+      }
+      if (turnChanged && game.current === me) buzz('turn');
+      if (turnChanged) beginTurnFlow(true);
+    },
+
+    seatToAi: (seat) => {
+      const s = get().session;
+      if (!s?.online || s.online.role !== 'host') return false;
+      const p = s.match.seats[seat];
+      if (!p || p.seat !== 'human' || seat === s.online.mySeat) return false;
+      const g = s.match.game;
+      const seats = s.match.seats.map((x, i) => (i === seat ? { ...x, seat: 'ai' as const, ai: 'casual' as const } : x));
+      const players = g.players.map((x, i) => (i === seat ? { ...x, seat: 'ai' as const, ai: 'casual' as const } : x));
+      const next: Session = { ...s, match: { ...s.match, seats, game: { ...g, players } } };
+      put(next);
+      publish(next, []);
+      if (g.phase === 'playing' && g.current === seat && !get().ai) void runAi();
+      return true;
     },
 
     setSplit: (setId) => set({ splitSet: setId }),

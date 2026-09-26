@@ -10,6 +10,7 @@ import type { TileId } from '../../game';
 /** 지금 이 화면에서 보여도 되는 랙의 주인 (혼자 두기: 늘 나 / 함께 두기: 지금 차례인 사람, 가림막이 없을 때) */
 export function rackOwner(s: Session, curtain: boolean): number | null {
   const g = s.match.game;
+  if (s.online) return s.online.mySeat;
   if (s.mode !== 'local') {
     const me = s.match.seats.findIndex((p) => p.seat === 'human');
     return me >= 0 ? me : null;
@@ -25,6 +26,7 @@ export function Rack() {
   const selection = useGame((s) => s.selection);
   const hint = useGame((s) => s.hint);
   const shake = useGame((s) => s.shake);
+  const waiting = useGame((s) => s.waiting);
   const dragTiles = useDrag((s) => s.tiles);
   const target = useDrag((s) => (s.target?.kind === 'rack' ? s.target : null));
   const refuse = useDrag((s) => s.target?.kind === 'rack' && s.preview === 'refuse');
@@ -45,7 +47,7 @@ export function Rack() {
   const rw = useRackFit(wellRef, owner === null ? Math.min(backs, 20) : tiles.length);
   if (!session) return null;
   const g = session.match.game;
-  const active = owner !== null && owner === g.current && !curtain;
+  const active = owner !== null && owner === g.current && !curtain && !waiting;
   const drawn = owner !== null ? session.drawn[owner] ?? [] : [];
   const visible = tiles.filter((id) => !dragTiles.includes(id));
   const caret = target && !refuse ? target.index : -1;

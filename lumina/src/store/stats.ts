@@ -5,7 +5,7 @@ import type { ThemeId } from './settings';
 /** 판 하나의 기록 (기기 안에만 저장) */
 export interface GameRecord {
   readonly at: number;
-  readonly mode: 'solo' | 'local';
+  readonly mode: 'solo' | 'local' | 'online';
   readonly names: readonly string[];
   readonly humans: readonly boolean[];
   /** 기록의 주인(이 기기에서 "나") — 혼자 두기에서는 사람 자리, 함께 두기에서는 첫 번째 사람 */
@@ -85,7 +85,7 @@ export function summarize(records: readonly GameRecord[]): Summary {
     jokers += r.jokers;
     longest = Math.max(longest, r.longestRun);
     themes.set(r.theme, (themes.get(r.theme) ?? 0) + 1);
-    if (r.mode === 'local') {
+    if (r.mode === 'local' || r.mode === 'online') {
       r.names.forEach((n, i) => {
         if (!r.humans[i]) return;
         const p = people.get(n) ?? { games: 0, wins: 0 };

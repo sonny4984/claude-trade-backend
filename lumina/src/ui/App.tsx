@@ -11,6 +11,9 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { StatsScreen } from './screens/StatsScreen';
 import { RulesScreen } from './screens/RulesScreen';
 import { LessonsScreen } from './screens/LessonsScreen';
+import { CodaSetup } from '../coda/ui/CodaSetup';
+import { CodaScreen } from '../coda/ui/CodaScreen';
+import { OnlineScreen } from './screens/OnlineScreen';
 
 /** 테마·접근성 설정을 <html> 속성으로 */
 function useDocumentSettings(): void {
@@ -65,6 +68,9 @@ export function App() {
       {screen === 'stats' && <StatsScreen />}
       {screen === 'rules' && <RulesScreen />}
       {screen === 'lessons' && <LessonsScreen />}
+      {screen === 'coda-setup' && <CodaSetup />}
+      {screen === 'coda' && <CodaScreen />}
+      {screen === 'online' && <OnlineScreen />}
       <Toasts />
     </div>
   );

@@ -10,6 +10,7 @@ import { ActionBar, cycleSort } from './ActionBar';
 import { DragLayer } from './DragLayer';
 import { Curtain, ConfirmDraw, GameOver, HintPreview, LessonBanner, LessonDone, MenuSheet } from './Overlays';
 import * as flip from '../flip';
+import { OnlineNotice } from '../online/OnlineNotice';
 import { cancelDrag, setErrorText } from '../dnd';
 import { useT } from '../../i18n';
 
@@ -78,6 +79,7 @@ export function GameScreen() {
       <Rack />
       <ActionBar />
       <DragLayer />
+      <OnlineNotice />
       <Curtain />
       <MenuSheet />
       <ConfirmDraw />

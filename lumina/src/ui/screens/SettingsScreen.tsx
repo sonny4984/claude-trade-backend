@@ -54,7 +54,7 @@ const SAMPLE = TS('r7 b8 o9 k10 J');
 export function SettingsScreen() {
   const t = useT();
   const s = useSettings();
-  const back = useGame((st) => (st.session && st.session.match.game.phase === 'playing' ? 'game' : 'home'));
+  const back = useGame((st) => (st.prevScreen === 'game' || st.prevScreen === 'coda' ? st.prevScreen : 'home'));
   const [confirmReset, setConfirmReset] = useState(false);
   const store = useGame.getState();
   return (

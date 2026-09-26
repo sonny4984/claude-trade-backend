@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { useGame } from '../../store/game';
+import { useGame, currentSeatIsHuman } from '../../store/game';
 import { useDrag } from '../dnd';
 import { Tile } from '../components/Tile';
 import { useT } from '../../i18n';
@@ -14,7 +14,7 @@ export function Staging() {
   if (!session) return null;
   const g = session.match.game;
   const staging = g.turn.work.staging;
-  const humanTurn = session.match.seats[g.current]?.seat === 'human';
+  const humanTurn = currentSeatIsHuman(session);
   const open = humanTurn && (staging.length > 0 || dragActive);
   if (!open) return null;
   const visible = staging.filter((id) => !dragTiles.includes(id));

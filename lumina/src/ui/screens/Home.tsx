@@ -66,6 +66,23 @@ export function Home() {
           <span className="plate-label">{t('home.local')}</span>
           <span className="plate-sub">{t('home.localSub')}</span>
         </button>
+        <button type="button" className="plate-btn plate-coda" onClick={() => store.go('coda-setup')}>
+          <span className="plate-label">{t('coda.title')}</span>
+          <span className="plate-sub">{t('coda.sub')}</span>
+          <span className="plate-tiles" aria-hidden="true">
+            <i data-c="b">7</i>
+            <i data-c="w" />
+            <i data-c="b" />
+          </span>
+        </button>
+        <button type="button" className="plate-btn plate-online" onClick={() => store.go('online')}>
+          <span className="plate-label">{t('online.title')}</span>
+          <span className="plate-sub">{t('online.sub')}</span>
+          <span className="plate-paws" aria-hidden="true">
+            <i />
+            <i />
+          </span>
+        </button>
         <button type="button" className="plate-btn" onClick={() => store.go('lessons')}>
           <span className="plate-label">{t('home.learn')}</span>
           <span className="plate-sub">{t('home.learnSub')}</span>

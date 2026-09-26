@@ -6,6 +6,7 @@ import './styles/base.css';
 import './styles/table.css';
 import './styles/tiles.css';
 import './styles/screens.css';
+import './styles/coda.css';
 import { App } from './ui/App';
 
 createRoot(document.getElementById('root') as HTMLElement).render(
