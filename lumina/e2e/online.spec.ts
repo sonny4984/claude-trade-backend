@@ -1,0 +1,207 @@
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { ClaudeHub } from './claude-mock';
+
+/**
+ * 온라인 대전 — 브라우저 컨텍스트 둘(방장 기기·친구 기기)을 가짜 claude.ai 런타임 허브로 잇는다.
+ * 기기 둘을 띄우므로 데스크톱 프로젝트에서 한 번만 돈다.
+ */
+test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, '두 기기 시험은 한 번만');
+
+interface Device {
+  page: Page;
+  ctx: BrowserContext;
+  errors: string[];
+}
+
+async function device(browser: Browser, hub: ClaudeHub, path = '/'): Promise<Device> {
+  const ctx = await browser.newContext({ viewport: { width: 430, height: 900 } });
+  const page = await ctx.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error' && !/ERR_FAILED|fonts\.g/.test(m.text())) errors.push(m.text());
+  });
+  await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  await hub.attach(page);
+  await page.addInitScript((s) => {
+    try {
+      if (sessionStorage.getItem('e2e-init')) return;
+      sessionStorage.setItem('e2e-init', '1');
+      localStorage.clear();
+      localStorage.setItem('lumina.settings.v1', JSON.stringify(s));
+    } catch {
+      /* 저장소가 막힌 환경 */
+    }
+  }, { aiSpeed: 'fast', hints: 'unlimited', confirmDraw: false, show3d: false });
+  await page.goto(path);
+  await expect(page.locator('.wordmark')).toHaveText('LUMINA');
+  return { page, ctx, errors };
+}
+
+/** 방장: 방을 만들고 코드를 돌려준다 */
+async function createRoom(host: Page, game: 'lumina' | 'coda'): Promise<string> {
+  await host.locator('.plate-online').click();
+  await host.locator('.ol-name').fill('방장');
+  if (game === 'coda') await host.locator('.seg button', { hasText: '다빈치' }).click();
+  await host.locator('.ol-create').click();
+  const codeEl = host.locator('.ol-code');
+  await expect(codeEl).toBeVisible();
+  return ((await codeEl.getAttribute('aria-label')) ?? '').replace(/\s/g, '');
+}
+
+/** 친구: 캐릭터·이름을 고르고 코드로 들어간다 */
+async function joinRoom(guest: Page, code: string): Promise<void> {
+  await guest.locator('.plate-online').click();
+  await guest.locator('.ol-pick-btn').nth(1).click();
+  await guest.locator('.ol-name').fill('친구');
+  await guest.locator('.ol-code-input').fill(code.toUpperCase());
+  await guest.locator('.ol-join button[type=submit]').click();
+}
+
+async function applyHint(page: Page): Promise<boolean> {
+  const hint = page.locator('.tool').nth(3);
+  for (let i = 0; i < 3; i++) {
+    if (await page.locator('.sheet .btn-primary').count()) break;
+    if (!(await hint.isEnabled())) return false;
+    await hint.click();
+    await page.waitForTimeout(200);
+  }
+  const apply = page.locator('.sheet .btn-primary');
+  if (!(await apply.count())) return false;
+  await apply.click();
+  return true;
+}
+
+test('온라인 루미큐브: 방 만들기 → 코드로 참가 → 친구의 첫 등록이 방장 판에 그대로', async ({ browser }) => {
+  const hub = new ClaudeHub();
+  // 시드 2: 방장·친구·AI 셋이면 친구(1번 자리)가 먼저 두고 첫 차례에 등록할 수 있다 (scripts/online-check.ts)
+  const host = await device(browser, hub, '/?seed=2');
+  const guest = await device(browser, hub);
+
+  const code = await createRoom(host.page, 'lumina');
+  expect(code).toMatch(/^[a-z0-9]{4}$/);
+  await joinRoom(guest.page, code);
+
+  // 로비: 둘 다 두 자리를 본다 → 방장이 AI를 앉히면 친구 화면에도 셋
+  const seats = (p: Page) => p.locator('.ol-seat:not(.ol-seat-empty)');
+  await expect(seats(host.page)).toHaveCount(2);
+  await expect(seats(guest.page)).toHaveCount(2);
+  await expect(guest.page.locator('.ol-wait')).toBeVisible();
+  await host.page.locator('.add-seat').click();
+  await expect(seats(guest.page)).toHaveCount(3);
+
+  // 시작 → 두 기기 모두 게임 화면, 각자 자기 패 14장 (서로 다른 패)
+  await host.page.locator('.ol-foot .btn-primary').click();
+  await expect(host.page.locator('.game')).toBeVisible();
+  await expect(guest.page.locator('.game')).toBeVisible();
+  await expect(host.page.locator('.rack .tile')).toHaveCount(14);
+  await expect(guest.page.locator('.rack .tile')).toHaveCount(14);
+  const rackOf = async (p: Page) => (await p.locator('.rack .tile').evaluateAll((els) => els.map((e) => e.getAttribute('data-tile-id')))).sort().join(',');
+  expect(await rackOf(host.page)).not.toBe(await rackOf(guest.page));
+  await expect(host.page.locator('.hud .ol-chip')).toContainText(code.toUpperCase());
+
+  // 친구 차례: 방장은 못 두고, 친구는 힌트로 첫 등록을 만들어 낸다
+  await expect(guest.page.locator('.draw-btn')).toBeEnabled();
+  await expect(host.page.locator('.draw-btn')).toBeDisabled();
+  expect(await applyHint(guest.page)).toBe(true);
+  const placed = await guest.page.locator('.felt .tile').count();
+  expect(placed).toBeGreaterThan(0);
+  await guest.page.locator('.commit-btn').click();
+
+  // 방장 판에 같은 타일들이 올라오고, 친구 패는 그만큼 줄어든다
+  await expect(host.page.locator('.felt .tile')).toHaveCount(placed);
+  await expect(guest.page.locator('.rack .tile')).toHaveCount(14 - placed);
+  const tableOf = async (p: Page) => (await p.locator('.felt .tile').evaluateAll((els) => els.map((e) => e.getAttribute('data-tile-id')))).sort().join(',');
+  expect(await tableOf(host.page)).toBe(await tableOf(guest.page));
+
+  // AI 차례가 지나 방장 차례 → 방장이 뽑으면 친구 화면의 더미 수가 준다
+  await expect(host.page.locator('.draw-btn')).toBeEnabled({ timeout: 45_000 });
+  const pool = async (p: Page) => Number(await p.locator('.hud-pool b').innerText());
+  const before = await pool(guest.page);
+  await host.page.locator('.draw-btn').click();
+  await expect.poll(() => pool(guest.page)).toBe(before - 1);
+  await expect(host.page.locator('.rack .tile')).toHaveCount(15);
+
+  // 다시 친구 차례: 뽑기도 방장을 거쳐 반영된다
+  await expect(guest.page.locator('.draw-btn')).toBeEnabled({ timeout: 45_000 });
+  const n = await guest.page.locator('.rack .tile').count();
+  await guest.page.locator('.draw-btn').click();
+  await expect(guest.page.locator('.rack .tile')).toHaveCount(n + 1);
+
+  // 방장이 나가면 친구 화면에 "방을 닫았어요"
+  await host.page.locator('.hud .icon-btn').first().click();
+  await host.page.locator('.sheet .btn-ghost').click();
+  await host.page.locator('.sheet .btn-danger').click();
+  await expect(host.page.locator('.home')).toBeVisible();
+  await expect(guest.page.locator('.ol-notice')).toContainText('방장이 방을 닫았어요');
+
+  expect(host.errors).toEqual([]);
+  expect(guest.errors).toEqual([]);
+  await host.ctx.close();
+  await guest.ctx.close();
+});
+
+/** 다빈치 코드 한 수: 지금 둘 수 있는 쪽이면 두고 무엇을 했는지 돌려준다 */
+async function codaStep(p: Page): Promise<string | null> {
+  const gap = p.locator('.code-gap');
+  if (await gap.count()) {
+    await gap.first().click();
+    return 'place';
+  }
+  const stop = p.locator('.coda-actions .moves .btn-secondary');
+  if (await stop.count()) {
+    await stop.click();
+    return 'stop';
+  }
+  const target = p.locator('.code-row button.ctile');
+  if (await target.count()) {
+    await target.first().click();
+    const key = p.locator('.numpad button:not([disabled])');
+    await expect(key.first()).toBeVisible();
+    await key.first().click();
+    return 'guess';
+  }
+  const own = p.locator('.my-code button.ctile, .mycode button.ctile');
+  if (await own.count()) {
+    await own.first().click();
+    return 'reveal';
+  }
+  return null;
+}
+
+test('온라인 다빈치 코드: 친구의 추리를 방장이 판정하고 두 화면이 같은 판을 본다', async ({ browser }) => {
+  const hub = new ClaudeHub();
+  const host = await device(browser, hub, '/?seed=5');
+  const guest = await device(browser, hub);
+  const code = await createRoom(host.page, 'coda');
+  await joinRoom(guest.page, code);
+  await expect(host.page.locator('.ol-seat:not(.ol-seat-empty)')).toHaveCount(2);
+  await host.page.locator('.ol-foot .btn-primary').click();
+  await expect(host.page.locator('.coda')).toBeVisible();
+  await expect(guest.page.locator('.coda')).toBeVisible();
+
+  const revealed = (p: Page) => p.locator('.ctile[data-revealed]').count();
+  let guestGuesses = 0;
+  for (let i = 0; i < 40 && guestGuesses < 2; i++) {
+    for (const [who, p] of [
+      ['host', host.page],
+      ['guest', guest.page],
+    ] as const) {
+      const did = await codaStep(p);
+      if (did === 'guess' && who === 'guest') guestGuesses++;
+      if (did) {
+        // 방장의 판정(뜸 들이기 포함)과 문서 전달을 기다린다
+        await p.waitForTimeout(1100);
+        await expect.poll(async () => (await revealed(host.page)) === (await revealed(guest.page)), { timeout: 8000 }).toBe(true);
+      }
+    }
+    if (await host.page.locator('.result').count()) break;
+  }
+  expect(guestGuesses).toBeGreaterThan(0);
+  // 같은 판: 공개된 타일 수와 차례 표시가 같다
+  expect(await revealed(host.page)).toBe(await revealed(guest.page));
+  expect(host.errors).toEqual([]);
+  expect(guest.errors).toEqual([]);
+  await host.ctx.close();
+  await guest.ctx.close();
+});

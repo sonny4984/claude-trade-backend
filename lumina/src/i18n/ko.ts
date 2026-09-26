@@ -319,6 +319,8 @@ export const ko = {
     none: '—',
   },
   theme: {
+    picnic: '피크닉',
+    picnicSub: '기니피그 소풍 담요',
     lumina: '루미나',
     luminaSub: '저녁 펠트 테이블',
     ivory: '클래식 아이보리',
@@ -512,6 +514,7 @@ export const ko = {
     closed: '방장이 방을 닫았어요',
     ok: '확인',
     retry: '다시 확인',
+    reconnect: '다시 연결',
     away: '{name} 연결 끊김',
     awayShort: '연결 끊김',
     toAi: 'AI가 대신 두기',

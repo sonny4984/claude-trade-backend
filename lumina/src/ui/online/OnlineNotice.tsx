@@ -1,9 +1,32 @@
 /**
- * 게임 화면 위의 작은 온라인 알림 — 방 코드·연결 상태, 끊긴 친구(방장은 AI로 바꾸기), 닫힌 방.
- * 온라인 판이 아니면 아무것도 그리지 않는다.
+ * 게임 화면의 온라인 표시 — 상단 바의 방 코드 칩(연결 점), 그 아래 필요할 때만 뜨는 알림
+ * (끊긴 친구 · 방장은 AI로 바꾸기 · 닫힌 방 · 연결 끊김). 온라인 판이 아니면 아무것도 그리지 않는다.
  */
 import { useOnline } from '../../net/online';
+import { useGame } from '../../store/game';
+import { useCoda } from '../../coda/store';
 import { useT } from '../../i18n';
+
+/** 닫힌 방에서 나오기: 게임 화면까지 정리하고 홈으로 */
+function leaveGame(): void {
+  if (useCoda.getState().session?.online) useCoda.getState().quit();
+  else if (useGame.getState().session?.online) useGame.getState().quit();
+  else void useOnline.getState().leave();
+}
+
+export function OnlineChip() {
+  const t = useT();
+  const code = useOnline((s) => s.code);
+  const status = useOnline((s) => s.status);
+  const connected = useOnline((s) => s.connected);
+  if (!code || (status !== 'playing' && status !== 'closed')) return null;
+  return (
+    <span className="ol-chip" data-on={connected || undefined} aria-label={`${t('online.codeTitle')} ${code.toUpperCase()} · ${connected ? t('online.connected') : t('online.offline')}`}>
+      <i aria-hidden="true" />
+      {code.toUpperCase()}
+    </span>
+  );
+}
 
 export function OnlineNotice() {
   const t = useT();
@@ -12,19 +35,31 @@ export function OnlineNotice() {
   const role = useOnline((s) => s.role);
   const connected = useOnline((s) => s.connected);
   const seats = useOnline((s) => s.table?.seats);
+  const error = useOnline((s) => s.error);
   if (!code || (status !== 'playing' && status !== 'closed')) return null;
   const store = useOnline.getState();
   const away = (seats ?? []).map((s, i) => ({ s, i })).filter((x) => x.s.kind === 'human' && x.s.away);
+  if (status !== 'closed' && connected && !away.length && !error) return null;
   return (
     <div className="ol-notice" role="status">
-      <span className="ol-chip" data-on={connected || undefined}>
-        <i aria-hidden="true" />
-        {code.toUpperCase()}
-      </span>
+      {error && status !== 'closed' && (
+        <span className="ol-msg" data-tone="bad">
+          {t(error)}
+          {error === 'online.err.lost' ? (
+            <button type="button" className="ol-mini" onClick={() => void store.resume()}>
+              {t('online.reconnect')}
+            </button>
+          ) : (
+            <button type="button" className="ol-mini" onClick={() => store.clearError()}>
+              {t('online.ok')}
+            </button>
+          )}
+        </span>
+      )}
       {status === 'closed' ? (
         <span className="ol-msg">
           {t('online.closed')}
-          <button type="button" className="ol-mini" onClick={() => void store.leave()}>
+          <button type="button" className="ol-mini" onClick={leaveGame}>
             {t('online.ok')}
           </button>
         </span>

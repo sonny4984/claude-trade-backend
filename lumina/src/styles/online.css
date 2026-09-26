@@ -1,0 +1,466 @@
+/*
+ * 온라인 대전 — 홈의 분홍 판, 로비(코드 타일·자리), 게임 화면 위 작은 알림.
+ * 색은 테마 토큰을 쓰고, 피크닉 테마에서는 딸기우유 분홍을 더한다.
+ */
+
+/* ── 홈: 온라인 판 (발자국 두 개) ── */
+.plate-online {
+  --paw: var(--accent);
+}
+.plate-paws {
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  display: flex;
+  gap: 6px;
+  transform: translateY(-50%) rotate(-12deg);
+  pointer-events: none;
+}
+.plate-paws i {
+  position: relative;
+  width: 12px;
+  height: 11px;
+  border-radius: 50% 50% 45% 45%;
+  background: var(--paw);
+  opacity: 0.55;
+  animation: paw-step 2.4s var(--ease-in-out) infinite;
+}
+.plate-paws i:nth-child(2) {
+  transform: translateY(-9px);
+  animation-delay: 0.6s;
+}
+.plate-paws i::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: -6px;
+  height: 5px;
+  background:
+    radial-gradient(circle at 12% 60%, var(--paw) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 38% 20%, var(--paw) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 62% 20%, var(--paw) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 88% 60%, var(--paw) 0 2px, transparent 2.5px);
+}
+@keyframes paw-step {
+  0%,
+  70%,
+  100% {
+    opacity: 0.55;
+  }
+  35% {
+    opacity: 0.2;
+  }
+}
+:root[data-lumina-theme='picnic'] .plate-online {
+  --paw: var(--pink-deep);
+  border-color: transparent;
+  color: var(--pink-ink);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 55%),
+    linear-gradient(180deg, #ffd3df, var(--pink));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.6),
+    0 4px 0 var(--pink-deep),
+    0 14px 22px -14px rgba(240, 107, 142, 0.6);
+}
+:root[data-lumina-theme='picnic'] .plate-online .plate-sub {
+  color: rgba(107, 36, 56, 0.75);
+}
+
+/* ── 로비 ── */
+.online-screen .screen-head {
+  position: relative;
+}
+.ol-link {
+  margin-left: auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 20%, transparent);
+}
+.ol-link[data-on] {
+  background: var(--valid);
+  box-shadow: 0 0 0 4px var(--valid-glow);
+}
+.ol-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 8px 8px 14px;
+  border-radius: 16px;
+  border: 1.5px solid var(--invalid);
+  background: var(--invalid-glow);
+  color: var(--text);
+  font-size: 14px;
+}
+.ol-error span {
+  flex: 1;
+}
+.ol-resume {
+  width: 100%;
+}
+.ol-face {
+  display: block;
+  border-radius: 50%;
+  background: var(--portrait-bg);
+  box-shadow: 0 0 0 2px var(--portrait-ring);
+  object-fit: cover;
+}
+.ol-pick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.ol-pick-btn {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 2px 6px;
+  border-radius: 18px;
+  border: 2px solid transparent;
+  font-size: 13px;
+  color: var(--text-dim);
+  transition:
+    transform var(--dur) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
+}
+.ol-pick-btn .ol-face {
+  width: 56px;
+  height: 56px;
+  box-shadow: 0 0 0 2px var(--panel-line);
+  transition: transform var(--dur) var(--ease);
+}
+.ol-pick-btn[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 700;
+}
+.ol-pick-btn[aria-checked='true'] .ol-face {
+  box-shadow: 0 0 0 3px var(--portrait-ring);
+  transform: translateY(-3px) scale(1.06);
+  animation: ol-hop 1.8s var(--ease-in-out) infinite;
+}
+.ol-pick-btn:active {
+  transform: scale(0.96);
+}
+@keyframes ol-hop {
+  0%,
+  60%,
+  100% {
+    transform: translateY(-3px) scale(1.06);
+  }
+  75% {
+    transform: translateY(-8px) scale(1.08, 1.03);
+  }
+  88% {
+    transform: translateY(-2px) scale(1.04, 1.08);
+  }
+}
+.ol-name {
+  text-align: center;
+  font-size: 17px;
+}
+.ol-create {
+  margin-top: 2px;
+}
+.ol-join {
+  display: flex;
+  gap: 8px;
+}
+.ol-code-input {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  text-transform: uppercase;
+  font-family: var(--font-num);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+}
+.ol-code-input::placeholder {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 15px;
+  font-family: var(--font-ko);
+  font-weight: 400;
+}
+.ol-how ol {
+  margin: 0;
+  padding-left: 1.3em;
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.ol-how li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.ol-room {
+  justify-items: center;
+  text-align: center;
+}
+.ol-kicker {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+.ol-code {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0 10px;
+}
+.ol-code-tile {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 70px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--tile-0), var(--tile-1));
+  box-shadow:
+    inset 0 1px 0 var(--tile-hi),
+    0 5px 0 var(--tile-edge),
+    0 6px 0 var(--tile-edge-2),
+    0 12px 16px -6px var(--tile-shadow);
+  color: var(--ink-red);
+  font-family: var(--font-num);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+  animation: ol-drop 520ms var(--ease) both;
+  animation-delay: calc(var(--i) * 90ms);
+}
+.ol-code-tile:nth-child(2) {
+  color: var(--ink-blue);
+}
+.ol-code-tile:nth-child(3) {
+  color: var(--ink-orange);
+}
+.ol-code-tile:nth-child(4) {
+  color: var(--ink-black);
+}
+@keyframes ol-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) rotate(-6deg);
+  }
+}
+.ol-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.ol-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.ol-seat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 6px 8px 6px 6px;
+  border-radius: 18px;
+  background: var(--accent-soft);
+  animation: ol-pop 380ms var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+.ol-seat[data-away] {
+  opacity: 0.6;
+}
+.ol-seat-empty {
+  background: transparent;
+  border: 2px dashed var(--panel-line);
+  animation: none;
+}
+.ol-empty-face {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px dashed var(--panel-line);
+}
+@keyframes ol-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+.ol-seat-info {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.ol-seat-info b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ol-you {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+.ol-role {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.ol-level {
+  max-width: 108px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--btn-line);
+  background: var(--btn);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.ol-center {
+  justify-items: center;
+  text-align: center;
+}
+.ol-big {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.ol-wait p {
+  margin: 0;
+  color: var(--text-dim);
+}
+.ol-bounce {
+  display: block;
+  animation: ol-bounce 1.2s var(--ease-in-out) infinite;
+}
+@keyframes ol-bounce {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  40% {
+    transform: translateY(-14px) scale(0.97, 1.04);
+  }
+  70% {
+    transform: translateY(0) scale(1.05, 0.95);
+  }
+}
+.ol-foot {
+  display: grid;
+  gap: 6px;
+}
+:root[data-lumina-theme='picnic'] .ol-big,
+:root[data-lumina-theme='picnic'] .ol-seat-info b,
+:root[data-lumina-theme='picnic'] .ol-pick-btn,
+:root[data-lumina-theme='picnic'] .ol-you {
+  font-family: var(--font-cute);
+  font-weight: 400;
+}
+:root[data-lumina-theme='picnic'] .ol-seat {
+  background: #fff3e2;
+}
+:root[data-lumina-theme='picnic'] .ol-seat:not([data-ai]):not(.ol-seat-empty) {
+  background: #ffe8ef;
+}
+
+/* ── 게임 화면 위 작은 알림 ── */
+.ol-notice {
+  position: fixed;
+  z-index: 40;
+  top: calc(var(--safe-top) + 52px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  pointer-events: none;
+}
+.ol-chip,
+.ol-msg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  box-shadow: 0 6px 14px -10px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: auto;
+}
+.ol-chip {
+  font-family: var(--font-num);
+  letter-spacing: 0.12em;
+  box-shadow: none;
+  color: var(--text-dim);
+}
+.ol-chip i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.ol-chip[data-on] i {
+  background: var(--valid);
+}
+.ol-msg[data-tone='bad'] {
+  border-color: var(--invalid);
+}
+.ol-mini {
+  min-height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.result-wait {
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plate-paws i,
+  .ol-pick-btn[aria-checked='true'] .ol-face,
+  .ol-bounce,
+  .ol-code-tile,
+  .ol-seat {
+    animation: none;
+  }
+}
+:root[data-motion='reduced'] .plate-paws i,
+:root[data-motion='reduced'] .ol-pick-btn[aria-checked='true'] .ol-face,
+:root[data-motion='reduced'] .ol-bounce,
+:root[data-motion='reduced'] .ol-code-tile,
+:root[data-motion='reduced'] .ol-seat {
+  animation: none;
+}

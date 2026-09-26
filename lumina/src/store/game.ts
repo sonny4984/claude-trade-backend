@@ -1025,7 +1025,8 @@ export const useGame = create<State & Actions>((set, get) => {
       const s = get().session;
       if (!s?.online || s.online.role !== 'host' || !isRemoteMove(payload)) return false;
       const g = s.match.game;
-      if (g.phase !== 'playing' || g.current !== seat || seat === s.online.mySeat || s.match.seats[seat]?.seat !== 'human' || get().ai) return false;
+      // (AI 연출이 끝나기 전에 친구가 빨리 두어도 받는다 — 차례와 자리만 맞으면 된다)
+      if (g.phase !== 'playing' || g.current !== seat || seat === s.online.mySeat || s.match.seats[seat]?.seat !== 'human') return false;
       let result: { state: GameState; events: GameEvent[] } | null = null;
       if (payload.type === 'draw') {
         const r = reduce(g, g.turn.meldedNow ? { type: 'commit' } : { type: 'draw' });

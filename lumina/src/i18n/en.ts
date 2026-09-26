@@ -321,6 +321,8 @@ export const en: Dict = {
     none: '—',
   },
   theme: {
+    picnic: 'Picnic',
+    picnicSub: 'A guinea-pig picnic blanket',
     lumina: 'Lumina',
     luminaSub: 'Evening felt table',
     ivory: 'Classic Ivory',
@@ -514,6 +516,7 @@ export const en: Dict = {
     closed: 'The host closed the room',
     ok: 'OK',
     retry: 'Check again',
+    reconnect: 'Reconnect',
     away: '{name} disconnected',
     awayShort: 'Disconnected',
     toAi: 'Let AI play',

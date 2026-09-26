@@ -1,0 +1,276 @@
+/*
+ * 09 피크닉 (기본 테마) — 기니피그 친구들의 소풍 담요.
+ * 크림색 풀밭 위 작은 발자국, 민트 깅엄 담요와 흰 바늘땀, 꿀색 원목 레일,
+ * 딸기·블루베리·당근·코코아 잉크, 눌리면 쏙 들어가는 말랑한 알약 버튼,
+ * 둥근 한글 글꼴(주아·고운돋움)과 Fredoka 숫자.
+ */
+:root[data-lumina-theme='picnic'] {
+  color-scheme: light;
+  --font-ui: 'Fredoka', 'Gowun Dodum', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+  --font-ko: 'Gowun Dodum', 'Fredoka', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+  --font-display: 'Jua', 'Fredoka', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+  --font-num: 'Fredoka', 'Jua', system-ui, sans-serif;
+  --font-cute: 'Jua', 'Fredoka', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+
+  --plate-ink: #5a3a26;
+  --room-0: #fff5e4;
+  --room-1: rgba(255, 221, 150, 0.6);
+  --vignette: rgba(236, 170, 110, 0.14);
+
+  --felt-0: #cdebd9;
+  --felt-1: #def4e6;
+  --felt-grain: 0;
+  --felt-edge: rgba(98, 160, 124, 0.25);
+  --rail-0: #f5c88c;
+  --rail-1: #e9a768;
+  --rail-inner: #fff3dc;
+
+  --rack-0: #f0bf7f;
+  --rack-1: #f8d7a4;
+  --rack-lip: rgba(255, 255, 255, 0.6);
+  --rack-well: #fff0d8;
+  --rack-well-shade: rgba(200, 130, 60, 0.18);
+
+  --tile-0: #fffefa;
+  --tile-1: #fff2e0;
+  --tile-hi: #ffffff;
+  --tile-lo: rgba(190, 130, 80, 0.22);
+  --tile-edge: #f0d6b4;
+  --tile-edge-2: #e3bd8f;
+  --tile-shadow: rgba(170, 110, 60, 0.24);
+  --tile-lift-shadow: rgba(170, 110, 60, 0.32);
+  --tile-grain: 0;
+
+  --ink-red: #e0435a; /* 딸기 */
+  --ink-blue: #3c68d6; /* 블루베리 */
+  --ink-orange: #ee8416; /* 당근 */
+  --ink-black: #4a3226; /* 코코아 */
+  --ink-emboss-hi: rgba(255, 255, 255, 0.7);
+  --ink-emboss-lo: rgba(150, 100, 60, 0.12);
+  --joker-a: #ffb13b;
+  --joker-b: #ff6f91;
+
+  --text: #5a3a26;
+  --text-dim: rgba(90, 58, 38, 0.72);
+  --text-faint: rgba(90, 58, 38, 0.46);
+  --panel: rgba(255, 252, 246, 0.95);
+  --panel-solid: #fffaf1;
+  --panel-line: rgba(233, 167, 104, 0.38);
+  --accent: #f4a93a;
+  --accent-2: #ffc766;
+  --accent-ink: #5a3417;
+  --accent-soft: rgba(244, 169, 58, 0.16);
+  --btn: #ffffff;
+  --btn-line: rgba(233, 167, 104, 0.6);
+  --btn-hover: #fff6e8;
+  --overlay: rgba(255, 244, 226, 0.84);
+
+  --valid: rgba(88, 178, 126, 0.85);
+  --valid-glow: rgba(88, 178, 126, 0.2);
+  --incomplete: rgba(210, 170, 120, 0.55);
+  --invalid: rgba(224, 67, 90, 0.8);
+  --invalid-glow: rgba(224, 67, 90, 0.12);
+  --select: #ff7f9e;
+  --fresh: #ff8fab;
+  --focus: #f06b8e;
+  --danger: #e0435a;
+
+  --portrait-bg: linear-gradient(180deg, #cfeaff 0%, #e8f6ff 60%, #fbfeff 100%);
+  --portrait-ring: rgba(255, 143, 171, 0.8);
+
+  /* 이 테마만 쓰는 색 */
+  --pink: #ff9fb8;
+  --pink-deep: #f06b8e;
+  --pink-ink: #6b2438;
+  --mint: #7fd1a8;
+  --honey-deep: #dc8e2c;
+  --press: rgba(233, 167, 104, 0.55);
+
+  --radius: 20px;
+  --radius-sm: 14px;
+  --ease: cubic-bezier(0.34, 1.36, 0.5, 1); /* 살짝 튕기는 */
+  --dur: 260ms;
+}
+
+/* ── 풀밭 위 작은 발자국 ── */
+:root[data-lumina-theme='picnic'] .room {
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='132' height='132' viewBox='0 0 132 132'><g fill='%23e8a86a' fill-opacity='0.13'><g transform='translate(30 34) rotate(-20)'><ellipse cx='0' cy='6' rx='7.5' ry='6.5'/><circle cx='-7.5' cy='-3.5' r='3.2'/><circle cx='-2.6' cy='-8' r='3.2'/><circle cx='2.6' cy='-8' r='3.2'/><circle cx='7.5' cy='-3.5' r='3.2'/></g><g transform='translate(96 92) rotate(18)'><ellipse cx='0' cy='6' rx='7.5' ry='6.5'/><circle cx='-7.5' cy='-3.5' r='3.2'/><circle cx='-2.6' cy='-8' r='3.2'/><circle cx='2.6' cy='-8' r='3.2'/><circle cx='7.5' cy='-3.5' r='3.2'/></g></g><g fill='%23ff9fb8' fill-opacity='0.16'><circle cx='100' cy='26' r='3'/><circle cx='22' cy='104' r='2.4'/></g></svg>")
+      0 0 / 132px 132px,
+    radial-gradient(120% 70% at 50% -10%, var(--room-1), transparent 62%),
+    radial-gradient(140% 100% at 50% 50%, transparent 60%, var(--vignette) 100%),
+    var(--room-0);
+}
+
+/* ── 민트 깅엄 담요 + 흰 바늘땀 ── */
+:root[data-lumina-theme='picnic'] .felt {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.34) 0 14px, transparent 14px 28px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.34) 0 14px, transparent 14px 28px),
+    var(--felt-0);
+  outline: 2px dashed rgba(255, 255, 255, 0.85);
+  outline-offset: -7px;
+  box-shadow:
+    0 0 0 1px var(--felt-edge),
+    0 0 0 6px var(--rail-0),
+    0 0 0 8px var(--rail-inner),
+    0 0 0 12px var(--rail-1),
+    0 16px 30px -18px rgba(170, 100, 40, 0.55);
+}
+:root[data-lumina-theme='picnic'] .home-felt {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.34) 0 12px, transparent 12px 24px) padding-box,
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.34) 0 12px, transparent 12px 24px) padding-box,
+    linear-gradient(var(--felt-0), var(--felt-0)) padding-box,
+    linear-gradient(180deg, var(--rail-1), var(--rail-0)) border-box;
+  box-shadow:
+    inset 0 0 0 1px var(--rail-inner),
+    0 30px 44px -28px rgba(170, 100, 40, 0.6);
+}
+
+/* ── 말랑한 알약 버튼: 아래쪽 두께가 있고 누르면 쏙 들어간다 ── */
+:root[data-lumina-theme='picnic'] .btn {
+  font-family: var(--font-cute);
+  font-weight: 400;
+  font-size: 16px;
+  letter-spacing: 0;
+  border-width: 2px;
+  box-shadow: 0 3px 0 var(--press);
+}
+:root[data-lumina-theme='picnic'] .btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--press);
+}
+:root[data-lumina-theme='picnic'] .btn-primary {
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    0 4px 0 var(--honey-deep),
+    0 12px 18px -10px rgba(200, 120, 40, 0.65);
+}
+:root[data-lumina-theme='picnic'] .btn-primary:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.45),
+    0 1px 0 var(--honey-deep);
+}
+:root[data-lumina-theme='picnic'] .btn-primary:disabled,
+:root[data-lumina-theme='picnic'] .btn-ghost,
+:root[data-lumina-theme='picnic'] .btn-danger {
+  box-shadow: none;
+}
+:root[data-lumina-theme='picnic'] .btn-lg {
+  font-size: 18px;
+  min-height: 54px;
+}
+:root[data-lumina-theme='picnic'] .icon-btn {
+  border-radius: 50%;
+}
+:root[data-lumina-theme='picnic'] .seg {
+  border-radius: 999px;
+}
+:root[data-lumina-theme='picnic'] .seg button {
+  font-family: var(--font-cute);
+  font-weight: 400;
+}
+:root[data-lumina-theme='picnic'] .seg button[aria-checked='true'] {
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  color: var(--accent-ink);
+  box-shadow: 0 2px 0 var(--honey-deep);
+}
+:root[data-lumina-theme='picnic'] .chip {
+  font-family: var(--font-cute);
+  font-weight: 400;
+}
+
+/* ── 홈: 동글동글한 메뉴 판 ── */
+:root[data-lumina-theme='picnic'] .plate-btn {
+  border: 2px solid var(--btn-line);
+  border-radius: 24px;
+  background: var(--panel);
+  box-shadow:
+    0 4px 0 var(--press),
+    0 14px 22px -16px rgba(170, 100, 40, 0.55);
+}
+:root[data-lumina-theme='picnic'] .plate-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--press);
+}
+:root[data-lumina-theme='picnic'] .plate-label {
+  font-family: var(--font-cute);
+  font-weight: 400;
+  font-size: 19px;
+}
+:root[data-lumina-theme='picnic'] .plate-primary {
+  color: var(--accent-ink);
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent 50%),
+    linear-gradient(180deg, var(--accent-2), var(--accent));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    0 4px 0 var(--honey-deep),
+    0 14px 22px -14px rgba(200, 120, 40, 0.7);
+}
+:root[data-lumina-theme='picnic'] .plate-primary::before {
+  display: none;
+}
+:root[data-lumina-theme='picnic'] .plate-primary .plate-sub {
+  color: rgba(90, 52, 23, 0.78);
+}
+:root[data-lumina-theme='picnic'] .wordmark {
+  font-family: 'Fredoka', var(--font-cute);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding-left: 0.12em;
+  background: linear-gradient(180deg, #ffbe5c 15%, #f27a98 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 3px 0 #ffffff) drop-shadow(0 8px 12px rgba(240, 120, 150, 0.28));
+}
+:root[data-lumina-theme='picnic'] .wordmark-sub {
+  font-family: var(--font-cute);
+  letter-spacing: 0.2em;
+  color: var(--pink-deep);
+}
+:root[data-lumina-theme='picnic'] .tagline {
+  font-family: var(--font-ko);
+}
+
+/* ── 카드·시트·제목 ── */
+:root[data-lumina-theme='picnic'] .card {
+  border: 2px solid var(--panel-line);
+  border-radius: 26px;
+  box-shadow: 0 4px 0 rgba(233, 167, 104, 0.22);
+}
+:root[data-lumina-theme='picnic'] .card-title,
+:root[data-lumina-theme='picnic'] .screen-head h1,
+:root[data-lumina-theme='picnic'] .sheet-title,
+:root[data-lumina-theme='picnic'] .result-title,
+:root[data-lumina-theme='picnic'] .curtain-title {
+  font-family: var(--font-cute);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+:root[data-lumina-theme='picnic'] .hud-turn,
+:root[data-lumina-theme='picnic'] .plate-name,
+:root[data-lumina-theme='picnic'] .toast {
+  font-family: var(--font-cute);
+  font-weight: 400;
+}
+
+/* ── 랙: 꿀색 원목 쟁반 ── */
+:root[data-lumina-theme='picnic'] .rack-tray {
+  border-radius: 22px;
+}
+
+/* ── 타일: 조금 더 동글게 ── */
+:root[data-lumina-theme='picnic'] .tile {
+  border-radius: calc(var(--w) * 0.2);
+}
+:root[data-lumina-theme='picnic'] .tile-num {
+  font-weight: 600;
+  letter-spacing: 0;
+}

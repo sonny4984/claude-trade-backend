@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useGame, currentSeatIsHuman } from '../../store/game';
 import { Icon } from '../components/Icon';
 import { useT, subj, useLang } from '../../i18n';
+import { OnlineChip } from '../online/OnlineNotice';
 
 /** 남은 시간 (초) — 1/4초마다 갱신 */
 export function useTimeLeft(): { left: number; total: number } | null {
@@ -73,6 +74,7 @@ export function Hud() {
         {mine && <TimerRing />}
       </div>
       <div className="hud-right">
+        <OnlineChip />
         {gameInfo && <span className="hud-chip">{gameInfo}</span>}
         <span className="hud-chip hud-pool" aria-label={`${t('hud.pool')} ${g.pool.length}`}>
           <span className="pool-stack" aria-hidden="true" />

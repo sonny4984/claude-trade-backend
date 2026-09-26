@@ -143,13 +143,44 @@ test('함께 두기는 차례마다 가림막으로 패를 숨긴다', async ({ 
 
 test('테마를 바꾸면 문서 전체의 재질이 바뀐다', async ({ page }) => {
   const errors = await open(page);
+  // 기본은 피크닉(기니피그 소풍 담요)
+  await expect(page.locator('html')).toHaveAttribute('data-lumina-theme', 'picnic');
   await page.locator('.home-links').getByText('설정').click();
-  for (const id of ['ivory', 'midnight', 'walnut', 'glass', 'studio', 'pastel', 'matcha']) {
+  for (const id of ['ivory', 'midnight', 'walnut', 'glass', 'studio', 'pastel', 'matcha', 'picnic']) {
     await page.locator(`.theme-card[data-preview="${id}"]`).click();
     await expect(page.locator('html')).toHaveAttribute('data-lumina-theme', id);
   }
   await page.locator('.theme-card[data-preview="lumina"]').click();
   await expect(page.locator('html')).not.toHaveAttribute('data-lumina-theme', /.+/);
+  expect(errors).toEqual([]);
+});
+
+test('예전 기본 테마(루미나) 저장값은 한 번만 피크닉으로 옮긴다', async ({ page }) => {
+  const errors = await open(page, { theme: 'lumina' });
+  await expect(page.locator('html')).toHaveAttribute('data-lumina-theme', 'picnic');
+  // 다시 루미나를 고르면 그대로 남는다
+  await page.locator('.home-links').getByText('설정').click();
+  await page.locator('.theme-card[data-preview="lumina"]').click();
+  await page.reload();
+  await expect(page.locator('.wordmark')).toHaveText('LUMINA');
+  await expect(page.locator('html')).not.toHaveAttribute('data-lumina-theme', /.+/);
+  expect(errors).toEqual([]);
+});
+
+test('다빈치 코드 혼자 두기: 시작하면 내 코드가 보이고 추리 한 번이 기록에 남는다', async ({ page }) => {
+  const errors = await open(page, {}, '/?seed=3');
+  await page.locator('.plate-coda').click();
+  await page.locator('.screen-foot .btn-primary').click();
+  await expect(page.locator('.coda')).toBeVisible();
+  await expect(page.locator('.my-code .ctile')).not.toHaveCount(0);
+  // 내 차례가 올 때까지 기다렸다가 상대 타일 하나를 골라 숫자를 부른다
+  const target = page.locator('.code-row button.ctile');
+  await expect(target.first()).toBeVisible({ timeout: 45_000 });
+  await target.first().click();
+  await page.locator('.numpad button:not([disabled])').first().click();
+  await expect(page.locator('.status-text')).not.toHaveText('', { timeout: 10_000 });
+  await page.locator('.hud .icon-btn.small').click();
+  await expect(page.locator('.sheet')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

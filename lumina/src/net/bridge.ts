@@ -44,10 +44,10 @@ export interface TableDoc {
   readonly jokers: boolean;
   /** 판이 바뀔 때마다 1씩 */
   readonly seq: number;
-  /** 게임 저장소의 세션 (직렬화) */
-  readonly payload: unknown;
-  /** 이번 변화의 이벤트 (소리·반응용) */
-  readonly events: readonly unknown[];
+  /** 게임 저장소의 세션 — JSON 문자열 하나로 (중첩 배열·깊이 제한과 무관하게) */
+  readonly payload: string | null;
+  /** 이번 변화의 이벤트 (소리·반응용) — JSON 배열 문자열 */
+  readonly events: string;
   /** 방장이 거절한 참가자 수 (그 참가자에게 알리기) */
   readonly reject: { readonly peer: string; readonly nonce: string } | null;
   readonly at: number;

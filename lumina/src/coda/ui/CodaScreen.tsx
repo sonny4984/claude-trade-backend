@@ -14,7 +14,7 @@ import { knownTiles } from '../deduce';
 import { isHumanTurn, useCoda, valueText, viewerOf, type CodaSession } from '../store';
 import { CodaTile } from './CodaTile';
 import { CodaStage } from './CodaStage';
-import { OnlineNotice } from '../../ui/online/OnlineNotice';
+import { OnlineChip, OnlineNotice } from '../../ui/online/OnlineNotice';
 
 type T = ReturnType<typeof useT>;
 
@@ -512,6 +512,7 @@ export function CodaScreen() {
           <span className="hud-turn-text">{turnLabel}</span>
         </div>
         <div className="hud-right">
+          <OnlineChip />
           <button type="button" className="icon-btn small" aria-label={t('coda.log')} onClick={() => store.openLog()}>
             <Icon name="list" size={18} />
           </button>

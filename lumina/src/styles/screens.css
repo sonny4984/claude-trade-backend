@@ -593,6 +593,27 @@
   font-size: 18px;
   line-height: 1;
 }
+.theme-swatch[data-theme-preview='picnic'] {
+  --sw-room: #fff5e4;
+  --sw-felt-0: #cdebd9;
+  --sw-felt-1: #def4e6;
+  --sw-rail-0: #f5c88c;
+  --sw-rail-1: #e9a768;
+  --sw-line: #fff3dc;
+  --sw-tile-0: #fffefa;
+  --sw-tile-1: #fff2e0;
+  --sw-edge: #f0d6b4;
+  --sw-ink: #e0435a;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.4) 0 7px, transparent 7px 14px) padding-box,
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.4) 0 7px, transparent 7px 14px) padding-box,
+    linear-gradient(var(--sw-felt-0), var(--sw-felt-0)) padding-box,
+    linear-gradient(180deg, var(--sw-rail-1), var(--sw-rail-0)) border-box;
+}
+.theme-swatch[data-theme-preview='picnic'] .swatch-tile {
+  font-family: 'Fredoka', var(--font-num);
+  border-radius: 6px;
+}
 .theme-swatch[data-theme-preview='ivory'] {
   --sw-room: #e9e1d2;
   --sw-felt-0: #efe6d4;

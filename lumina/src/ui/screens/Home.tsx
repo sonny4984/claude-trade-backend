@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { savedSessionInfo, useGame } from '../../store/game';
+import { savedRoom } from '../../net/online';
 import { useSettings } from '../../store/settings';
 import { usePortrait } from '../../characters/portrait3d';
 import type { CharacterId } from '../../characters/roster';
@@ -20,6 +21,7 @@ export function Home() {
   const t = useT();
   const store = useGame.getState();
   const saved = useMemo(() => savedSessionInfo(), []);
+  const room = useMemo(() => savedRoom(), []);
   const lastSolo = useSettings((s) => s.lastSolo);
   return (
     <div className="home">
@@ -77,7 +79,7 @@ export function Home() {
         </button>
         <button type="button" className="plate-btn plate-online" onClick={() => store.go('online')}>
           <span className="plate-label">{t('online.title')}</span>
-          <span className="plate-sub">{t('online.sub')}</span>
+          <span className="plate-sub">{room ? t('online.resumeInfo', { code: room.code.toUpperCase(), role: t(`online.${room.role}`) }) : t('online.sub')}</span>
           <span className="plate-paws" aria-hidden="true">
             <i />
             <i />

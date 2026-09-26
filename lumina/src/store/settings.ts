@@ -5,8 +5,8 @@ import type { AiLevel } from '../game/types';
 import type { MatchFormat } from '../game/match';
 import { isCharacterId, type CharacterId } from '../characters/roster';
 
-export type ThemeId = 'lumina' | 'ivory' | 'midnight' | 'walnut' | 'glass' | 'studio' | 'pastel' | 'matcha';
-export const THEME_IDS: readonly ThemeId[] = ['lumina', 'ivory', 'midnight', 'walnut', 'glass', 'studio', 'pastel', 'matcha'];
+export type ThemeId = 'picnic' | 'lumina' | 'ivory' | 'midnight' | 'walnut' | 'glass' | 'studio' | 'pastel' | 'matcha';
+export const THEME_IDS: readonly ThemeId[] = ['picnic', 'lumina', 'ivory', 'midnight', 'walnut', 'glass', 'studio', 'pastel', 'matcha'];
 export type Lang = 'ko' | 'en';
 
 export interface SeatConfig {
@@ -26,6 +26,8 @@ export interface SetupConfig {
 export interface SettingsState {
   lang: Lang;
   theme: ThemeId;
+  /** 저장된 테마 값의 판 (기본 테마가 바뀔 때 한 번만 옮기기 위해) */
+  themeRev: number;
   tileSize: 'S' | 'M' | 'L';
   motion: 'system' | 'full' | 'reduced';
   master: number;
@@ -53,7 +55,8 @@ const KEY = 'lumina.settings.v1';
 
 const DEFAULTS: Omit<SettingsState, 'set'> = {
   lang: 'ko',
-  theme: 'lumina',
+  theme: 'picnic',
+  themeRev: 2,
   tileSize: 'M',
   motion: 'system',
   master: 0.8,
@@ -100,7 +103,9 @@ function load(): Omit<SettingsState, 'set'> {
   const num = (v: unknown, d: number): number => (typeof v === 'number' && v >= 0 && v <= 1 ? v : d);
   return {
     lang: pick<Lang>(raw.lang, ['ko', 'en'], DEFAULTS.lang),
-    theme: pick<ThemeId>(raw.theme, THEME_IDS, DEFAULTS.theme),
+    // 테마 2판: 기본이 '피크닉'으로 바뀌었다 — 예전 기본(루미나)을 그대로 쓰던 사람만 한 번 옮긴다
+    theme: raw.themeRev !== 2 && (raw.theme === 'lumina' || raw.theme === undefined) ? 'picnic' : pick<ThemeId>(raw.theme, THEME_IDS, DEFAULTS.theme),
+    themeRev: 2,
     tileSize: pick(raw.tileSize, ['S', 'M', 'L'] as const, 'M'),
     motion: pick(raw.motion, ['system', 'full', 'reduced'] as const, 'system'),
     master: num(raw.master, DEFAULTS.master),

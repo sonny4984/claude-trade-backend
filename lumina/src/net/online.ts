@@ -92,6 +92,17 @@ const cleanName = (v: unknown): string =>
     .slice(0, 12) || '?';
 const cleanChar = (v: unknown): CharacterId => (isCharacterId(v) ? v : 'hwigi');
 const tr = (path: string, params?: Record<string, string | number>): string => translate(useSettings.getState().lang, path, params);
+/** 문서의 JSON 문자열 칸 풀기 (깨졌으면 기본값) */
+function parse<T>(raw: unknown, fallback: T): T {
+  if (typeof raw !== 'string') return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+/** db 문서 한 개는 256 KiB까지 — 넉넉히 남겨 둔다 */
+const MAX_DOC_BYTES = 240 * 1024;
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 // ─────────────────────────────── 실행 중 연결 ───────────────────────────────
@@ -277,7 +288,14 @@ export const useOnline = create<OnlineStore>((set, get) => {
   const hostPublish = (game: OnlineGame, payload: unknown, events: readonly unknown[]): void => {
     const t = get().table;
     if (!t || get().role !== 'host' || t.game !== game) return;
-    const nt: TableDoc = { ...t, status: 'playing', seq: t.seq + 1, payload, events: events.slice(-40), reject: null, at: Date.now() };
+    const body = JSON.stringify(payload);
+    let evs = JSON.stringify(events.slice(-40));
+    if (body.length + evs.length > MAX_DOC_BYTES) evs = '[]';
+    if (body.length > MAX_DOC_BYTES) {
+      set({ error: 'online.err.write' });
+      return;
+    }
+    const nt: TableDoc = { ...t, status: 'playing', seq: t.seq + 1, payload: body, events: evs, reject: null, at: Date.now() };
     set({ table: nt, status: 'playing' });
     write(nt);
     rt.room?.emit('sync', { seq: nt.seq }).catch(() => undefined);
@@ -298,8 +316,11 @@ export const useOnline = create<OnlineStore>((set, get) => {
       set({ sending: false });
     }
     const info = { code: doc.code, role: 'guest' as const, mySeat };
-    if (doc.game === 'coda') useCoda.getState().adoptRemote(doc.payload, fresh ? doc.events : [], info);
-    else useGame.getState().adoptRemote(doc.payload, fresh ? doc.events : [], info);
+    const payload = parse<unknown>(doc.payload, null);
+    if (!payload) return;
+    const events = fresh ? parse<unknown[]>(doc.events, []) : [];
+    if (doc.game === 'coda') useCoda.getState().adoptRemote(payload, events, info);
+    else useGame.getState().adoptRemote(payload, events, info);
   };
 
   const onDocGuest = (doc: TableDoc | null): void => {
@@ -369,6 +390,27 @@ export const useOnline = create<OnlineStore>((set, get) => {
       return null;
     }
     return { room, db };
+  };
+
+  /** 방이 끝났다는 알림(재접속 실패 등): 끊김으로 표시하고 "다시 연결"을 띄운다 */
+  const onRoomError = (e: { code: string }): void => {
+    set({ connected: false, error: e.code === 'not_permitted' ? 'online.err.permission' : 'online.err.lost' });
+  };
+
+  /** 연결 상태 — 잠깐 끊겼다 붙는 건 흔하므로 2초 넘게 끊겨 있을 때만 알린다 */
+  const watchConnection = (room: NamedRoom): (() => void) => {
+    let timer: number | null = null;
+    set({ connected: true });
+    const off = room.onConnection((c) => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = null;
+      if (c) set({ connected: true });
+      else timer = window.setTimeout(() => set({ connected: false }), 2000);
+    }, onRoomError);
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+      off();
+    };
   };
 
   const presence = async (room: NamedRoom, code: string, role: 'host' | 'guest'): Promise<void> => {
@@ -457,7 +499,7 @@ export const useOnline = create<OnlineStore>((set, get) => {
         jokers: true,
         seq: 0,
         payload: null,
-        events: [],
+        events: '[]',
         reject: null,
         at: Date.now(),
       };
@@ -469,9 +511,9 @@ export const useOnline = create<OnlineStore>((set, get) => {
         return;
       }
       set({ status: 'lobby', role: 'host', code, table, myPeer, peers: [] });
-      rt.unsubs.push(room.onPeers(onPeersHost));
-      rt.unsubs.push(room.on('act', onActHost));
-      rt.unsubs.push(room.onConnection((c) => set({ connected: c })));
+      rt.unsubs.push(room.onPeers(onPeersHost, onRoomError));
+      rt.unsubs.push(room.on('act', onActHost, onRoomError));
+      rt.unsubs.push(watchConnection(room));
       bridge.publish = hostPublish;
       bridge.leave = () => void get().leave();
       remember();
@@ -524,8 +566,8 @@ export const useOnline = create<OnlineStore>((set, get) => {
           () => set({ error: 'online.err.lost' }),
         ),
       );
-      rt.unsubs.push(room.onPeers((c) => set({ peers: c.peers.filter((p) => p.kind === 'viewer').map(peerInfo) })));
-      rt.unsubs.push(room.onConnection((c) => set({ connected: c })));
+      rt.unsubs.push(room.onPeers((c) => set({ peers: c.peers.filter((p) => p.kind === 'viewer').map(peerInfo) }), onRoomError));
+      rt.unsubs.push(watchConnection(room));
       // 문서 알림이 늦으면 직접 읽는다
       rt.unsubs.push(
         room.on('sync', (msg) => {
@@ -593,16 +635,17 @@ export const useOnline = create<OnlineStore>((set, get) => {
       const table: TableDoc = { ...doc, hostPeer: myPeer, seats: doc.seats.map((s, i) => (i === hostSeat ? { ...s, peer: myPeer, away: false } : s)), reject: null, at: Date.now() };
       set({ status: doc.status === 'playing' ? 'playing' : 'lobby', role: 'host', code: saved.code, table, myPeer, peers: [] });
       write(table);
-      rt.unsubs.push(room.onPeers(onPeersHost));
-      rt.unsubs.push(room.on('act', onActHost));
-      rt.unsubs.push(room.onConnection((c) => set({ connected: c })));
+      rt.unsubs.push(room.onPeers(onPeersHost, onRoomError));
+      rt.unsubs.push(room.on('act', onActHost, onRoomError));
+      rt.unsubs.push(watchConnection(room));
       bridge.publish = hostPublish;
       bridge.leave = () => void get().leave();
       remember();
-      if (table.status === 'playing' && table.payload) {
+      const payload = parse<unknown>(table.payload, null);
+      if (table.status === 'playing' && payload) {
         const info = { code: table.code, role: 'host' as const, mySeat: hostSeat };
-        if (table.game === 'coda') useCoda.getState().adoptRemote(table.payload, [], info);
-        else useGame.getState().adoptRemote(table.payload, [], info);
+        if (table.game === 'coda') useCoda.getState().adoptRemote(payload, [], info);
+        else useGame.getState().adoptRemote(payload, [], info);
       }
       sfx('pop');
     },
