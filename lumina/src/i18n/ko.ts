@@ -103,6 +103,9 @@ export const ko = {
     run: '런',
     setLabel: '{kind} {count}장',
     invalidLabel: '틀린 세트',
+    label: '테이블',
+    rack: '내 패',
+    addHere: '이 세트에 놓기',
   },
   status: {
     meld: '첫 등록은 손패만으로 {need}점입니다.',

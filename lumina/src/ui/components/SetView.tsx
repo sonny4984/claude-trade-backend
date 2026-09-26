@@ -85,7 +85,7 @@ export const SetView = memo(function SetView({ set, fresh, locked, touched, hint
         })}
         {caret >= 0 && caret >= visible.length && <i className="caret" aria-hidden="true" />}
         {hasSelection && !locked && (
-          <button type="button" className="set-add" aria-label={t('table.newSet')} onClick={place}>
+          <button type="button" className="set-add" aria-label={t('table.addHere')} onClick={place}>
             <span aria-hidden="true">+</span>
           </button>
         )}

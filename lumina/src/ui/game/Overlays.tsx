@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useGame, type Session } from '../../store/game';
 import type { Expression } from '../../characters/draw2d';
 import type { CharacterId } from '../../characters/roster';
@@ -163,11 +163,7 @@ export function GameOver() {
   const overlay = useGame((s) => s.overlay);
   const session = useGame((s) => s.session);
   const [card, setCard] = useState<string | null>(null);
-  const endedAt = useRef(Date.now());
   const winners = session?.match.game.result?.winners ?? [];
-  useEffect(() => {
-    if (overlay === 'gameover') endedAt.current = Date.now();
-  }, [overlay]);
   const meIdx = useMemo(() => (session ? Math.max(0, session.match.seats.findIndex((p) => p.seat === 'human')) : 0), [session]);
   if (overlay !== 'gameover' && overlay !== 'share') return null;
   if (!session || !session.match.game.result) return null;
@@ -229,7 +225,7 @@ export function GameOver() {
           <dl className="result-stats">
             <div>
               <dt>{t('result.duration')}</dt>
-              <dd>{fmtDuration(endedAt.current - session.startedAt, t)}</dd>
+              <dd>{fmtDuration((session.endedAt ?? Date.now()) - session.startedAt, t)}</dd>
             </div>
             <div>
               <dt>{t('result.largest')}</dt>
@@ -313,28 +309,54 @@ function ShareSheet({ url, onClose }: { url: string; onClose: () => void }) {
   const t = useT();
   const [msg, setMsg] = useState<string | null>(null);
   const save = async (): Promise<void> => {
+    setMsg(null);
+    let blob: Blob;
     try {
-      const blob = await (await fetch(url)).blob();
-      const file = new File([blob], 'lumina.png', { type: 'image/png' });
-      const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
-      if (nav.canShare?.({ files: [file] }) && navigator.share) {
+      // data: URL을 직접 풀어 Blob으로 (fetch는 샌드박스의 CSP에 막힐 수 있다)
+      const [head = '', body = ''] = url.split(',');
+      const bin = atob(body);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      blob = new Blob([bytes], { type: /data:([^;]+)/.exec(head)?.[1] ?? 'image/png' });
+    } catch {
+      setMsg(t('share.fallback'));
+      return;
+    }
+    // 1) claude.ai 아티팩트 안: 다운로드 기능 (보는 사람이 확인해야 저장된다)
+    type Downloads = { save: (o: { filename: string; data: Blob }) => Promise<unknown> };
+    const claude = (window as unknown as { claude?: { use?: (n: string) => Promise<unknown> } }).claude;
+    if (claude?.use) {
+      const dl = (await claude.use('downloads').catch(() => null)) as Downloads | null;
+      if (dl) {
+        try {
+          await dl.save({ filename: 'lumina.png', data: blob });
+          return;
+        } catch (e) {
+          if ((e as { code?: string } | null)?.code === 'declined') return;
+        }
+      }
+    }
+    // 2) 휴대폰 공유 시트
+    const file = new File([blob], 'lumina.png', { type: 'image/png' });
+    const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
+    if (nav.canShare?.({ files: [file] }) && navigator.share) {
+      try {
         await navigator.share({ files: [file], title: 'LUMINA' });
         return;
+      } catch (e) {
+        if ((e as { name?: string } | null)?.name === 'AbortError') return;
       }
-      const claude = (window as unknown as { claude?: { use?: (n: string) => Promise<unknown> } }).claude;
-      const dl = (await claude?.use?.('downloads')) as { save?: (o: { filename: string; data: Blob }) => Promise<unknown> } | null | undefined;
-      if (dl?.save) {
-        await dl.save({ filename: 'lumina.png', data: blob });
-        return;
-      }
+    }
+    // 3) 일반 브라우저: 파일로 내려받기
+    try {
       const a = document.createElement('a');
       a.href = url;
       a.download = 'lumina.png';
       a.click();
-      setMsg(t('share.fallback'));
     } catch {
-      setMsg(t('share.fallback'));
+      /* 막힌 환경 — 아래 안내만 */
     }
+    setMsg(t('share.fallback'));
   };
   return (
     <Sheet label={t('share.title')} onClose={onClose}>

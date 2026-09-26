@@ -21,8 +21,9 @@ function useDocumentSettings(): void {
   const lang = useSettings((s) => s.lang);
   useEffect(() => {
     const el = document.documentElement;
-    if (theme === 'lumina') delete el.dataset.theme;
-    else el.dataset.theme = theme;
+    // claude.ai 같은 호스트가 data-theme(light/dark)를 쓰므로 게임 테마는 다른 이름으로
+    if (theme === 'lumina') delete el.dataset.luminaTheme;
+    else el.dataset.luminaTheme = theme;
     if (hc) el.dataset.contrast = 'high';
     else delete el.dataset.contrast;
     if (cvd) el.dataset.cvd = 'on';

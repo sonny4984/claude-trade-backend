@@ -62,6 +62,8 @@ export interface Session {
   readonly rackOrder: readonly (readonly TileId[])[];
   readonly drawn: readonly (readonly TileId[])[];
   readonly startedAt: number;
+  /** 판이 끝난 시각 (진행 중이면 없음) */
+  readonly endedAt?: number | null;
   readonly hintsLeft: number;
   readonly timerLeftMs: number | null;
 }
@@ -133,7 +135,18 @@ let toastSeq = 0;
 let reactionSeq = 0;
 let aiToken = 0;
 let lastTickSecond = -1;
-const aiRng = createRng(randomSeed());
+/** 주소의 ?seed=N 으로 판을 고정할 수 있다 (테스트·같은 판 다시 두기) */
+function urlSeed(): number | null {
+  try {
+    const v = new URLSearchParams(window.location.search).get('seed');
+    if (!v || !/^\d{1,9}$/.test(v)) return null;
+    const n = Number(v);
+    return n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+const aiRng = createRng(urlSeed() ?? randomSeed());
 
 function lang(): 'ko' | 'en' {
   return useSettings.getState().lang;
@@ -421,7 +434,7 @@ export const useGame = create<State & Actions>((set, get) => {
     const over = next.phase === 'over';
     if (over) match = recordGame(match);
     const turnChanged = next.current !== prev.current || next.turnNo !== prev.turnNo;
-    const session: Session = { ...s, match, rackOrder, drawn, timerLeftMs: turnChanged ? null : s.timerLeftMs };
+    const session: Session = { ...s, match, rackOrder, drawn, timerLeftMs: turnChanged ? null : s.timerLeftMs, endedAt: over ? Date.now() : (s.endedAt ?? null) };
     const text = handleEvents(session, events, byAi);
     put(session, {
       layoutTick: get().layoutTick + 1,
@@ -567,7 +580,7 @@ export const useGame = create<State & Actions>((set, get) => {
     startMatch: (cfg) => {
       aiToken++;
       const { seats, meta } = seatsFrom(cfg);
-      const match = newMatch({ seats, rules: cfg.rules, format: cfg.format, seed: randomSeed() });
+      const match = newMatch({ seats, rules: cfg.rules, format: cfg.format, seed: urlSeed() ?? randomSeed() });
       const session: Session = {
         v: 1,
         mode: cfg.mode,
@@ -857,7 +870,7 @@ export const useGame = create<State & Actions>((set, get) => {
       const match = nextGameOf(s.match);
       aiToken++;
       put(
-        { ...s, match, rackOrder: initialOrders(match), drawn: match.game.players.map(() => []), startedAt: Date.now(), hintsLeft: hintBudget(s.mode), timerLeftMs: null },
+        { ...s, match, rackOrder: initialOrders(match), drawn: match.game.players.map(() => []), startedAt: Date.now(), endedAt: null, hintsLeft: hintBudget(s.mode), timerLeftMs: null },
         { overlay: null, reactions: [], lastEventText: null, ai: null },
       );
       sfx('shuffle');
@@ -870,7 +883,7 @@ export const useGame = create<State & Actions>((set, get) => {
       const match = rematchOf(s.match, randomSeed());
       aiToken++;
       put(
-        { ...s, match, rackOrder: initialOrders(match), drawn: match.game.players.map(() => []), startedAt: Date.now(), hintsLeft: hintBudget(s.mode), timerLeftMs: null },
+        { ...s, match, rackOrder: initialOrders(match), drawn: match.game.players.map(() => []), startedAt: Date.now(), endedAt: null, hintsLeft: hintBudget(s.mode), timerLeftMs: null },
         { overlay: null, reactions: [], lastEventText: null, ai: null },
       );
       sfx('shuffle');

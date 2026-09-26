@@ -81,15 +81,16 @@ export function useRackFit(ref: RefObject<HTMLElement | null>, count: number): n
       if (W <= 0) return;
       const max = (W < 520 ? 48 : 58) * sizeFactor(size);
       const n = Math.max(1, count);
-      let best = 30;
-      for (let w = Math.floor(max); w >= 28; w--) {
+      // 가로 폰처럼 낮은 화면에서는 랙이 화면 높이의 30%를 넘지 않게
+      const hMax = window.innerHeight < 521 ? window.innerHeight * 0.3 : Infinity;
+      let best = 28;
+      for (let w = Math.floor(max); w >= 26; w--) {
         const gap = Math.max(3, w * 0.1);
         const per = Math.max(1, Math.floor((W + gap) / (w + gap)));
-        if (Math.ceil(n / per) <= 2) {
-          best = w;
-          break;
-        }
+        const rows = Math.ceil(n / per);
+        const height = rows * w * 1.36 + (rows - 1) * gap + 16;
         best = w;
+        if (rows <= 2 && height <= hMax) break;
       }
       setRw(best);
     };

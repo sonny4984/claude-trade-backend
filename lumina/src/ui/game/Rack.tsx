@@ -52,7 +52,7 @@ export function Rack() {
   const hintTile = hint.level >= 1 ? hint.data?.focus ?? null : null;
 
   return (
-    <section className="rack" aria-label={t('hud.yourTurn')} data-active={active || undefined} style={{ ['--rw' as string]: `${rw}px` }}>
+    <section className="rack" aria-label={t('table.rack')} data-active={active || undefined} style={{ ['--rw' as string]: `${rw}px` }}>
       <div className="rack-tray">
         <div className="rack-well" data-drop={active ? 'rack' : undefined} data-refuse={refuse || undefined} ref={wellRef}>
           {owner === null

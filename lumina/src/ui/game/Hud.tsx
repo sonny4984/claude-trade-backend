@@ -57,8 +57,8 @@ export function Hud() {
       ? ''
       : mine && session.mode !== 'local'
         ? t('hud.yourTurn')
-        : ai
-          ? t('status.aiThinking', { subj: subj(lang, cur?.name ?? '') })
+        : ai?.phase === 'thinking'
+          ? t('status.aiThinking', { subj: subj(lang, session.match.seats[ai.seat]?.name ?? '') })
           : t('hud.turnOf', { name: cur?.name ?? '' });
   const format = session.match.format;
   const gameInfo = format.kind === 'games' && format.games > 1 ? `${session.match.gameNo}/${format.games}` : null;

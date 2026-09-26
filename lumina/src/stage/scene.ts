@@ -54,6 +54,7 @@ export class StageScene {
   private rail = 1;
   private D = 10;
   private camY = 1;
+  private gap = GAP;
   private raf = 0;
   private running = false;
   private last = 0;
@@ -140,6 +141,10 @@ export class StageScene {
     const k = Math.max(1, this.cast.length);
     const needW = (k - 1) * GAP + HALF_W * 2;
     const s = Math.min(this.w / needW, this.rail / ABOVE);
+    // 높이 때문에 작아졌다면 이름판(약 90px)이 겹치지 않게 간격을 벌린다
+    let gap = GAP;
+    if (k > 1) gap = Math.min(Math.max(GAP, 96 / s), (this.w / s - HALF_W * 2) / (k - 1));
+    this.gap = gap;
     const tan = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
     this.D = this.h / 2 / (s * tan);
     this.camY = (this.rail - this.h / 2) / s;
@@ -156,7 +161,7 @@ export class StageScene {
     this.cast.forEach((c, i) => {
       const rig = this.rigs.get(c.seat);
       if (!rig) return;
-      rig.root.position.set((i - (k - 1) / 2) * GAP, 0, 0);
+      rig.root.position.set((i - (k - 1) / 2) * this.gap, 0, 0);
       rig.setPawBase(pawBase);
     });
     this.dirty = true;

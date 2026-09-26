@@ -4,7 +4,8 @@
  */
 
 /* ── 02 Classic Ivory: 밝은 린넨 테이블, 참나무 랙, 따뜻한 오후 빛 ── */
-:root[data-theme='ivory'] {
+:root[data-lumina-theme='ivory'] {
+  --plate-ink: #2a1c0e;
   color-scheme: light;
   --room-0: #e9e1d2;
   --room-1: rgba(255, 236, 200, 0.55);
@@ -59,7 +60,7 @@
 }
 
 /* ── 03 Midnight: 거의 검은 방, 은은한 조명, 타일이 떠오르는 구조 ── */
-:root[data-theme='midnight'] {
+:root[data-lumina-theme='midnight'] {
   --room-0: #06080c;
   --room-1: rgba(120, 150, 220, 0.08);
   --vignette: rgba(0, 0, 0, 0.7);
@@ -110,7 +111,7 @@
 }
 
 /* ── 04 Natural Wood: 호두나무 원목 테이블, 상아 타일, 숲빛 포인트 ── */
-:root[data-theme='walnut'] {
+:root[data-lumina-theme='walnut'] {
   --room-0: #140e09;
   --room-1: rgba(255, 190, 110, 0.1);
   --felt-0: #5b3a22;
@@ -136,7 +137,7 @@
 }
 
 /* ── 05 Modern Glass: 슬레이트 배경, 절제된 반투명 패널 ── */
-:root[data-theme='glass'] {
+:root[data-lumina-theme='glass'] {
   --room-0: #0e1526;
   --room-1: rgba(130, 180, 240, 0.12);
   --vignette: rgba(3, 6, 16, 0.55);
@@ -188,7 +189,8 @@
 }
 
 /* ── 06 Minimal Studio: 장식 없는 흰 작업대, 타일만 ── */
-:root[data-theme='studio'] {
+:root[data-lumina-theme='studio'] {
+  --plate-ink: #151515;
   color-scheme: light;
   --room-0: #f3f3f1;
   --room-1: rgba(255, 255, 255, 0);
@@ -251,7 +253,8 @@
 }
 
 /* ── 07 Soft Pastel: 피치·민트·크림, 부드러운 그림자 (보라 없음) ── */
-:root[data-theme='pastel'] {
+:root[data-lumina-theme='pastel'] {
+  --plate-ink: #3b2a26;
   color-scheme: light;
   --room-0: #f8f1ec;
   --room-1: rgba(255, 214, 196, 0.5);
@@ -313,7 +316,7 @@
 }
 
 /* ── 08 Cozy Matcha: 세이지 펠트, 크림, 버터 옐로, 원목 ── */
-:root[data-theme='matcha'] {
+:root[data-lumina-theme='matcha'] {
   color-scheme: light;
   --room-0: #efe9dc;
   --room-1: rgba(255, 228, 160, 0.45);
@@ -376,7 +379,7 @@
   --valid: var(--accent);
   --invalid: #ff5a5a;
 }
-:root[data-contrast='high']:not([data-theme='ivory']):not([data-theme='studio']):not([data-theme='pastel']):not([data-theme='matcha']) {
+:root[data-contrast='high']:not([data-lumina-theme='ivory']):not([data-lumina-theme='studio']):not([data-lumina-theme='pastel']):not([data-lumina-theme='matcha']) {
   --tile-0: #ffffff;
   --tile-1: #f4f0e6;
   --ink-black: #000000;

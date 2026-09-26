@@ -158,7 +158,7 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     0 4px 10px -4px rgba(0, 0, 0, 0.6);
-  color: #fff8ea;
+  color: var(--plate-ink);
   font-size: 12px;
   line-height: 1;
   transition:
@@ -602,14 +602,12 @@
   border-color: var(--accent);
 }
 .staging-label {
-  font: 600 11px/1 var(--font-ui);
-  letter-spacing: 0.08em;
+  font: 700 11px/1.2 var(--font-ui);
+  letter-spacing: 0.06em;
   color: var(--text-dim);
-  writing-mode: vertical-rl;
   flex: none;
-}
-:lang(ko) .staging-label {
-  letter-spacing: 0.2em;
+  max-width: 3.2em;
+  text-align: center;
 }
 .staging-tiles {
   display: flex;
@@ -1170,15 +1168,78 @@
   }
 }
 @media (orientation: landscape) and (max-height: 520px) {
+  /* 가로 폰: 테이블을 넓게, 랙 오른쪽에 도구·뽑기·등록을 세로로 */
+  .game {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas:
+      'hud hud'
+      'stage stage'
+      'banner banner'
+      'felt felt'
+      'staging staging'
+      'status actions'
+      'rack actions';
+    column-gap: 10px;
+    row-gap: 2px;
+    padding: calc(var(--safe-top) + 2px) max(10px, env(safe-area-inset-right, 0px)) calc(var(--safe-bottom) + 6px) max(10px, env(safe-area-inset-left, 0px));
+  }
+  .hud {
+    grid-area: hud;
+    min-height: 38px;
+  }
+  .stage,
+  .seat-strip {
+    grid-area: stage;
+  }
   .stage {
-    height: 96px;
-    margin-bottom: -14px;
+    height: 84px;
+    margin: 0 -10px -20px;
+  }
+  .lesson-banner {
+    grid-area: banner;
+  }
+  .felt {
+    grid-area: felt;
+    min-height: 0;
+    margin: 10px 12px 4px;
+  }
+  .staging {
+    grid-area: staging;
+  }
+  .status {
+    grid-area: status;
+    min-height: 20px;
+  }
+  .rack {
+    grid-area: rack;
+    align-self: end;
   }
   .rack-well {
     min-height: calc(var(--rw) * 1.36 + 16px);
   }
+  .actions {
+    grid-area: actions;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-end;
+    width: 212px;
+    gap: 4px;
+  }
+  .tools {
+    flex: none;
+  }
+  .tool {
+    min-height: 38px;
+  }
   .tool span {
     display: none;
+  }
+  .moves .btn {
+    flex: 1 1 0;
+    min-height: 44px;
+    padding: 0 10px;
   }
 }
 

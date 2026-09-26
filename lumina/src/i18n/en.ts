@@ -105,6 +105,9 @@ export const en: Dict = {
     run: 'Run',
     setLabel: '{kind} of {count}',
     invalidLabel: 'Invalid set',
+    label: 'Table',
+    rack: 'Your rack',
+    addHere: 'Place in this set',
   },
   status: {
     meld: 'Open with {need} points from your own rack.',

@@ -33,7 +33,7 @@ export function TableArea() {
   const humanTurn = session?.match.seats[g.current]?.seat === 'human';
 
   return (
-    <main className="felt" aria-label={t('table.group')} style={{ ['--tw' as string]: `${tw}px` }}>
+    <main className="felt" aria-label={t('table.label')} style={{ ['--tw' as string]: `${tw}px` }}>
       <div className="felt-scroll" data-scroll="felt" data-drop="felt" ref={ref}>
         <div className="sets">
           {work.sets.map((s) => {

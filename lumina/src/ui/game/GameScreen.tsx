@@ -6,7 +6,7 @@ import { TableArea } from './Table';
 import { Staging } from './Staging';
 import { StatusLine } from './StatusLine';
 import { Rack } from './Rack';
-import { ActionBar } from './ActionBar';
+import { ActionBar, cycleSort } from './ActionBar';
 import { DragLayer } from './DragLayer';
 import { Curtain, ConfirmDraw, GameOver, HintPreview, LessonBanner, LessonDone, MenuSheet } from './Overlays';
 import * as flip from '../flip';
@@ -51,6 +51,7 @@ export function GameScreen() {
       else if (k === 'h') st.requestHint();
       else if (k === 'n' && st.selection.length) st.moveSelectionTo({ kind: 'new' });
       else if (k === 'm') st.openMenu();
+      else if (k === 's') cycleSort();
       else if (k === ' ' && !(e.target instanceof HTMLButtonElement)) {
         e.preventDefault();
         st.commit();
