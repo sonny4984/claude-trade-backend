@@ -16,8 +16,8 @@ export function cellOf(w: WorldState, el: Element): Cell | null {
 
 const same = (a: Cell | null, b: Cell): boolean => !!a && a.x === b.x && a.y === b.y;
 
-function tick(w: WorldState, el: Element | null, inp: Input): void {
-  step(w, { fire: el === 'fire' ? inp : NO_INPUT, ice: el === 'ice' ? inp : NO_INPUT }, DT);
+function tick(w: WorldState, el: Element | null, inp: Input): ReturnType<typeof step> {
+  return step(w, { fire: el === 'fire' ? inp : NO_INPUT, ice: el === 'ice' ? inp : NO_INPUT }, DT);
 }
 
 /** 발판이 다 서고 둘 다 땅에 설 때까지 기다린다 */
@@ -37,23 +37,37 @@ interface Strat {
   readonly hold: number;
 }
 
-/** 한 몸놀림을 복사본에서 해 본다. 목표 칸에 (한 번이라도) 내려섰으면 그 세계를 돌려준다 */
-function attempt(w0: WorldState, el: Element, to: Cell, s: Strat): WorldState | null {
+/**
+ * 한 몸놀림을 복사본에서 해 본다. 목표 칸에 (한 번이라도) 내려섰으면 그 세계를 돌려준다.
+ * via가 있으면: 먼저 그 칸의 젤리를 밟아 튀어 오른 뒤, 발이 (튄 자리 기준) bounceRise만큼 오르면 목표로 몸을 튼다.
+ */
+function attempt(w0: WorldState, el: Element, to: Cell, s: Strat, via: Cell | null = null, bounceRise = 0): WorldState | null {
   const w = structuredClone(w0);
   const b = w.bodies[el];
   const feet0 = b.y + PHYS.h;
   let steer = s.rise <= 0;
   let calm = 0;
   let reached = false;
-  for (let t = 0; t < 3.5 && calm < 15; t += DT) {
-    if (!steer && b.y + PHYS.h < feet0 - s.rise) steer = true;
-    const err = to.x + 0.5 - (b.x + PHYS.w / 2);
+  let bounced = !via;
+  let launchFeet = 0;
+  for (let t = 0; t < 4 && calm < 15; t += DT) {
+    const target = bounced ? to : (via as Cell);
+    if (via && bounced) steer = b.y + PHYS.h < launchFeet - bounceRise || b.vy > 0;
+    else if (!steer && b.y + PHYS.h < feet0 - s.rise) steer = true;
+    const err = target.x + 0.5 - (b.x + PHYS.w / 2);
     const v = err - b.vx * 0.12;
     const want = steer ? (Math.abs(v) < 0.06 ? 0 : Math.sign(v)) : 0;
-    tick(w, el, { left: want < 0, right: want > 0, jump: s.jump && t < s.hold });
+    const ev = tick(w, el, { left: want < 0, right: want > 0, jump: (!via || !bounced) && s.jump && t < s.hold });
     if (!b.alive) return null;
-    if (t > 0.05 && same(cellOf(w, el), to)) reached = true;
-    calm = t > 0.1 && b.ground !== -2 && Math.abs(err) < 0.2 && Math.abs(b.vx) < 0.05 ? calm + 1 : 0;
+    if (!bounced && via && ev.some((e) => e.type === 'bounce' && e.el === el && e.x === via.x)) {
+      bounced = true;
+      launchFeet = via.y + 1;
+      continue;
+    }
+    // 튀기 전에 다른 젤리를 밟았으면 실패
+    if (!bounced && ev.some((e) => e.type === 'bounce' && e.el === el)) return null;
+    if (bounced && t > 0.05 && same(cellOf(w, el), to)) reached = true;
+    calm = bounced && t > 0.1 && b.ground !== -2 && Math.abs(err) < 0.2 && Math.abs(b.vx) < 0.05 ? calm + 1 : 0;
   }
   return reached ? w : null;
 }
@@ -100,8 +114,13 @@ export function replay(level: ParsedLevel, path: readonly PathState[]): BotResul
       // 움직인 칸 (발판이 움직여 실려 가면 그 뒤 칸은 settle 뒤에 본다)
       const to = n.to ?? (el === 'fire' ? n.f : n.i);
       let done: WorldState | null = null;
-      for (const s of strategies(from, to)) {
-        const r = attempt(w, el, to, s);
+      const via = n.via;
+      // 젤리로 튀는 길: 젤리까지 가는 몸놀림 × 튄 뒤 몸을 트는 높이
+      const tries: { s: Strat; rise: number }[] = via
+        ? strategies(from, via).flatMap((s) => [Math.max(0.3, via.y - to.y + 0.05), 1, 2, 3, 4, 5, 0].map((rise) => ({ s, rise })))
+        : strategies(from, to).map((s) => ({ s, rise: 0 }));
+      for (const { s, rise } of tries) {
+        const r = attempt(w, el, to, s, via, rise);
         if (!r) continue;
         // 레버를 지나며 잘못 건드렸으면, 레버 칸에 서 있을 때 되돌린다
         r.level.levers.forEach((lv, i) => {

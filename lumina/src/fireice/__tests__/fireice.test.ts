@@ -150,6 +150,45 @@ describe('불과 얼음 물리', () => {
     expect(off.filter((e) => e.type === 'lever')).toEqual([{ type: 'lever', id: 0, on: false }]);
   });
 
+  it('크림 선반: 아래에서 뛰어 통과해 위에 내려앉고, 그 위에 설 수 있다', () => {
+    const lv = mini(['#..............#', '#..............#', '#...====.......#', '#..............#', '#....f........i#', '################', '################']);
+    const w = newWorld(lv);
+    // 선반 바로 아래에서 곧장 뛰면 선반을 뚫고 올라가 그 위에 선다
+    const ok = jumpTo(w, 'fire', 5, LEVEL_H - 6);
+    expect(ok).toBe(true);
+    // 옆으로 걸어도 선반은 벽이 아니다 (아래층)
+    const w2 = newWorld(lv);
+    run(w2, 0.8, () => ({ fire: { left: false, right: true, jump: false } }));
+    expect(w2.bodies.fire.x).toBeGreaterThan(8);
+    expect(Math.abs(w2.bodies.fire.y + PHYS.h - (LEVEL_H - 2))).toBeLessThan(0.05);
+  });
+
+  it('젤리: 밟으면 5.5칸 넘게 통 튀어 오른다 (점프를 안 눌러도)', () => {
+    const lv = mini(['#..............#', '#..............#', '#..f..........i#', '#####J##########', '################']);
+    const w = newWorld(lv);
+    const y0 = w.bodies.fire.y;
+    let top = y0;
+    const ev = run(w, 1.6, (s) => {
+      top = Math.min(top, s.bodies.fire.y);
+      const cx = s.bodies.fire.x + PHYS.w / 2;
+      return { fire: { left: cx > 5.6, right: cx < 5.4, jump: false } };
+    });
+    expect(ev.some((e) => e.type === 'bounce' && e.el === 'fire')).toBe(true);
+    expect(y0 - top).toBeGreaterThan(5.5);
+  });
+
+  it('커튼: 뜨거운 커튼은 불만, 차가운 커튼은 얼음만 지나간다', () => {
+    const lv = mini(['#..f..H..C..i..#', '################', '################']);
+    const w = newWorld(lv);
+    run(w, 1.2, () => ({ fire: { left: false, right: true, jump: false }, ice: { left: true, right: false, jump: false } }));
+    // 불: H(6)는 지나가고 C(9)에 막힌다 → 8칸 안쪽
+    expect(w.bodies.fire.x).toBeGreaterThan(7);
+    expect(w.bodies.fire.x + PHYS.w).toBeLessThanOrEqual(9 + 1e-3);
+    // 얼음: C(9)는 지나가고 H(6)에 막힌다
+    expect(w.bodies.ice.x).toBeLessThan(9);
+    expect(w.bodies.ice.x).toBeGreaterThanOrEqual(7 - 1e-3);
+  });
+
   it('둘 다 제 문에 서면 통과', () => {
     const lv = mini(['#f.F......I...i#', '################', '################']);
     const w = newWorld(lv);

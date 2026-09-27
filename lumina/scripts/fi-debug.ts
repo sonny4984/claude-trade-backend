@@ -17,7 +17,7 @@ for (const def of LEVELS) {
     const q = [start];
     while (q.length) {
       const c = q.shift()!;
-      for (const n of movesFrom(lv, new Set(), el, c.x, c.y)) {
+      for (const { cell: n } of movesFrom(lv, new Set(), el, c.x, c.y)) {
         const k = at(n.x, n.y);
         if (!seen.has(k)) { seen.add(k); q.push(n); }
       }

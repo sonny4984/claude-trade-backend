@@ -188,6 +188,11 @@
 
 .fi-status .status-text {
   font-size: 14px;
+  white-space: normal;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 /* 넘어짐 */

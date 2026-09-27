@@ -39,9 +39,11 @@ function hash(x: number, y: number, k = 0): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
 }
 
+/** 쿠키 블록인 칸 (웅덩이·젤리는 따로 그린다) */
 function solidAt(lv: ParsedLevel, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x >= LEVEL_W || y >= LEVEL_H) return true;
-  return (lv.solid[at(x, y)] as boolean) && !lv.pool[at(x, y)];
+  const i = at(x, y);
+  return (lv.solid[i] as boolean) && !lv.pool[i] && !lv.jelly[i];
 }
 
 /** 정적 층: 배경 + 쿠키 블록 + 문틀. tile은 CSS 픽셀, dpr 배율로 그린다 */
@@ -112,6 +114,34 @@ export function buildStatic(lv: ParsedLevel, tile: number, dpr: number): HTMLCan
       ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.fillRect(px + T * 0.08, py + T * 0.03, T * 0.3, T * 0.04);
+    }
+
+  // 크림 선반: 얇은 웨하스 + 크림 줄
+  for (let y = 0; y < LEVEL_H; y++)
+    for (let x = 0; x < LEVEL_W; x++) {
+      if (!lv.oneway[at(x, y)]) continue;
+      const px = x * T;
+      const py = y * T;
+      const h = T * 0.3;
+      const left = !lv.oneway[at(x - 1, y)] || x === 0;
+      const right = x === LEVEL_W - 1 || !lv.oneway[at(x + 1, y)];
+      ctx.fillStyle = '#F6CF8E';
+      rr(ctx, px + (left ? T * 0.04 : -0.5), py, T - (left ? T * 0.04 : 0) - (right ? T * 0.04 : 0) + (left ? 0 : 0.5) + (right ? 0 : 0.5), h, left || right ? T * 0.08 : 0);
+      ctx.fill();
+      // 웨하스 격자
+      ctx.strokeStyle = 'rgba(190, 130, 60, 0.45)';
+      ctx.lineWidth = Math.max(1, T * 0.03);
+      for (let k = 1; k < 4; k++) {
+        ctx.beginPath();
+        ctx.moveTo(px + (k * T) / 4, py + h * 0.35);
+        ctx.lineTo(px + (k * T) / 4, py + h);
+        ctx.stroke();
+      }
+      // 딸기 크림 윗줄
+      ctx.fillStyle = '#FFD6E2';
+      ctx.fillRect(px, py, T, h * 0.32);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.fillRect(px + T * 0.1, py + h * 0.06, T * 0.25, h * 0.1);
     }
 
   // 문틀 (아치) — 안쪽 불빛은 매 프레임
@@ -241,6 +271,8 @@ export interface DrawOpts {
   readonly particles: readonly Particle[];
   /** 머리 위 표시 ("나" 또는 지금 움직이는 쪽) */
   readonly marker: Element | null;
+  /** 젤리 칸마다 마지막으로 튄 시각 (ms, now와 같은 시계) */
+  readonly jellyHit?: ReadonlyMap<number, number>;
   readonly markerText: string;
 }
 
@@ -378,6 +410,78 @@ export function drawFrame(ctx: CanvasRenderingContext2D, w: WorldState, o: DrawO
     for (let x = 0; x < LEVEL_W; x++) {
       const p = lv.pool[at(x, y)];
       if (p) drawPool(ctx, x, y, T, p, t, lv);
+    }
+
+  // 젤리: 말랑한 딸기 젤리, 밟히면 출렁
+  for (let y = 0; y < LEVEL_H; y++)
+    for (let x = 0; x < LEVEL_W; x++) {
+      if (!lv.jelly[at(x, y)]) continue;
+      const since = (o.now - (o.jellyHit?.get(at(x, y)) ?? -1e9)) / 1000;
+      const wob = since < 0.6 ? Math.sin(since * 30) * Math.exp(-since * 6) * 0.18 : Math.sin(t * 3 + x) * 0.02;
+      const px = x * T;
+      const py = y * T;
+      const h = T * (0.86 - wob);
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 120, 170, 0.92)';
+      ctx.strokeStyle = '#C2185B';
+      ctx.lineWidth = Math.max(1.2, T * 0.05);
+      rr(ctx, px + T * 0.04 - wob * T * 0.2, py + T - h, T * 0.92 + wob * T * 0.4, h, T * 0.22);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.beginPath();
+      ctx.ellipse(px + T * 0.32, py + T - h + T * 0.2, T * 0.14, T * 0.07, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath();
+      ctx.arc(px + T * 0.66, py + T - h * 0.45, T * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+  // 커튼: 뜨거운(불만 통과) 불꽃 리본 / 차가운(얼음만 통과) 고드름 구슬
+  for (let y = 0; y < LEVEL_H; y++)
+    for (let x = 0; x < LEVEL_W; x++) {
+      const c = lv.curtain[at(x, y)];
+      if (!c) continue;
+      const px = x * T;
+      const py = y * T;
+      ctx.save();
+      if (c === 'fire') {
+        for (let k = 0; k < 4; k++) {
+          const cx = px + T * (0.16 + k * 0.23);
+          const sway = Math.sin(t * 4 + k * 1.7 + x) * T * 0.05;
+          const g = ctx.createLinearGradient(0, py, 0, py + T);
+          g.addColorStop(0, 'rgba(255, 90, 40, 0.85)');
+          g.addColorStop(1, 'rgba(255, 200, 60, 0.55)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.moveTo(cx - T * 0.07, py);
+          ctx.quadraticCurveTo(cx + sway, py + T * 0.5, cx - T * 0.05 + sway, py + T);
+          ctx.lineTo(cx + T * 0.07 + sway, py + T * 0.86);
+          ctx.quadraticCurveTo(cx + T * 0.08 + sway, py + T * 0.4, cx + T * 0.07, py);
+          ctx.closePath();
+          ctx.fill();
+        }
+      } else {
+        for (let k = 0; k < 4; k++) {
+          const cx = px + T * (0.16 + k * 0.23);
+          ctx.strokeStyle = 'rgba(120, 190, 255, 0.55)';
+          ctx.lineWidth = Math.max(1, T * 0.025);
+          ctx.beginPath();
+          ctx.moveTo(cx, py);
+          ctx.lineTo(cx, py + T);
+          ctx.stroke();
+          for (let j = 0; j < 4; j++) {
+            const by = py + T * (0.14 + j * 0.24) + Math.sin(t * 2 + j + k) * T * 0.015;
+            ctx.fillStyle = j % 2 ? 'rgba(210, 240, 255, 0.95)' : 'rgba(110, 185, 255, 0.9)';
+            ctx.beginPath();
+            ctx.arc(cx, by, T * 0.065, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+      ctx.restore();
     }
 
   // 버튼 접시

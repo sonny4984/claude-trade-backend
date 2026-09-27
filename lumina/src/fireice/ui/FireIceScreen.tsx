@@ -28,6 +28,7 @@ function Stage({ session }: { session: FireIceSession }) {
   const [tile, setTile] = useState(0);
   const layers = useRef<{ key: string; staticLayer: HTMLCanvasElement | null; sprites: Sprites | null }>({ key: '', staticLayer: null, sprites: null });
   const particles = useRef<Particle[]>([]);
+  const jellyHit = useRef(new Map<number, number>());
   const control = useFireIce((s) => s.control);
   const infoRef = useRef({ session, control, t });
   infoRef.current = { session, control, t };
@@ -75,12 +76,16 @@ function Stage({ session }: { session: FireIceSession }) {
         if (f.type === 'gem') burst(particles.current, f.x, f.y, f.el === 'fire' ? '#FF4D6D' : '#3D8BFF', 10, 2.6, 0.06);
         else if (f.type === 'jump' || f.type === 'land') burst(particles.current, f.x, f.y, 'rgba(160,110,60,0.55)', f.type === 'jump' ? 4 : 3, 1.2, 0.05);
         else if (f.type === 'dead') burst(particles.current, f.x, f.y - 0.4, f.el === 'fire' ? '#FFB199' : '#BDE8FF', 16, 3, 0.08);
+        else if (f.type === 'bounce') {
+          jellyHit.current.set(f.y * 16 + f.x, now);
+          burst(particles.current, f.x + 0.5, f.y, 'rgba(255,140,190,0.8)', 6, 2, 0.06);
+        }
       }
       stepParticles(particles.current, dt);
       const mine = myElement(s);
       const marker: Element | null = s.mode === 'solo' ? ctl : mine;
       const markerText = s.mode === 'online' ? tr('fireice.me') : '';
-      drawFrame(ctx, w, { tile, dpr, now, staticLayer, sprites, particles: particles.current, marker, markerText });
+      drawFrame(ctx, w, { tile, dpr, now, staticLayer, sprites, particles: particles.current, marker, markerText, jellyHit: jellyHit.current });
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -173,6 +178,7 @@ function Status({ session }: { session: FireIceSession }) {
   const control = useFireIce((s) => s.control);
   const atDoor = useFireIce((s) => s.atDoor);
   const waiting = useFireIce((s) => s.waiting);
+  const time = useFireIce((s) => s.time);
   const [fine] = useState(() => typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches);
   const [friend, setFriend] = useState(true);
   useEffect(() => {
@@ -181,7 +187,10 @@ function Status({ session }: { session: FireIceSession }) {
     return () => window.clearInterval(id);
   }, [session.online]);
   let text: string;
+  const tipKey = `fireice.tips.${levelDef(session.level).id}`;
+  const tip = t(tipKey);
   if (waiting) text = t('online.sending');
+  else if (time < 6 && tip !== tipKey && session.status === 'playing') text = tip;
   else if (session.online && !friend) text = t('fireice.waitFriend');
   else if (atDoor.fire !== atDoor.ice) text = t('fireice.waitDoor', { el: t(`fireice.${atDoor.fire ? 'fire' : 'ice'}`) });
   else if (session.mode === 'solo') text = t(fine ? 'fireice.keysSolo' : 'fireice.nowSolo', { el: t(`fireice.${control}`) });

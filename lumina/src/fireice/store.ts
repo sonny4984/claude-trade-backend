@@ -119,7 +119,7 @@ export const runtime: {
   /** 마지막으로 보낸 내 몸 (가만히 있으면 덜 보내려고) */
   lastSent: string;
   /** 화면 효과 대기열 (사탕 톡, 점프 먼지 …) — 화면이 매 프레임 비운다 */
-  fx: { readonly type: 'gem' | 'jump' | 'dead' | 'land'; readonly x: number; readonly y: number; readonly el: Element }[];
+  fx: { readonly type: 'gem' | 'jump' | 'dead' | 'land' | 'bounce'; readonly x: number; readonly y: number; readonly el: Element }[];
 } = { world: null, acc: 0, hudAt: 0, sendAt: 0, restartTimer: null, puppet: null, lastSent: '', fx: [] };
 
 export const levelCount = LEVELS.length;
@@ -293,7 +293,7 @@ export const useFireIce = create<FireIceStore>((set, get) => {
   const onEvents = (s: FireIceSession, events: readonly WorldEvent[]): void => {
     const online = !!s.online;
     const w = runtime.world;
-    const fx = (type: 'gem' | 'jump' | 'dead' | 'land', el: Element, x: number, y: number): void => {
+    const fx = (type: 'gem' | 'jump' | 'dead' | 'land' | 'bounce', el: Element, x: number, y: number): void => {
       if (runtime.fx.length < 40) runtime.fx.push({ type, el, x, y });
     };
     const feet = (el: Element): [number, number] => {
@@ -305,6 +305,7 @@ export const useFireIce = create<FireIceStore>((set, get) => {
         const g = w?.level.gems[e.id];
         if (g) fx('gem', e.el, g.x + 0.5, g.y + 0.5);
       } else if (e.type === 'jump' || e.type === 'land' || e.type === 'dead') fx(e.type, e.el, ...feet(e.el));
+      else if (e.type === 'bounce') fx('bounce', e.el, e.x, e.y);
       switch (e.type) {
         case 'gem':
           sfx('pop', { pitch: e.el === 'fire' ? 1.15 : 1.35 });
@@ -320,6 +321,10 @@ export const useFireIce = create<FireIceStore>((set, get) => {
           break;
         case 'jump':
           sfx('pick', { pitch: e.el === 'fire' ? 1.1 : 1.3 });
+          break;
+        case 'bounce':
+          sfx('pop', { pitch: 0.55 });
+          buzz('tap');
           break;
         case 'door':
           if (e.in) sfx('hint');

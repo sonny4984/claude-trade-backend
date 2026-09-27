@@ -2,9 +2,10 @@
  * 불과 얼음 — 물리와 판정 (순수 시뮬레이션, 화면과 무관).
  * 칸 = 1. 몸은 사각형(너비 0.68, 키 0.86). 달리기·가속, 점프(길게 누르면 높이, 약 3.5칸), 코요테 타임·점프 예약.
  * 발판은 버튼·레버 번호가 켜지면 정해진 칸만큼 움직이고, 위에 탄 몸을 싣고 간다.
+ * 크림 선반은 위에서 내려올 때만 딛고, 젤리는 밟으면 통 튀어 오르며, 커튼은 제 원소만 지나간다.
  * 두 몸은 서로 부딪히지 않는다. 온라인에서 상대 몸은 "꼭두각시"로 두고 위치만 받아 쓴다.
  */
-import { LEVEL_H, LEVEL_W, at, deadly, type Element, type ParsedLevel, type Pool } from './level';
+import { LEVEL_H, LEVEL_W, at, deadly, wallFor, type Element, type ParsedLevel, type Pool } from './level';
 
 export const PHYS = {
   gravity: 34,
@@ -21,6 +22,8 @@ export const PHYS = {
   w: 0.68,
   h: 0.86,
   platSpeed: 3,
+  /** 젤리가 튕겨 올리는 속도 (약 5.9칸 높이) */
+  jellyV: 20,
 } as const;
 
 const EPS = 1e-4;
@@ -47,6 +50,8 @@ export interface Body {
   alive: boolean;
   atDoor: boolean;
   jumpHeld: boolean;
+  /** 젤리에 튕겨 오르는 중 (점프를 떼도 높이가 줄지 않는다) */
+  bouncing: boolean;
 }
 
 export interface Plat {
@@ -73,11 +78,12 @@ export type WorldEvent =
   | { readonly type: 'door'; readonly el: Element; readonly in: boolean }
   | { readonly type: 'jump'; readonly el: Element }
   | { readonly type: 'land'; readonly el: Element }
+  | { readonly type: 'bounce'; readonly el: Element; readonly x: number; readonly y: number }
   | { readonly type: 'button'; readonly group: number; readonly on: boolean };
 
 function spawnBody(level: ParsedLevel, el: Element): Body {
   const c = level.spawn[el];
-  return { el, x: c.x + (1 - PHYS.w) / 2, y: c.y + 1 - PHYS.h - EPS, vx: 0, vy: 0, ground: -1, coyote: 0, buffer: 0, face: el === 'fire' ? 1 : -1, alive: true, atDoor: false, jumpHeld: false };
+  return { el, x: c.x + (1 - PHYS.w) / 2, y: c.y + 1 - PHYS.h - EPS, vx: 0, vy: 0, ground: -1, coyote: 0, buffer: 0, face: el === 'fire' ? 1 : -1, alive: true, atDoor: false, jumpHeld: false, bouncing: false };
 }
 
 export function newWorld(level: ParsedLevel): WorldState {
@@ -93,9 +99,9 @@ export function newWorld(level: ParsedLevel): WorldState {
   };
 }
 
-function tileSolid(level: ParsedLevel, tx: number, ty: number): boolean {
-  if (tx < 0 || ty < 0 || tx >= LEVEL_W || ty >= LEVEL_H) return true;
-  return level.solid[at(tx, ty)] as boolean;
+function oneWayAt(level: ParsedLevel, tx: number, ty: number): boolean {
+  if (tx < 0 || ty < 0 || tx >= LEVEL_W || ty >= LEVEL_H) return false;
+  return level.oneway[at(tx, ty)] === true;
 }
 
 interface Box {
@@ -107,11 +113,11 @@ interface Box {
   readonly id: number;
 }
 
-/** 사각형과 겹치는 단단한 것들 (skip: 빼고 볼 발판 번호) */
-function hits(w: WorldState, l: number, t: number, r: number, b: number, skip = -1): Box[] {
+/** 사각형과 겹치는 단단한 것들 — 이 원소에게 막히는 커튼 포함 (skip: 빼고 볼 발판 번호) */
+function hits(w: WorldState, el: Element, l: number, t: number, r: number, b: number, skip = -1): Box[] {
   const out: Box[] = [];
   for (let ty = Math.floor(t); ty <= Math.floor(b - EPS); ty++)
-    for (let tx = Math.floor(l); tx <= Math.floor(r - EPS); tx++) if (tileSolid(w.level, tx, ty)) out.push({ l: tx, t: ty, r: tx + 1, b: ty + 1, id: -1 });
+    for (let tx = Math.floor(l); tx <= Math.floor(r - EPS); tx++) if (wallFor(w.level, el, tx, ty)) out.push({ l: tx, t: ty, r: tx + 1, b: ty + 1, id: -1 });
   w.level.platforms.forEach((d, i) => {
     if (i === skip) return;
     const p = w.plats[i] as Plat;
@@ -123,7 +129,7 @@ function hits(w: WorldState, l: number, t: number, r: number, b: number, skip = 
 function moveX(w: WorldState, b: Body, dx: number): void {
   if (!dx) return;
   const nx = b.x + dx;
-  const hs = hits(w, nx, b.y, nx + PHYS.w, b.y + PHYS.h);
+  const hs = hits(w, b.el, nx, b.y, nx + PHYS.w, b.y + PHYS.h);
   if (!hs.length) {
     b.x = nx;
     return;
@@ -136,7 +142,14 @@ function moveX(w: WorldState, b: Body, dx: number): void {
 function moveY(w: WorldState, b: Body, dy: number): number {
   if (!dy) return -2;
   const ny = b.y + dy;
-  const hs = hits(w, b.x, ny, b.x + PHYS.w, ny + PHYS.h);
+  const hs = hits(w, b.el, b.x, ny, b.x + PHYS.w, ny + PHYS.h);
+  if (dy > 0) {
+    // 크림 선반: 발이 선반 윗면 위에 있다가 내려올 때만 딛는다
+    const feet0 = b.y + PHYS.h;
+    const feet1 = ny + PHYS.h;
+    for (let ty = Math.ceil(feet0 - EPS * 2); ty <= Math.floor(feet1); ty++)
+      for (let tx = Math.floor(b.x); tx <= Math.floor(b.x + PHYS.w - EPS); tx++) if (ty >= feet0 - EPS * 2 && ty <= feet1 && oneWayAt(w.level, tx, ty)) hs.push({ l: tx, t: ty, r: tx + 1, b: ty + 1, id: -1 });
+  }
   if (!hs.length) {
     b.y = ny;
     return -2;
@@ -202,9 +215,9 @@ export function step(w: WorldState, inputs: Readonly<Record<Element, Input>>, dt
     const my = ddy * k;
     const nl = p.x + mx;
     const nt = p.y + my;
-    const free = (x: number, y: number): boolean => !hits(w, x, y, x + PHYS.w, y + PHYS.h, i).length;
     const plan: { b: Body; x: number; y: number; lift: boolean }[] = [];
     for (const b of local) {
+      const free = (x: number, y: number): boolean => !hits(w, b.el, x, y, x + PHYS.w, y + PHYS.h, i).length;
       if (b.ground === i) {
         // 탄 몸: 위로는 반드시 같이 (막히면 발판이 멈춤), 옆·아래는 막히면 그 자리에 남는다
         const x = free(b.x + mx, b.y) ? b.x + mx : b.x;
@@ -254,7 +267,8 @@ export function step(w: WorldState, inputs: Readonly<Record<Element, Input>>, dt
       b.ground = -2;
       events.push({ type: 'jump', el: b.el });
     }
-    if (!inp.jump && b.vy < -PHYS.jumpV * PHYS.shortHop) b.vy = -PHYS.jumpV * PHYS.shortHop;
+    if (b.vy >= 0) b.bouncing = false;
+    if (!inp.jump && !b.bouncing && b.vy < -PHYS.jumpV * PHYS.shortHop) b.vy = -PHYS.jumpV * PHYS.shortHop;
     b.vy = Math.min(PHYS.maxFall, b.vy + PHYS.gravity * dt);
 
     const wasGround = b.ground;
@@ -263,7 +277,7 @@ export function step(w: WorldState, inputs: Readonly<Record<Element, Input>>, dt
     b.ground = g;
     if (g !== -2 && wasGround === -2) events.push({ type: 'land', el: b.el });
 
-    // 웅덩이 판정 (발 아래 가운데 칸)
+    // 웅덩이 판정·젤리 (발 아래 가운데 칸)
     if (g === -1) {
       const { tx, ty } = floorTile(b);
       const pool = ty < LEVEL_H ? w.level.pool[at(tx, ty)] ?? null : null;
@@ -273,6 +287,14 @@ export function step(w: WorldState, inputs: Readonly<Record<Element, Input>>, dt
         b.vy = 0;
         events.push({ type: 'dead', el: b.el, cause: pool });
         continue;
+      }
+      if (ty < LEVEL_H && tx >= 0 && tx < LEVEL_W && w.level.jelly[at(tx, ty)]) {
+        b.vy = -PHYS.jellyV;
+        b.ground = -2;
+        b.coyote = 0;
+        b.buffer = 0;
+        b.bouncing = true;
+        events.push({ type: 'bounce', el: b.el, x: tx, y: ty });
       }
     }
 
