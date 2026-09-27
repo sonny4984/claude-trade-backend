@@ -78,6 +78,8 @@ interface CodaStore {
   rematch: () => void;
   quit: () => void;
   leave: () => void;
+  /** 더미에서 이 색을 한 장 가져온다 (처음 고르기·차례 뽑기) */
+  drawColor: (color: 'black' | 'white') => void;
   select: (target: number, index: number) => void;
   clearSelect: () => void;
   guess: (value: CodaGuess) => void;
@@ -148,6 +150,8 @@ const isAction = (x: unknown): x is CodaAction => {
   if (!x || typeof x !== 'object') return false;
   const a = x as Record<string, unknown>;
   switch (a.type) {
+    case 'draw':
+      return a.color === 'black' || a.color === 'white';
     case 'guess':
       return Number.isInteger(a.target) && Number.isInteger(a.index) && (a.value === 'joker' || Number.isInteger(a.value));
     case 'continue':
@@ -176,8 +180,10 @@ export function viewerOf(s: CodaSession): number {
 
 function sanitize(raw: unknown): CodaSession | null {
   if (!raw || typeof raw !== 'object') return null;
-  const s = raw as CodaSession;
+  let s = raw as CodaSession;
   if (s.v !== 1 || !s.state || !Array.isArray(s.state.players) || !Array.isArray(s.meta)) return null;
+  // 예전 저장에는 첫 차례 자리(first)가 없다 — 이미 처음 고르기가 끝난 판이라 아무 값이면 된다
+  if (typeof s.state.first !== 'number') s = { ...s, state: { ...s.state, first: 0 } };
   if (codaInvariants(s.state).length) return null;
   if (!s.meta.every((m) => isCharacterId(m?.character))) return null;
   return s;
@@ -275,8 +281,13 @@ export const useCoda = create<CodaStore>((set, get) => {
         }
         case 'turn':
           sfx('turn', { delay: 150 });
-          if (e.drew && (s.online ? e.p === s.online.mySeat : s.state.players[e.p]?.seat === 'human')) sfx('draw', { delay: 350 });
           break;
+        case 'drew': {
+          const mine = s.online ? e.p === s.online.mySeat : s.state.players[e.p]?.seat === 'human';
+          sfx(e.deal ? 'pick' : 'draw', { pitch: e.color === 'black' ? 0.9 : 1.1 });
+          if (!mine && !e.deal) react(e.p, 'play');
+          break;
+        }
         default:
           break;
       }
@@ -365,6 +376,15 @@ export const useCoda = create<CodaStore>((set, get) => {
         if (!alive()) return;
         apply(a, true);
         await sleep(reduced ? 150 : 700 * speed);
+      } else if (st.phase === 'deal' || st.phase === 'draw') {
+        // 펼친 타일에서 한 장 집기 (처음 고르기는 빠르게)
+        await sleep(reduced ? 80 : (st.phase === 'deal' ? 260 : 520) * speed);
+        while (get().overlay === 'menu') {
+          await sleep(80);
+          if (!alive()) return;
+        }
+        if (!alive()) return;
+        apply(codaDecide(get().session?.state as CodaState, aiRng), true);
       } else if (st.phase === 'decide') {
         set({ ai: { seat, phase: 'deciding' } });
         await sleep(reduced ? 100 : 550 * speed);
@@ -465,6 +485,14 @@ export const useCoda = create<CodaStore>((set, get) => {
     leave: () => {
       aiToken++;
       set({ ai: null, pending: null, overlay: null });
+    },
+
+    drawColor: (color) => {
+      const s = get().session;
+      if (!s || !isHumanTurn(s) || get().curtain || get().waiting) return;
+      if (s.state.phase !== 'deal' && s.state.phase !== 'draw') return;
+      buzz('pick');
+      submit({ type: 'draw', color });
     },
 
     select: (target, index) => {

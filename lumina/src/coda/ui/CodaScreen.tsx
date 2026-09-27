@@ -9,7 +9,7 @@ import { Sheet } from '../../ui/game/Overlays';
 import { usePortrait } from '../../characters/portrait3d';
 import type { CharacterId } from '../../characters/roster';
 import type { Expression } from '../../characters/draw2d';
-import { codaColor, codaTiles, codaValue, guessOf, hiddenCount, validSlots, type CodaGuess, type CodaPlayer, type CodaSlot } from '../engine';
+import { codaColor, codaTiles, codaValue, guessOf, hiddenCount, poolColors, startCount, validSlots, type CodaGuess, type CodaPlayer, type CodaSlot } from '../engine';
 import { knownTiles } from '../deduce';
 import { isHumanTurn, useCoda, valueText, viewerOf, type CodaSession } from '../store';
 import { CodaTile } from './CodaTile';
@@ -109,6 +109,7 @@ function MyCode({ session }: { session: CodaSession }) {
   const gaps = placing ? validSlots(me.row, st.drawn as number) : [];
   const revealing = mine && st.phase === 'reveal-own';
   const showDrawn = st.current === viewer && st.drawn !== null && !curtain && st.phase !== 'over';
+  const drawSlot = mine && st.phase === 'draw';
   const tiles: React.ReactNode[] = [];
   me.row.forEach((slot, i) => {
     if (gaps.includes(i)) tiles.push(<button key={`g${i}`} type="button" className="code-gap" aria-label={t('coda.gap')} onClick={() => useCoda.getState().place(i)} />);
@@ -133,6 +134,14 @@ function MyCode({ session }: { session: CodaSession }) {
       <header className="my-code-head">
         <b>{session.mode === 'local' ? me.name : t('coda.myCode')}</b>
         <span>{t('coda.hiddenN', { n: hiddenCount(me) })}</span>
+        {drawSlot && (
+          <span className="my-drawn">
+            <small>{t('coda.drawn')}</small>
+            <span className="draw-slot" aria-label={t('coda.drawSlot')}>
+              ?
+            </span>
+          </span>
+        )}
         {showDrawn && (
           <span className="my-drawn">
             <small>{t('coda.drawn')}</small>
@@ -141,6 +150,56 @@ function MyCode({ session }: { session: CodaSession }) {
         )}
       </header>
       <div className="code-tiles mine">{tiles}</div>
+    </section>
+  );
+}
+
+// ─────────────────────────────── 더미 ───────────────────────────────
+
+/** 뒷면으로 펼쳐 둔 타일 더미. 테이블에는 작게(남은 장수), 내가 고를 차례면 아래 조작 칸에 크게 눌러 가져온다 */
+function Pile({ session, pick }: { session: CodaSession; pick?: boolean }) {
+  const t = useT();
+  const st = session.state;
+  if (!st.pool.length || st.phase === 'over') return null;
+  const left = poolColors(st);
+  const heap = (color: 'black' | 'white') => {
+    const n = left[color];
+    const shown = Math.min(n, pick ? 9 : 6);
+    const tiles = Array.from({ length: shown }, (_, i) => {
+      // 흩어 놓은 듯이 (자리마다 같은 모양)
+      const r = ((i * 37 + (color === 'black' ? 11 : 5)) % 17) - 8;
+      const per = pick ? 5 : 6;
+      const x = (i % per) * (pick ? 19 : 12) + ((i * 7) % 5);
+      const y = Math.floor(i / per) * (pick ? 24 : 0) + ((i * 3) % 4);
+      return <i key={i} className="pile-tile" style={{ left: x, top: y, transform: `rotate(${r}deg)` }} />;
+    });
+    if (pick && n > 0) {
+      const label = `${t(color === 'black' ? 'coda.takeBlack' : 'coda.takeWhite')} (${n})`;
+      return (
+        <button type="button" className="pile-heap" data-color={color} data-pick onClick={() => useCoda.getState().drawColor(color)} aria-label={label}>
+          <span className="pile-tiles" aria-hidden="true">
+            {tiles}
+          </span>
+          <span className="pile-count">{label}</span>
+        </button>
+      );
+    }
+    return (
+      <span className="pile-heap" data-color={color} role="img" aria-label={t(color === 'black' ? 'coda.pileBlack' : 'coda.pileWhite', { n })}>
+        <span className="pile-tiles" aria-hidden="true">
+          {tiles}
+        </span>
+        <span className="pile-count">{t(color === 'black' ? 'coda.pileBlack' : 'coda.pileWhite', { n })}</span>
+      </span>
+    );
+  };
+  return (
+    <section className="coda-pile" data-pick={pick || undefined} aria-label={t('coda.pileLabel', { b: left.black, w: left.white })}>
+      {!pick && <h3 className="coda-pile-title">{t('coda.pool')}</h3>}
+      <div className="coda-pile-heaps">
+        {heap('black')}
+        {heap('white')}
+      </div>
     </section>
   );
 }
@@ -212,6 +271,13 @@ function Actions({ session }: { session: CodaSession }) {
   if (st.phase === 'over' || curtain) return <nav className="coda-actions" />;
   if (!isHumanTurn(session)) return <nav className="coda-actions" aria-hidden="true" />;
   const store = useCoda.getState();
+  if (st.phase === 'deal' || st.phase === 'draw') {
+    return (
+      <nav className="coda-actions">
+        <Pile session={session} pick />
+      </nav>
+    );
+  }
   if (st.phase === 'guess') {
     if (pending) return <nav className="coda-actions" />;
     if (selected) return <nav className="coda-actions"><NumberPad session={session} /></nav>;
@@ -244,6 +310,7 @@ function statusText(t: T, lang: 'ko' | 'en', session: CodaSession, ai: { seat: n
   const st = session.state;
   if (st.phase === 'over') return last ?? '';
   if (waiting) return t('online.sending');
+  if ((st.phase === 'deal' || st.phase === 'draw') && !isHumanTurn(session)) return t(st.phase === 'deal' ? 'coda.otherDealing' : 'coda.otherDrawing', { subj: subj(lang, st.players[st.current]?.name ?? '') });
   if (ai) {
     const name = st.players[ai.seat]?.name ?? '';
     return ai.phase === 'thinking' ? t('coda.aiThinking', { subj: subj(lang, name) }) : last ?? '';
@@ -254,6 +321,10 @@ function statusText(t: T, lang: 'ko' | 'en', session: CodaSession, ai: { seat: n
     return last ?? '';
   }
   switch (st.phase) {
+    case 'deal':
+      return t('coda.dealStatus', { k: (st.players[st.current]?.row.length ?? 0) + 1, n: startCount(st.players.length) });
+    case 'draw':
+      return t('coda.drawStatus');
     case 'guess':
       return selected ? '' : st.streak > 0 ? (last ?? t('coda.pick')) : t('coda.pick');
     case 'decide':
@@ -530,6 +601,7 @@ export function CodaScreen() {
           {others.map((seat) => (
             <OpponentRow key={seat} session={session} seat={seat} />
           ))}
+          <Pile session={session} />
         </div>
       </main>
       <p className="status" aria-live="polite">

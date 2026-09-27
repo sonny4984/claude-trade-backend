@@ -34,7 +34,8 @@ export const CodaTile = memo(function CodaTile({ id, faceUp, revealed, secret, s
       </span>
     )
   ) : (
-    <span className="ctile-mark" aria-hidden="true" />
+    // 보드게임 타일처럼 뒷면은 무늬 없이 색만 (살짝 윤이 나게)
+    <span className="ctile-back" aria-hidden="true" />
   );
   const common = {
     className: 'ctile',

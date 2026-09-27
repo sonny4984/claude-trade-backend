@@ -47,6 +47,7 @@ function board(rows: CodaSlot[][], o: { pool?: CodaTileId[]; drawn?: CodaTileId 
     turnNo: 1,
     winner: null,
     log: [],
+    first: 0,
   };
 }
 
@@ -65,32 +66,71 @@ function act(s: CodaState, a: CodaAction): CodaState {
 }
 
 describe('시작', () => {
-  it('2~3인은 4장, 4인은 3장. 시작패에 조커 없음, 줄은 정렬', () => {
+  /** 처음 고르기를 AI처럼 끝까지 */
+  function dealAll(s0: CodaState, rng = createRng(5)): CodaState {
+    let s = s0;
+    for (let k = 0; k < 20 && s.phase === 'deal'; k++) s = act(s, codaDecide(s, rng, 'casual'));
+    return s;
+  }
+
+  it('처음에는 자리 순서대로 각자 색을 골라 가져온다: 2~3인은 4장, 4인은 3장, 조커 없음, 줄은 정렬', () => {
     for (const [n, per] of [
       [2, 4],
       [3, 4],
       [4, 3],
     ] as const) {
       for (let seed = 1; seed <= 30; seed++) {
-        const s = newCoda({ seats: seats(n), jokers: true, seed });
+        const s0 = newCoda({ seats: seats(n), jokers: true, seed });
+        expect(s0.phase).toBe('deal');
+        expect(s0.current).toBe(0);
+        expect(s0.players.every((p) => p.row.length === 0)).toBe(true);
+        expect(codaInvariants(s0)).toEqual([]);
+        const s = dealAll(s0);
         s.players.forEach((p) => {
           expect(p.row).toHaveLength(per);
           expect(p.row.some((x) => isCodaJoker(x.tile))).toBe(false);
           const keys = p.row.map((x) => codaKey(x.tile) as number);
           expect([...keys].sort((a, b) => a - b)).toEqual(keys);
         });
-        // 첫 사람은 이미 한 장을 뽑았다
-        expect(s.drawn).not.toBeNull();
-        expect(s.pool.length + 1 + n * per).toBe(26);
+        // 다 가져가면 조커를 섞고 첫 사람이 한 장 뽑을 차례
+        expect(s.phase).toBe('draw');
+        expect(s.current).toBe(s0.first);
+        expect(s.drawn).toBeNull();
+        expect(s.pool.length + n * per).toBe(26);
+        expect(s.pool.filter(isCodaJoker)).toHaveLength(2);
         expect(codaInvariants(s)).toEqual([]);
       }
     }
   });
 
+  it('고른 색이 그대로 온다 — 검정 셋, 하양 하나', () => {
+    let s = newCoda({ seats: seats(2), jokers: false, seed: 11 });
+    for (const c of ['black', 'white', 'black', 'black'] as const) s = act(s, { type: 'draw', color: c });
+    const colors = s.players[0]?.row.map((x) => (x.tile < 13 ? 'black' : 'white')).sort();
+    expect(colors).toEqual(['black', 'black', 'black', 'white']);
+    expect(s.current).toBe(1);
+    expect(s.phase).toBe('deal');
+  });
+
+  it('차례마다 원하는 색을 한 장 뽑아 혼자 본 뒤 추리한다. 없는 색은 못 뽑는다', () => {
+    let s = dealAll(newCoda({ seats: seats(2), jokers: false, seed: 21 }));
+    expect(s.phase).toBe('draw');
+    expect(codaReduce(s, { type: 'guess', target: 1 - s.current, index: 0, value: 0 }).ok).toBe(false); // 뽑기 전
+    const before = s.pool.length;
+    s = act(s, { type: 'draw', color: 'white' });
+    expect(s.phase).toBe('guess');
+    expect(s.drawn !== null && s.drawn >= 13).toBe(true);
+    expect(s.pool.length).toBe(before - 1);
+    // 더미에 한 색만 남으면 다른 색은 거절
+    const onlyBlack = { ...s, phase: 'draw' as const, drawn: null, pool: s.pool.filter((t) => t < 13) };
+    expect(codaReduce(onlyBlack, { type: 'draw', color: 'white' }).ok).toBe(false);
+    expect(codaReduce(onlyBlack, { type: 'draw', color: 'black' }).ok).toBe(true);
+  });
+
   it('조커를 빼면 24장', () => {
-    const s = newCoda({ seats: seats(3), jokers: false, seed: 7 });
-    expect(s.pool.length + 1 + 12).toBe(24);
-    expect([...s.pool, s.drawn].some((t) => t !== null && isCodaJoker(t))).toBe(false);
+    const s = dealAll(newCoda({ seats: seats(3), jokers: false, seed: 7 }));
+    expect(s.pool.length + 12).toBe(24);
+    expect(s.pool.some((t) => isCodaJoker(t))).toBe(false);
   });
 });
 
@@ -120,7 +160,9 @@ describe('차례', () => {
     expect(s.players[0]?.row.map((x) => x.tile)).toEqual([B(1), B(7), W(8)]);
     expect(s.players[0]?.row[1]?.revealed).toBe(false);
     expect(s.current).toBe(1);
-    expect(s.drawn).toBe(W(0));
+    // 다음 사람은 더미에서 색을 골라 뽑는 것부터
+    expect(s.phase).toBe('draw');
+    expect(s.drawn).toBeNull();
     expect(sortedRows(s)).toBe(true);
   });
 

@@ -8,7 +8,7 @@
  */
 import type { AiLevel } from '../game/types';
 import type { Rng } from '../game/rng';
-import { activePlayers, hiddenCount, isCodaJoker, validSlots, type CodaAction, type CodaPlayer, type CodaState } from './engine';
+import { activePlayers, hiddenCount, isCodaJoker, poolColors, validSlots, type CodaAction, type CodaColor, type CodaPlayer, type CodaState } from './engine';
 import { beliefs, guessOptions, knownTiles, type GuessOption } from './deduce';
 import { codaColor, codaTiles, guessOf } from './engine';
 
@@ -111,10 +111,33 @@ function wantsMore(s: CodaState, prof: CodaAiProfile): boolean {
   return best.p >= need;
 }
 
+/**
+ * 더미에서 어느 색을 가져올까.
+ *  · 처음 고르기와 입문·보통: 펼친 타일 중 아무거나 집듯이 (남은 장수에 비례)
+ *  · 고수·명인: 모두에게 덜 드러난 색 — 그 색은 숫자 후보가 많아 새 타일을 맞히기 어렵다
+ */
+function chooseColor(s: CodaState, rng: Rng, prof: CodaAiProfile): CodaColor {
+  const left = poolColors(s);
+  if (!left.black) return 'white';
+  if (!left.white) return 'black';
+  const byCount = (): CodaColor => (rng.next() * (left.black + left.white) < left.black ? 'black' : 'white');
+  if (s.phase === 'deal' || prof.level === 'beginner' || prof.level === 'casual') return byCount();
+  const shown = new Set<number>();
+  s.players.forEach((p) => p.row.forEach((x) => x.revealed && shown.add(x.tile)));
+  const unknown = (c: CodaColor): number => codaTiles(s.jokers).filter((t) => codaColor(t) === c && !shown.has(t)).length;
+  const b = unknown('black');
+  const w = unknown('white');
+  if (b === w) return byCount();
+  return b > w ? 'black' : 'white';
+}
+
 export function codaDecide(s: CodaState, rng: Rng, level?: AiLevel): CodaAction {
   const me = s.players[s.current] as CodaPlayer;
   const prof = CODA_PROFILES[level ?? me.ai ?? 'casual'];
   switch (s.phase) {
+    case 'deal':
+    case 'draw':
+      return { type: 'draw', color: chooseColor(s, rng, prof) };
     case 'guess':
       return chooseGuess(s, rng, prof);
     case 'decide':

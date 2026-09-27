@@ -2,9 +2,10 @@
  * 다빈치 코드 규칙 커널 — UI와 무관한 순수 함수. 모든 수는 codaReduce()만 판정한다.
  *
  * 타일: 검정·하양 0~11 각 12장 + (선택) 조커 2장(검정 하나, 하양 하나) = 24/26장.
- *  · 2~3인은 4장, 4인은 3장씩 받는다. 시작패에는 조커가 없다(배분한 뒤 더미에 섞는다).
+ *  · 보드게임처럼 타일은 뒷면(색만 보임)으로 펼쳐 두고, 각자 원하는 색을 골라 가져온다.
+ *  · 처음(deal): 자리 순서대로 2~3인은 4장, 4인은 3장씩 색을 골라 가져온다. 시작패에는 조커가 없다(다 가져간 뒤 더미에 섞는다).
  *  · 자기 줄은 작은 수가 왼쪽. 같은 수면 검정이 왼쪽. 조커는 아무 자리에나 둘 수 있다.
- *  · 차례: 더미에서 한 장 뽑아 혼자 본다 → 상대의 숨은 타일 하나를 가리켜 숫자를 말한다.
+ *  · 차례: 더미에서 검정이나 하양 한 장을 골라 뽑아 혼자 본다(draw) → 상대의 숨은 타일 하나를 가리켜 숫자를 말한다.
  *    맞으면 그 타일이 공개되고, 더 맞힐지 멈출지 고른다. 멈추면 뽑은 타일을 숨긴 채 제자리에 끼운다.
  *    틀리면 뽑은 타일을 공개한 채 제자리에 끼우고 차례가 끝난다.
  *  · 더미가 비면 뽑지 않고 추리한다. 틀리면 자기 숨은 타일 하나를 골라 공개한다.
@@ -86,7 +87,7 @@ export interface CodaPlayer {
   readonly stats: CodaStats;
 }
 
-export type CodaPhase = 'guess' | 'decide' | 'place' | 'reveal-own' | 'over';
+export type CodaPhase = 'deal' | 'draw' | 'guess' | 'decide' | 'place' | 'reveal-own' | 'over';
 
 export interface CodaLogEntry {
   readonly turn: number;
@@ -114,9 +115,12 @@ export interface CodaState {
   readonly turnNo: number;
   readonly winner: number | null;
   readonly log: readonly CodaLogEntry[];
+  /** 처음 타일을 다 가져간 뒤 첫 차례를 할 사람 */
+  readonly first: number;
 }
 
 export type CodaAction =
+  | { readonly type: 'draw'; readonly color: CodaColor }
   | { readonly type: 'guess'; readonly target: number; readonly index: number; readonly value: CodaGuess }
   | { readonly type: 'continue' }
   | { readonly type: 'stop' }
@@ -124,7 +128,9 @@ export type CodaAction =
   | { readonly type: 'reveal-own'; readonly index: number };
 
 export type CodaEvent =
-  | { readonly type: 'turn'; readonly p: number; readonly drew: boolean }
+  | { readonly type: 'turn'; readonly p: number }
+  /** 더미에서 한 장 가져옴 (deal: 처음 타일 고르기) */
+  | { readonly type: 'drew'; readonly p: number; readonly color: CodaColor; readonly deal: boolean }
   | { readonly type: 'hit'; readonly p: number; readonly target: number; readonly index: number; readonly value: CodaGuess; readonly tile: CodaTileId; readonly streak: number }
   | { readonly type: 'miss'; readonly p: number; readonly target: number; readonly index: number; readonly value: CodaGuess }
   | { readonly type: 'placed'; readonly p: number; readonly index: number; readonly revealed: boolean; readonly tile: CodaTileId | null }
@@ -132,7 +138,7 @@ export type CodaEvent =
   | { readonly type: 'out'; readonly p: number }
   | { readonly type: 'over'; readonly winner: number };
 
-export type CodaError = 'phase' | 'target' | 'slot' | 'value' | 'index';
+export type CodaError = 'phase' | 'target' | 'slot' | 'value' | 'index' | 'color';
 
 export type CodaResult = { readonly ok: true; readonly state: CodaState; readonly events: readonly CodaEvent[] } | { readonly ok: false; readonly error: CodaError };
 
@@ -189,54 +195,86 @@ function withSlot(s: CodaState, p: number, index: number, patch: Partial<CodaSlo
 
 // ─────────────────────────────── 시작 ───────────────────────────────
 
+/** 처음에 각자 가져갈 장수: 2~3인 4장, 4인 3장 */
+export function startCount(players: number): number {
+  return players >= 4 ? 3 : 4;
+}
+
+/** 더미에 남은 색별 장수 (뒷면 색은 모두가 본다) */
+export function poolColors(s: CodaState): Readonly<Record<CodaColor, number>> {
+  let black = 0;
+  for (const t of s.pool) if (codaColor(t) === 'black') black++;
+  return { black, white: s.pool.length - black };
+}
+
+/** 차례 시작: 더미가 있으면 먼저 한 장을 골라 뽑는다(draw), 없으면 바로 추리 */
 function beginTurn(s: CodaState, p: number, events: CodaEvent[]): CodaState {
-  let pool = s.pool;
-  let drawn: CodaTileId | null = null;
-  if (pool.length) {
-    drawn = pool[pool.length - 1] as CodaTileId;
-    pool = pool.slice(0, -1);
-  }
-  events.push({ type: 'turn', p, drew: drawn !== null });
-  return { ...s, pool, drawn, current: p, phase: 'guess', placeRevealed: false, streak: 0, turnNo: s.turnNo + 1 };
+  events.push({ type: 'turn', p });
+  return { ...s, drawn: null, current: p, phase: s.pool.length ? 'draw' : 'guess', placeRevealed: false, streak: 0, turnNo: s.turnNo + 1 };
 }
 
 export function newCoda(o: { seats: readonly CodaSeat[]; jokers: boolean; seed: number; first?: number }): CodaState {
   const n = o.seats.length;
   if (n < 2 || n > 4) throw new Error('다빈치 코드는 2~4명이 둡니다');
   const rng = createRng(o.seed);
-  const numbers = shuffle(codaTiles(false), rng);
-  const per = n >= 4 ? 3 : 4;
-  const byKey = (a: CodaTileId, b: CodaTileId): number => (codaKey(a) as number) - (codaKey(b) as number);
-  const players: CodaPlayer[] = o.seats.map((seat, i) => ({
+  // 처음 고를 때는 숫자 타일만 펼쳐 둔다 (조커는 다 가져간 뒤 섞는다)
+  const pool = shuffle(codaTiles(false), rng);
+  const first = o.first !== undefined && o.first >= 0 && o.first < n ? o.first : rng.int(n);
+  const players: CodaPlayer[] = o.seats.map((seat) => ({
     name: seat.name,
     seat: seat.seat,
     ...(seat.ai ? { ai: seat.ai } : {}),
-    row: numbers
-      .slice(i * per, (i + 1) * per)
-      .sort(byKey)
-      .map((tile) => ({ tile, revealed: false, misses: [] })),
+    row: [],
     out: false,
     stats: { guesses: 0, correct: 0, bestStreak: 0 },
   }));
-  const rest = numbers.slice(n * per);
-  const pool = shuffle(o.jokers ? [...rest, BLACK_JOKER, WHITE_JOKER] : rest, rng);
-  const first = o.first !== undefined && o.first >= 0 && o.first < n ? o.first : rng.int(n);
-  const base: CodaState = {
+  return {
     v: 1,
     seed: o.seed,
     jokers: o.jokers,
     players,
     pool,
-    current: first,
-    phase: 'guess',
+    current: 0,
+    phase: 'deal',
     drawn: null,
     placeRevealed: false,
     streak: 0,
     turnNo: 0,
     winner: null,
     log: [],
+    first,
   };
-  return beginTurn(base, first, []);
+}
+
+/** 더미에서 이 색 타일 하나를 꺼낸다 (섞인 더미라 누구도 숫자를 모른다) */
+function takeColor(pool: readonly CodaTileId[], color: CodaColor): { readonly tile: CodaTileId; readonly pool: CodaTileId[] } | null {
+  for (let i = pool.length - 1; i >= 0; i--) {
+    const t = pool[i] as CodaTileId;
+    if (codaColor(t) === color) return { tile: t, pool: [...pool.slice(0, i), ...pool.slice(i + 1)] };
+  }
+  return null;
+}
+
+/** 처음 타일 가져오기 / 차례의 한 장 뽑기 */
+function drawTile(s: CodaState, color: CodaColor, events: CodaEvent[]): CodaResult {
+  if (color !== 'black' && color !== 'white') return { ok: false, error: 'color' };
+  const got = takeColor(s.pool, color);
+  if (!got) return { ok: false, error: 'color' };
+  const me = s.players[s.current] as CodaPlayer;
+  if (s.phase === 'draw') {
+    events.push({ type: 'drew', p: s.current, color, deal: false });
+    return { ok: true, state: { ...s, pool: got.pool, drawn: got.tile, phase: 'guess' }, events };
+  }
+  // 처음 고르기: 바로 자기 줄 제자리에 숨긴 채 (조커가 없으니 자리는 하나)
+  const at = validSlots(me.row, got.tile)[0] ?? me.row.length;
+  let st = withPlayer({ ...s, pool: got.pool }, s.current, { row: insertAt(me.row, at, { tile: got.tile, revealed: false, misses: [] }) });
+  events.push({ type: 'drew', p: s.current, color, deal: true });
+  const n = s.players.length;
+  if ((st.players[s.current] as CodaPlayer).row.length < startCount(n)) return { ok: true, state: st, events };
+  if (s.current + 1 < n) return { ok: true, state: { ...st, current: s.current + 1 }, events };
+  // 모두 가져갔다: 조커를 더미에 섞고 첫 차례
+  if (s.jokers) st = { ...st, pool: shuffle([...st.pool, BLACK_JOKER, WHITE_JOKER], createRng((s.seed ^ 0x5bd1e995) >>> 0)) };
+  return { ok: true, state: beginTurn(st, s.first, events), events };
 }
 
 // ─────────────────────────────── 진행 ───────────────────────────────
@@ -299,6 +337,10 @@ export function codaReduce(s: CodaState, a: CodaAction): CodaResult {
   const events: CodaEvent[] = [];
   const me = s.players[s.current] as CodaPlayer;
   switch (a.type) {
+    case 'draw': {
+      if (s.phase !== 'deal' && s.phase !== 'draw') return { ok: false, error: 'phase' };
+      return drawTile(s, a.color, events);
+    }
     case 'guess': {
       if (s.phase !== 'guess') return { ok: false, error: 'phase' };
       const t = s.players[a.target];
@@ -372,7 +414,8 @@ export function codaInvariants(s: CodaState): string[] {
   s.players.forEach((p) => p.row.forEach((x) => count(x.tile)));
   s.pool.forEach(count);
   if (s.drawn !== null) count(s.drawn);
-  const all = codaTiles(s.jokers);
+  // 처음 고르는 동안에는 조커가 아직 더미에 없다
+  const all = codaTiles(s.jokers && s.phase !== 'deal');
   for (const t of all) if (seen.get(t) !== 1) issues.push(`타일 ${t}: ${seen.get(t) ?? 0}번`);
   for (const t of seen.keys()) if (!all.includes(t)) issues.push(`없는 타일 ${t}`);
   s.players.forEach((p, i) => {
@@ -383,7 +426,8 @@ export function codaInvariants(s: CodaState): string[] {
       if (k <= last) issues.push(`${i}번 줄 순서`);
       last = k;
     }
-    if (p.out !== (hiddenCount(p) === 0)) issues.push(`${i}번 탈락 표시`);
+    if (s.phase !== 'deal' && p.out !== (hiddenCount(p) === 0)) issues.push(`${i}번 탈락 표시`);
+    if (s.phase === 'deal' && p.out) issues.push(`${i}번 탈락 표시`);
   });
   if (s.phase === 'over' && s.winner === null) issues.push('승자 없음');
   if (s.phase !== 'over' && activePlayers(s).length < 2) issues.push('끝났어야 함');

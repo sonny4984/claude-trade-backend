@@ -172,8 +172,18 @@ test('다빈치 코드 혼자 두기: 시작하면 내 코드가 보이고 추�
   await page.locator('.plate-coda').click();
   await page.locator('.screen-foot .btn-primary').click();
   await expect(page.locator('.coda')).toBeVisible();
-  await expect(page.locator('.my-code .ctile')).not.toHaveCount(0);
-  // 내 차례가 올 때까지 기다렸다가 상대 타일 하나를 골라 숫자를 부른다
+  // 보드게임처럼 처음 타일 4장을 더미에서 색을 골라 가져온다
+  for (const color of ['black', 'white', 'black', 'white']) {
+    const heap = page.locator(`button.pile-heap[data-color="${color}"]`);
+    await expect(heap).toBeVisible({ timeout: 20_000 });
+    await heap.click();
+  }
+  await expect(page.locator('.my-code .ctile')).toHaveCount(4);
+  await expect(page.locator('.my-code .ctile[data-color="black"]')).toHaveCount(2);
+  // 내 차례가 오면 한 장 뽑고, 상대 타일 하나를 골라 숫자를 부른다
+  await expect(page.locator('button.pile-heap').first()).toBeVisible({ timeout: 45_000 });
+  await page.locator('button.pile-heap').first().click();
+  await expect(page.locator('.my-drawn .ctile')).toBeVisible();
   const target = page.locator('.code-row button.ctile');
   await expect(target.first()).toBeVisible({ timeout: 45_000 });
   await target.first().click();

@@ -158,6 +158,12 @@ test('온라인 루미큐브: 방 만들기 → 코드로 참가 → 친구의 �
 
 /** 다빈치 코드 한 수: 지금 둘 수 있는 쪽이면 두고 무엇을 했는지 돌려준다 */
 async function codaStep(p: Page): Promise<string | null> {
+  // 처음 고르기·차례 뽑기: 더미에서 한 색을 가져온다
+  const heap = p.locator('button.pile-heap');
+  if (await heap.count()) {
+    await heap.first().click();
+    return 'draw';
+  }
   const gap = p.locator('.code-gap');
   if (await gap.count()) {
     await gap.first().click();
@@ -195,7 +201,8 @@ test('온라인 다빈치 코드: 친구의 추리를 방장이 판정하고 두
   await expect(host.page.locator('.coda')).toBeVisible();
   await expect(guest.page.locator('.coda')).toBeVisible();
 
-  const revealed = (p: Page) => p.locator('.ctile[data-revealed]').count();
+  // 줄에 놓인 타일만 (뽑아 들고 있는 타일은 그 사람 화면에만 보인다)
+  const revealed = (p: Page) => p.locator('.code-tiles .ctile[data-revealed]').count();
   let guestGuesses = 0;
   for (let i = 0; i < 40 && guestGuesses < 2; i++) {
     for (const [who, p] of [
