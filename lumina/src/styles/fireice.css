@@ -1,0 +1,426 @@
+/*
+ * 불과 얼음 — 캔버스 무대, 터치 조작 버튼, 단계 카드, 넘어짐·통과 화면.
+ */
+:root {
+  --fi-fire: #ff6a3d;
+  --fi-fire-soft: #ffe1d4;
+  --fi-ice: #3fa7f5;
+  --fi-ice-soft: #dcf0ff;
+  --fi-star: #ffc93c;
+}
+
+.fi-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+}
+.fi-canvas {
+  display: block;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 3px #fff,
+    0 10px 24px rgba(120, 60, 20, 0.22);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  image-rendering: auto;
+}
+
+.fi-level-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--fi-fire), var(--fi-ice));
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  flex: none;
+}
+.fi-gem-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.fi-candy {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffd1da 0 18%, #ff4d6d 20%);
+  box-shadow:
+    -6px 0 0 -3px #ffd1da,
+    6px 0 0 -3px #ffd1da;
+}
+.fi-time {
+  font-variant-numeric: tabular-nums;
+  min-width: 46px;
+  text-align: center;
+}
+.fi-time[data-over] {
+  opacity: 0.7;
+}
+
+/* 터치 조작 */
+.fi-pad {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 4px 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.fi-pad-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fi-pad-btn {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 22px;
+  border: 0;
+  background: var(--surface, #fff);
+  color: var(--text, #3b2a20);
+  box-shadow:
+    0 4px 0 rgba(120, 70, 30, 0.22),
+    inset 0 0 0 2px rgba(120, 70, 30, 0.12);
+  touch-action: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.fi-pad-btn[data-big] {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: linear-gradient(160deg, #fff, var(--fi-fire-soft));
+}
+.fi-pad-btn:active {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 rgba(120, 70, 30, 0.22),
+    inset 0 0 0 2px rgba(120, 70, 30, 0.2);
+}
+.fi-pad-btn .icon {
+  stroke-width: 2.6;
+}
+.fi-swap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 70px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 18px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  background: var(--fi-ice);
+  box-shadow: 0 4px 0 rgba(0, 60, 120, 0.25);
+  cursor: pointer;
+}
+.fi-swap[data-el='ice'] {
+  background: var(--fi-fire);
+  box-shadow: 0 4px 0 rgba(140, 40, 10, 0.25);
+}
+.fi-swap:active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+
+/* 둘이 한 기기: 왼손 불, 오른손 얼음 (좁은 폰에서도 두 묶음이 한 줄에) */
+.fi-pad-two {
+  gap: 8px;
+  padding: 2px 0 0;
+}
+.fi-pad-two .fi-pad-group {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 16px 6px 6px;
+  border-radius: 20px;
+  background: var(--fi-fire-soft);
+}
+.fi-pad-two .fi-pad-group[data-el='ice'] {
+  background: var(--fi-ice-soft);
+  flex-direction: row-reverse;
+}
+.fi-pad-two .fi-pad-btn {
+  flex: 0 1 50px;
+  width: auto;
+  min-width: 40px;
+  height: 52px;
+  border-radius: 16px;
+}
+.fi-pad-two .fi-pad-btn[data-big] {
+  flex: 0 1 60px;
+  width: auto;
+  height: 60px;
+  border-radius: 50%;
+}
+.fi-pad-two .fi-pad-btn[data-el='ice'][data-big] {
+  background: linear-gradient(160deg, #fff, var(--fi-ice-soft));
+}
+.fi-pad-tag {
+  position: absolute;
+  top: 2px;
+  left: 12px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--fi-fire);
+}
+.fi-pad-group[data-el='ice'] .fi-pad-tag {
+  left: auto;
+  right: 12px;
+  color: var(--fi-ice);
+}
+
+.fi-status .status-text {
+  font-size: 14px;
+}
+
+/* 넘어짐 */
+.fi-oops {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 20px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(80, 40, 10, 0.25);
+  transform: translate(-50%, -50%);
+  animation: fi-pop 320ms var(--ease, ease-out) both;
+  pointer-events: none;
+  text-align: center;
+}
+.fi-oops b {
+  font-size: 24px;
+  color: var(--fi-fire);
+}
+.fi-oops[data-el='ice'] b {
+  color: var(--fi-ice);
+}
+@keyframes fi-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -40%) scale(0.8);
+  }
+}
+
+/* 단계 카드 */
+.fi-levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+.fi-level {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px 8px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface-2, #fff7ee);
+  color: inherit;
+  font: inherit;
+  box-shadow: inset 0 0 0 2px rgba(120, 70, 30, 0.1);
+  cursor: pointer;
+}
+.fi-level[aria-checked='true'],
+.fi-level[data-current] {
+  box-shadow:
+    inset 0 0 0 3px var(--fi-fire),
+    0 3px 0 rgba(120, 70, 30, 0.12);
+  background: linear-gradient(160deg, var(--fi-fire-soft), var(--fi-ice-soft));
+}
+.fi-level:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.fi-level-n {
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1;
+}
+.fi-level-name {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.fi-level-stars {
+  display: flex;
+  gap: 2px;
+  min-height: 16px;
+  align-items: center;
+}
+.fi-level-stars i {
+  width: 12px;
+  height: 12px;
+  clip-path: polygon(50% 0, 62% 35%, 100% 38%, 70% 60%, 80% 98%, 50% 76%, 20% 98%, 30% 60%, 0 38%, 38% 35%);
+  background: rgba(120, 70, 30, 0.2);
+}
+.fi-level-stars i[data-on] {
+  background: var(--fi-star);
+}
+.fi-total-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #c88a00;
+}
+.fi-total-stars .icon {
+  fill: var(--fi-star);
+  stroke: #c88a00;
+}
+
+/* 준비 화면: 불·얼음 자리 */
+.fi-mode-sub {
+  margin: -2px 4px 6px;
+  font-size: 13px;
+  opacity: 0.75;
+}
+.fi-seat[data-el='fire'] .seat-avatar img {
+  background: var(--fi-fire-soft);
+  border-radius: 50%;
+}
+.fi-seat[data-el='ice'] .seat-avatar img {
+  background: var(--fi-ice-soft);
+  border-radius: 50%;
+}
+.fi-el-tag {
+  align-self: flex-start;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 13px;
+  color: #fff;
+  background: var(--fi-fire);
+}
+.fi-el-tag[data-el='ice'] {
+  background: var(--fi-ice);
+}
+.fi-el-sub {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+/* 통과 */
+.fi-stars {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.fi-star .icon {
+  fill: rgba(120, 70, 30, 0.14);
+  stroke: rgba(120, 70, 30, 0.3);
+  stroke-width: 1.2;
+}
+.fi-star[data-on] {
+  animation: fi-star 420ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.fi-star[data-on] .icon {
+  fill: var(--fi-star);
+  stroke: #c88a00;
+}
+@keyframes fi-star {
+  from {
+    opacity: 0;
+    transform: scale(0.3) rotate(-30deg);
+  }
+}
+.fi-result-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.fi-result-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(120, 70, 30, 0.06);
+}
+.fi-result-list li[data-ok] b::after {
+  content: ' ★';
+  color: #e0a800;
+}
+.fi-best {
+  margin: 0 0 8px;
+  font-weight: 800;
+  color: var(--fi-fire);
+  text-align: center;
+}
+
+/* 홈 접시: 불꽃·물방울 */
+.plate-drops {
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  display: flex;
+  gap: 6px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.plate-drops i {
+  width: 16px;
+  height: 20px;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: radial-gradient(circle at 40% 65%, #ffd166 0 25%, var(--fi-fire) 30%);
+  clip-path: polygon(50% 0, 100% 62%, 85% 92%, 50% 100%, 15% 92%, 0 62%);
+}
+.plate-drops i[data-el='ice'] {
+  background: radial-gradient(circle at 40% 65%, #fff 0 20%, var(--fi-ice) 26%);
+}
+
+/* 마우스·키보드 기기: 화면 버튼 대신 키보드 (혼자 하기의 "바꾸기"만 남김) */
+@media (hover: hover) and (pointer: fine) {
+  .fi-pad .fi-pad-group {
+    display: none;
+  }
+  .fi-pad {
+    justify-content: center;
+  }
+}
+
+/* 낮은 가로 화면: 조작 버튼을 작게 */
+@media (orientation: landscape) and (max-height: 540px) {
+  .fi-pad-btn {
+    width: 52px;
+    height: 52px;
+  }
+  .fi-pad-btn[data-big] {
+    width: 64px;
+    height: 64px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fi-star[data-on],
+  .fi-oops {
+    animation: none;
+  }
+}

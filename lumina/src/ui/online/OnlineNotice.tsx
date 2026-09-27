@@ -3,14 +3,19 @@
  * (끊긴 친구 · 방장은 AI로 바꾸기 · 닫힌 방 · 연결 끊김). 온라인 판이 아니면 아무것도 그리지 않는다.
  */
 import { useOnline } from '../../net/online';
+import { GAME_SEATS } from '../../net/bridge';
 import { useGame } from '../../store/game';
 import { useCoda } from '../../coda/store';
+import { useGomoku } from '../../gomoku/store';
+import { useFireIce } from '../../fireice/store';
 import { useT } from '../../i18n';
 
 /** 닫힌 방에서 나오기: 게임 화면까지 정리하고 홈으로 */
 function leaveGame(): void {
   if (useCoda.getState().session?.online) useCoda.getState().quit();
   else if (useGame.getState().session?.online) useGame.getState().quit();
+  else if (useGomoku.getState().session?.online) useGomoku.getState().quit();
+  else if (useFireIce.getState().session?.online) useFireIce.getState().quit();
   else void useOnline.getState().leave();
 }
 
@@ -35,6 +40,7 @@ export function OnlineNotice() {
   const role = useOnline((s) => s.role);
   const connected = useOnline((s) => s.connected);
   const seats = useOnline((s) => s.table?.seats);
+  const game = useOnline((s) => s.table?.game);
   const error = useOnline((s) => s.error);
   if (!code || (status !== 'playing' && status !== 'closed')) return null;
   const store = useOnline.getState();
@@ -69,7 +75,7 @@ export function OnlineNotice() {
         away.map(({ s, i }) => (
           <span key={i} className="ol-msg">
             {t('online.away', { name: s.name })}
-            {role === 'host' && (
+            {role === 'host' && game && GAME_SEATS[game].ai && (
               <button type="button" className="ol-mini" onClick={() => store.replaceWithAi(i)}>
                 {t('online.toAi')}
               </button>

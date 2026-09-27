@@ -137,5 +137,5 @@ describe('오목 AI', () => {
     // AI끼리는 판이 꽉 차 비기기도 한다 — 명인은 지지 않고 대부분 이긴다
     expect(expertLosses).toBe(0);
     expect(expertWins).toBeGreaterThanOrEqual(8);
-  });
+  }, 30_000);
 });

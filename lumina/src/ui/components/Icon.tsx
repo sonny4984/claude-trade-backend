@@ -19,6 +19,13 @@ const PATHS: Record<string, string> = {
   flat: 'M4 6h16M4 12h16M4 18h10',
   list: 'M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01',
   eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  left: 'M15 18l-6-6 6-6',
+  right: 'M9 6l6 6-6 6',
+  up: 'M12 19V6M6 12l6-6 6 6',
+  swap: 'M4 8h14l-4-4M20 16H6l4 4',
+  lock: 'M6 11h12v10H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
+  star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z',
+  play: 'M8 5v14l11-7z',
 };
 
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {

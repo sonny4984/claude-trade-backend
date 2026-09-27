@@ -16,6 +16,8 @@ import { CodaScreen } from '../coda/ui/CodaScreen';
 import { OnlineScreen } from './screens/OnlineScreen';
 import { GomokuSetup } from '../gomoku/ui/GomokuSetup';
 import { GomokuScreen } from '../gomoku/ui/GomokuScreen';
+import { FireIceSetup } from '../fireice/ui/FireIceSetup';
+import { FireIceScreen } from '../fireice/ui/FireIceScreen';
 import { useOnline } from '../net/online';
 import { readInvite } from '../net/site';
 
@@ -84,6 +86,8 @@ export function App() {
       {screen === 'online' && <OnlineScreen />}
       {screen === 'gomoku-setup' && <GomokuSetup />}
       {screen === 'gomoku' && <GomokuScreen />}
+      {screen === 'fireice-setup' && <FireIceSetup />}
+      {screen === 'fireice' && <FireIceScreen />}
       <Toasts />
     </div>
   );
