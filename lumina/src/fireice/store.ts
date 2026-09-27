@@ -340,8 +340,10 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     const b = w.bodies[mine];
     const msg = { a: s.attempt, x: round(b.x), y: round(b.y), vx: round(b.vx), vy: round(b.vy), f: b.face, g: b.ground !== -2 ? 1 : 0, al: b.alive ? 1 : 0, d: b.atDoor ? 1 : 0 };
     const sig = `${msg.x},${msg.y},${msg.f},${msg.g},${msg.al},${msg.d}`;
-    // 가만히 있으면 가끔만
-    if (sig === runtime.lastSent && w.time - runtime.sendAt < 1) return;
+    // 공개 중계 서버에 무리 없게 초당 12번까지, 가만히 있으면 1초에 한 번만
+    const since = w.time - runtime.sendAt;
+    if (since < 1 / 12 && runtime.lastSent !== '') return;
+    if (sig === runtime.lastSent && since < 1) return;
     runtime.lastSent = sig;
     runtime.sendAt = w.time;
     bridge.emit?.('fp', msg, true);
