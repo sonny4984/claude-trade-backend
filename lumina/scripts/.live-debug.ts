@@ -1,0 +1,14 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', proxy: { server: process.env.HTTPS_PROXY as string }, args: ['--ignore-certificate-errors'] });
+const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+const page = await ctx.newPage();
+page.on('console', (m) => console.log('console', m.type(), m.text().slice(0, 300)));
+page.on('pageerror', (e) => console.log('pageerror', e.message.slice(0, 300)));
+page.on('requestfailed', (r) => console.log('failed', r.url().slice(0, 120), r.failure()?.errorText));
+const resp = await page.goto(process.argv[2] as string, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch((e) => { console.log('goto error', e.message); return null; });
+console.log('status', resp?.status(), resp?.headers()['content-type']);
+await page.waitForTimeout(8000);
+console.log('title', await page.title(), 'len', (await page.content()).length);
+console.log('root children', await page.evaluate(() => document.getElementById('root')?.children.length));
+await page.screenshot({ path: '/tmp/claude-0/-home-user-claude-trade-backend/d7c30341-84e2-5730-bf08-4ba4fb74a270/scratchpad/live.png' });
+await browser.close();
