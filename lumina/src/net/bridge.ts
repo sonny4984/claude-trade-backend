@@ -2,7 +2,19 @@
  * 게임 저장소 ↔ 온라인 저장소 사이의 얇은 다리 (서로 import하지 않게).
  * 온라인 저장소가 함수를 끼워 넣고, 게임 저장소는 있으면 부른다.
  */
-export type OnlineGame = 'lumina' | 'coda';
+export type OnlineGame = 'lumina' | 'coda' | 'gomoku' | 'fireice';
+
+/** 게임마다 자리 수와 AI 허용 */
+export const GAME_SEATS: Readonly<Record<OnlineGame, { readonly min: number; readonly max: number; readonly ai: boolean }>> = {
+  lumina: { min: 2, max: 4, ai: true },
+  coda: { min: 2, max: 4, ai: true },
+  gomoku: { min: 2, max: 2, ai: true },
+  fireice: { min: 2, max: 2, ai: false },
+};
+
+export function isOnlineGame(x: unknown): x is OnlineGame {
+  return x === 'lumina' || x === 'coda' || x === 'gomoku' || x === 'fireice';
+}
 
 export interface OnlineInfo {
   readonly code: string;
@@ -11,6 +23,8 @@ export interface OnlineInfo {
   readonly mySeat: number;
 }
 
+type RealtimeListener = (seat: number, data: unknown) => void;
+
 export const bridge: {
   /** 방장: 바뀐 판을 모두에게 */
   publish: ((game: OnlineGame, payload: unknown, events: readonly unknown[]) => void) | null;
@@ -18,13 +32,26 @@ export const bridge: {
   send: ((game: OnlineGame, payload: unknown) => void) | null;
   /** 방을 나감 (게임 화면의 "그만두기") */
   leave: (() => void) | null;
-} = { publish: null, send: null, leave: null };
+  /** 실시간 순간 메시지 (불과 얼음의 위치·스위치 등) — fast면 도착 보장 없이 빠르게 */
+  emit: ((kind: string, data: unknown, fast?: boolean) => void) | null;
+  /** 받은 실시간 메시지를 나눠 줄 곳 (kind별) */
+  readonly listeners: Map<string, Set<RealtimeListener>>;
+} = { publish: null, send: null, leave: null, emit: null, listeners: new Map() };
 
-/** 온라인 방의 한 자리 (방장이 정하고 db 문서에 적는다) */
+/** 실시간 메시지 듣기 (그 메시지를 보낸 자리 번호와 함께) */
+export function onRealtime(kind: string, fn: RealtimeListener): () => void {
+  if (!bridge.listeners.has(kind)) bridge.listeners.set(kind, new Set());
+  bridge.listeners.get(kind)?.add(fn);
+  return () => bridge.listeners.get(kind)?.delete(fn);
+}
+
+/** 온라인 방의 한 자리 (방장이 정하고 문서에 적는다) */
 export interface TableSeat {
   readonly kind: 'human' | 'ai';
-  /** 사람 자리: 그 기기의 peer (나가 있으면 null 또는 옛 값) */
+  /** 사람 자리: 그 기기의 peer (나가 있으면 옛 값) */
   readonly peer: string | null;
+  /** 기기에 저장된 플레이어 번호 — 새로고침해도 같은 자리를 되찾는다 */
+  readonly pid?: string;
   readonly name: string;
   readonly character: import('../characters/roster').CharacterId;
   readonly level?: import('../game/types').AiLevel;
@@ -32,7 +59,7 @@ export interface TableSeat {
   readonly away?: boolean;
 }
 
-/** db의 tables/<code> 문서 — 늦게 들어와도 여기서 판을 받는다 */
+/** 방 문서 — 늦게 들어와도 여기서 판을 받는다 */
 export interface TableDoc {
   readonly v: 1;
   readonly code: string;
@@ -44,7 +71,7 @@ export interface TableDoc {
   readonly jokers: boolean;
   /** 판이 바뀔 때마다 1씩 */
   readonly seq: number;
-  /** 게임 저장소의 세션 — JSON 문자열 하나로 (중첩 배열·깊이 제한과 무관하게) */
+  /** 게임 저장소의 세션 — JSON 문자열 하나로 */
   readonly payload: string | null;
   /** 이번 변화의 이벤트 (소리·반응용) — JSON 배열 문자열 */
   readonly events: string;
@@ -52,3 +79,18 @@ export interface TableDoc {
   readonly reject: { readonly peer: string; readonly nonce: string } | null;
   readonly at: number;
 }
+
+/** 온라인 대전에 참여하는 게임 저장소가 온라인 저장소에 내주는 손잡이 */
+export interface OnlineGameApi {
+  /** 방장: 로비의 자리로 판 시작 */
+  startOnline(table: TableDoc, info: OnlineInfo): void;
+  /** 방장: 참가자가 보낸 수 (틀리면 false) */
+  applyRemote(seat: number, payload: unknown): boolean;
+  /** 참가자(또는 다시 들어온 방장): 방에 올라온 판을 받는다 */
+  adoptRemote(payload: unknown, events: readonly unknown[], info: OnlineInfo): void;
+  /** 방장: 나간 친구 자리를 AI가 이어 둔다 (못 하면 false) */
+  seatToAi(seat: number): boolean;
+}
+
+/** 게임별 손잡이 — 각 게임 저장소가 불러올 때 스스로 등록한다 */
+export const gameApis: Partial<Record<OnlineGame, () => OnlineGameApi>> = {};

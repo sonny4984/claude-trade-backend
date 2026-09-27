@@ -14,6 +14,8 @@ import { LessonsScreen } from './screens/LessonsScreen';
 import { CodaSetup } from '../coda/ui/CodaSetup';
 import { CodaScreen } from '../coda/ui/CodaScreen';
 import { OnlineScreen } from './screens/OnlineScreen';
+import { useOnline } from '../net/online';
+import { readInvite } from '../net/site';
 
 /** 테마·접근성 설정을 <html> 속성으로 */
 function useDocumentSettings(): void {
@@ -49,6 +51,13 @@ export function App() {
     const id = window.setTimeout(() => void loadPortrait3d(), 60);
     return () => window.clearTimeout(id);
   }, [show3d]);
+  // 초대 링크(?room=코드)로 열렸으면 바로 입장 화면으로
+  useEffect(() => {
+    const inv = readInvite();
+    if (!inv) return;
+    useOnline.getState().setInvite(inv);
+    useGame.getState().go('online');
+  }, []);
   useEffect(() => {
     const unlock = (): void => unlockAudio();
     window.addEventListener('pointerdown', unlock, { passive: true });

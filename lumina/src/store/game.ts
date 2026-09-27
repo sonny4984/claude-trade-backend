@@ -48,7 +48,7 @@ import { commitIssueText, subj, tileLabel, translate } from '../i18n';
 import { LESSONS } from '../lessons/lessons';
 import { bridge, type OnlineInfo, type TableDoc } from '../net/bridge';
 
-export type Screen = 'home' | 'setup-solo' | 'setup-local' | 'game' | 'settings' | 'stats' | 'rules' | 'lessons' | 'coda-setup' | 'coda' | 'online';
+export type Screen = 'home' | 'setup-solo' | 'setup-local' | 'game' | 'settings' | 'stats' | 'rules' | 'lessons' | 'coda-setup' | 'coda' | 'online' | 'gomoku-setup' | 'gomoku' | 'fireice-setup' | 'fireice';
 export type Overlay = null | 'menu' | 'gameover' | 'hint' | 'share' | 'confirm-draw' | 'confirm-quit' | 'lesson-done';
 
 export interface SeatMeta {

@@ -1,12 +1,13 @@
 /**
- * 온라인 대전 — 방 만들기·코드로 참가·로비.
- * 방장이 방을 만들면 4자리 코드가 나오고, 친구가 같은 페이지(claude.ai)에서 그 코드를 넣으면 같은 방에 앉는다.
+ * 온라인 대전 — 한국 게임식 초대: 방 만들기 → "카카오톡으로 초대하기" → 친구가 링크를 누르면 바로 입장.
+ * 링크 없이 방 코드 6자리를 쳐서 들어올 수도 있다. 로그인·설치·공유 설정은 필요 없다.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../../store/game';
 import { useCoda } from '../../coda/store';
-import { useOnline, savedRoom, normalizeCode } from '../../net/online';
-import type { TableSeat } from '../../net/bridge';
+import { useOnline, savedRoom, normalizeCode, CODE_LENGTH } from '../../net/online';
+import { GAME_SEATS, gameApis, type OnlineGame, type TableSeat } from '../../net/bridge';
+import { canNativeShare, elsewhere, inviteUrl, shareInvite, siteUrl } from '../../net/site';
 import { CHARACTER_ORDER, type CharacterId } from '../../characters/roster';
 import type { Expression } from '../../characters/draw2d';
 import { usePortrait } from '../../characters/portrait3d';
@@ -16,6 +17,7 @@ import { useT } from '../../i18n';
 import { sfx } from '../../audio/sfx';
 
 const LEVELS: AiLevel[] = ['beginner', 'casual', 'advanced', 'expert'];
+const GAMES: OnlineGame[] = ['lumina', 'coda', 'gomoku', 'fireice'];
 
 function Face({ id, ex = 'idle', size = 56 }: { id: CharacterId; ex?: Expression; size?: number }) {
   const src = usePortrait(id, ex, 128);
@@ -49,16 +51,85 @@ function ErrorPill() {
   );
 }
 
-/** 처음 화면: 내 캐릭터·이름, 게임 고르기, 방 만들기 / 코드로 참가 */
-function Start() {
+/** claude.ai 안처럼 주소를 나눌 수 없는 곳: 게임 사이트로 가는 길 */
+function SiteHint() {
+  const t = useT();
+  const url = siteUrl();
+  if (!elsewhere() || !url) return null;
+  return (
+    <section className="card ol-site">
+      <p className="ol-note">{t('online.siteHint')}</p>
+      <a className="btn btn-secondary btn-block" href={url} target="_blank" rel="noopener noreferrer">
+        {t('online.openSite')}
+      </a>
+    </section>
+  );
+}
+
+/** 내 캐릭터·이름 */
+function Profile() {
   const t = useT();
   const profile = useOnline((s) => s.profile);
+  const store = useOnline.getState();
+  return (
+    <section className="card ol-me">
+      <h2 className="card-title">{t('online.me')}</h2>
+      <div className="ol-pick" role="radiogroup" aria-label={t('character.pick')}>
+        {CHARACTER_ORDER.map((c) => (
+          <button
+            key={c}
+            type="button"
+            role="radio"
+            aria-checked={profile.character === c}
+            className="ol-pick-btn"
+            onClick={() => {
+              sfx('pick');
+              store.setProfile({ character: c });
+            }}
+          >
+            <Face id={c} ex={profile.character === c ? 'happy' : 'idle'} />
+            <span>{t(`character.${c}`)}</span>
+          </button>
+        ))}
+      </div>
+      <input className="text-input ol-name" value={profile.name} maxLength={12} placeholder={t('online.namePh')} aria-label={t('online.namePh')} onChange={(e) => store.setProfile({ name: e.target.value })} />
+    </section>
+  );
+}
+
+/** 초대 링크로 들어왔을 때: 누구로 앉을지 고르고 바로 입장 */
+function InviteJoin({ code, broker }: { code: string; broker?: number }) {
+  const t = useT();
+  const working = useOnline((s) => s.status === 'working');
+  const store = useOnline.getState();
+  return (
+    <>
+      <section className="card ol-room ol-invited">
+        <p className="ol-kicker">{t('online.invited')}</p>
+        <CodeTiles code={code} />
+        <p className="ol-note">{t('online.invitedSub')}</p>
+      </section>
+      <Profile />
+      <button type="button" className="btn btn-primary btn-lg btn-block ol-enter" disabled={working} onClick={() => void store.join(code, broker)}>
+        {t('online.enter')}
+      </button>
+      <button type="button" className="btn btn-ghost btn-block" onClick={() => store.setInvite(null)}>
+        {t('online.otherWay')}
+      </button>
+    </>
+  );
+}
+
+/** 처음 화면: 내 캐릭터·이름, 게임 고르기, 방 만들기 / 코드로 입장 */
+function Start() {
+  const t = useT();
   const game = useOnline((s) => s.game);
   const working = useOnline((s) => s.status === 'working');
   const [code, setCode] = useState('');
   const saved = useMemo(() => savedRoom(), []);
   const store = useOnline.getState();
   const ready = normalizeCode(code).length >= 4;
+  const games = GAMES.filter((g) => !!gameApis[g]);
   return (
     <>
       {saved && (
@@ -67,47 +138,21 @@ function Start() {
           <span className="plate-sub">{t('online.resumeInfo', { code: saved.code.toUpperCase(), role: t(`online.${saved.role}`) })}</span>
         </button>
       )}
-      <section className="card ol-me">
-        <h2 className="card-title">{t('online.me')}</h2>
-        <div className="ol-pick" role="radiogroup" aria-label={t('character.pick')}>
-          {CHARACTER_ORDER.map((c) => (
-            <button
-              key={c}
-              type="button"
-              role="radio"
-              aria-checked={profile.character === c}
-              className="ol-pick-btn"
-              onClick={() => {
-                sfx('pick');
-                store.setProfile({ character: c });
-              }}
-            >
-              <Face id={c} ex={profile.character === c ? 'happy' : 'idle'} />
-              <span>{t(`character.${c}`)}</span>
-            </button>
-          ))}
-        </div>
-        <input
-          className="text-input ol-name"
-          value={profile.name}
-          maxLength={12}
-          placeholder={t('online.namePh')}
-          aria-label={t('online.namePh')}
-          onChange={(e) => store.setProfile({ name: e.target.value })}
-        />
-      </section>
+      <Profile />
       <section className="card">
         <h2 className="card-title">{t('online.game')}</h2>
-        <div className="seg" role="radiogroup" aria-label={t('online.game')}>
-          {(['lumina', 'coda'] as const).map((g) => (
-            <button key={g} type="button" role="radio" aria-checked={game === g} onClick={() => store.setGame(g)}>
-              {t(`online.${g}`)}
+        <div className="ol-games" role="radiogroup" aria-label={t('online.game')}>
+          {games.map((g) => (
+            <button key={g} type="button" role="radio" aria-checked={game === g} className="ol-game" data-game={g} onClick={() => store.setGame(g)}>
+              <b>{t(`online.${g}`)}</b>
+              <small>{t(`online.${g}Sub`)}</small>
             </button>
           ))}
         </div>
         <button type="button" className="btn btn-primary btn-lg btn-block ol-create" disabled={working} onClick={() => void store.create()}>
           <Icon name="plus" size={20} /> {t('online.create')}
         </button>
+        <p className="ol-note ol-tip">{t('online.tip')}</p>
       </section>
       <section className="card">
         <h2 className="card-title">{t('online.joinTitle')}</h2>
@@ -125,8 +170,8 @@ function Start() {
             autoCapitalize="characters"
             autoComplete="off"
             spellCheck={false}
-            placeholder={t('online.codePh')}
-            aria-label={t('online.codePh')}
+            placeholder={t('online.codePh', { n: CODE_LENGTH })}
+            aria-label={t('online.codePh', { n: CODE_LENGTH })}
             onChange={(e) => setCode(e.target.value)}
           />
           <button type="submit" className="btn btn-secondary" disabled={!ready || working}>
@@ -134,22 +179,8 @@ function Start() {
           </button>
         </form>
       </section>
-      <HowTo />
+      <SiteHint />
     </>
-  );
-}
-
-function HowTo() {
-  const t = useT();
-  return (
-    <section className="card ol-how">
-      <h2 className="card-title">{t('online.howTitle')}</h2>
-      <ol>
-        <li>{t('online.how1')}</li>
-        <li>{t('online.how2')}</li>
-        <li>{t('online.how3')}</li>
-      </ol>
-    </section>
   );
 }
 
@@ -187,29 +218,52 @@ function SeatRow({ seat, i, host, me }: { seat: TableSeat; i: number; host: bool
   );
 }
 
-/** 로비: 코드 크게, 자리, (방장) AI 추가·시작 */
+/** 초대 버튼 — 휴대폰은 공유 시트(카카오톡), 컴퓨터는 링크 복사. 아래에 링크를 그대로 보여 준다 */
+function Invite({ code, broker, hostName, gameName }: { code: string; broker: number; hostName: string; gameName: string }) {
+  const t = useT();
+  const [msg, setMsg] = useState<string | null>(null);
+  const url = inviteUrl(code, broker);
+  const native = canNativeShare();
+  const send = async (): Promise<void> => {
+    const r = await shareInvite(url, t('online.inviteText', { name: hostName, game: gameName }), t('online.inviteTitle'));
+    if (r === 'shared') setMsg(t('online.shared'));
+    else if (r === 'copied') setMsg(t('online.copied'));
+    else if (r === 'failed') setMsg(t('online.copyFail'));
+    if (r === 'shared' || r === 'copied') sfx('pop');
+  };
+  return (
+    <div className="ol-invite">
+      <button type="button" className="btn btn-lg btn-block ol-kakao" onClick={() => void send()}>
+        <span className="ol-kakao-bubble" aria-hidden="true" />
+        {native ? t('online.kakao') : t('online.copyLink')}
+      </button>
+      <label className="ol-link-row">
+        <span className="sr-only">{t('online.linkLabel')}</span>
+        <input className="text-input ol-link" readOnly value={url} onFocus={(e) => e.currentTarget.select()} />
+      </label>
+      {msg && (
+        <p className="ol-note" role="status">
+          {msg}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** 로비: 코드와 초대, 자리, (방장) AI 추가·시작 */
 function Lobby() {
   const t = useT();
   const table = useOnline((s) => s.table);
   const role = useOnline((s) => s.role);
   const myPeer = useOnline((s) => s.myPeer);
   const status = useOnline((s) => s.status);
-  const [copied, setCopied] = useState<null | 'ok' | 'fail'>(null);
+  const broker = useOnline((s) => s.broker);
   const store = useOnline.getState();
   if (!table) return null;
   const host = role === 'host';
   const seated = table.seats.some((s) => s.peer === myPeer);
   const n = table.seats.length;
-  const copy = async (): Promise<void> => {
-    const text = t('online.inviteText', { code: table.code.toUpperCase() });
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied('ok');
-      sfx('pop');
-    } catch {
-      setCopied('fail');
-    }
-  };
+  const rule = GAME_SEATS[table.game];
   if (status === 'closed') {
     return (
       <section className="card ol-center">
@@ -232,32 +286,30 @@ function Lobby() {
       </section>
     );
   }
+  const gameName = t(`online.${table.game}`);
   return (
     <>
       <section className="card ol-room">
         <p className="ol-kicker">
-          {t(`online.${table.game}`)} · {t('online.codeTitle')}
+          {host ? gameName : t('online.roomOf', { name: table.hostName })} · {t('online.codeTitle')}
         </p>
         <CodeTiles code={table.code} />
-        <button type="button" className="btn btn-secondary btn-block" onClick={() => void copy()}>
-          <Icon name="share" size={18} /> {t('online.copy')}
-        </button>
-        {copied && <p className="ol-note" role="status">{t(copied === 'ok' ? 'online.copied' : 'online.copyFail')}</p>}
+        {host && status === 'lobby' && <Invite code={table.code} broker={broker} hostName={table.hostName} gameName={gameName} />}
       </section>
       <section className="card">
-        <h2 className="card-title">{t('online.seats', { n })}</h2>
+        <h2 className="card-title">{t('online.seats', { n, max: rule.max })}</h2>
         <ol className="ol-seats">
           {table.seats.map((s, i) => (
             <SeatRow key={`${s.peer ?? 'ai'}-${i}`} seat={s} i={i} host={host && status === 'lobby'} me={s.peer === myPeer} />
           ))}
-          {Array.from({ length: Math.max(0, 4 - n) }, (_, k) => (
+          {Array.from({ length: Math.max(0, rule.max - n) }, (_, k) => (
             <li key={`empty-${k}`} className="ol-seat ol-seat-empty" aria-hidden="true">
               <span className="ol-empty-face" />
               <span className="ol-role">{t('online.emptySeat')}</span>
             </li>
           ))}
         </ol>
-        {host && status === 'lobby' && n < 4 && (
+        {host && status === 'lobby' && rule.ai && n < rule.max && (
           <button type="button" className="btn btn-ghost add-seat" onClick={() => store.addAi('casual')}>
             <Icon name="plus" size={18} /> {t('online.addAi')}
           </button>
@@ -282,9 +334,13 @@ function Lobby() {
           <p>{t('online.waiting')}</p>
         </section>
       )}
-      {host && <HowTo />}
     </>
   );
+}
+
+/** 지금 온라인 판이 도는 게임 화면 */
+function screenOf(game: OnlineGame): 'game' | 'coda' | 'gomoku' | 'fireice' {
+  return game === 'lumina' ? 'game' : game;
 }
 
 export function OnlineScreen() {
@@ -293,14 +349,15 @@ export function OnlineScreen() {
   const role = useOnline((s) => s.role);
   const table = useOnline((s) => s.table);
   const connected = useOnline((s) => s.connected);
+  const invite = useOnline((s) => s.invite);
   const go = useGame.getState().go;
   useEffect(() => {
     void useOnline.getState().check();
   }, []);
   const inRoom = status === 'lobby' || status === 'playing' || status === 'closed';
   const host = role === 'host';
-  const canStart = host && status === 'lobby' && (table?.seats.length ?? 0) >= 2;
-  const playingHere = status === 'playing' && (table?.game === 'coda' ? !!useCoda.getState().session?.online : !!useGame.getState().session?.online);
+  const canStart = host && status === 'lobby' && !!table && table.seats.length >= GAME_SEATS[table.game].min;
+  const playingHere = status === 'playing' && !!table && (table.game === 'coda' ? !!useCoda.getState().session?.online : table.game === 'lumina' ? !!useGame.getState().session?.online : true);
   return (
     <div className="screen online-screen">
       <header className="screen-head">
@@ -308,7 +365,7 @@ export function OnlineScreen() {
           <Icon name="back" />
         </button>
         <h1>{t('online.title')}</h1>
-        {inRoom && <span className="ol-link" data-on={connected || undefined} aria-label={connected ? t('online.connected') : t('online.offline')} />}
+        {inRoom && <span className="ol-link-dot" data-on={connected || undefined} aria-label={connected ? t('online.connected') : t('online.offline')} />}
       </header>
       <div className="screen-body">
         <ErrorPill />
@@ -317,9 +374,6 @@ export function OnlineScreen() {
             <Face id="ginini" ex="surprised" size={96} />
             <p className="ol-big">{t('online.unavailableTitle')}</p>
             <p className="ol-note">{t('online.unavailable')}</p>
-            <button type="button" className="btn btn-secondary btn-block" onClick={() => useOnline.setState({ status: 'idle', error: null })}>
-              {t('online.retry')}
-            </button>
           </section>
         ) : status === 'working' ? (
           <section className="card ol-center ol-wait">
@@ -330,14 +384,16 @@ export function OnlineScreen() {
           </section>
         ) : inRoom ? (
           <Lobby />
+        ) : invite ? (
+          <InviteJoin code={invite.code} {...(invite.broker !== undefined ? { broker: invite.broker } : {})} />
         ) : (
           <Start />
         )}
       </div>
       {inRoom && (
         <footer className="screen-foot ol-foot">
-          {playingHere ? (
-            <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => go(table?.game === 'coda' ? 'coda' : 'game')}>
+          {playingHere && table ? (
+            <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => go(screenOf(table.game))}>
               {t('online.back')}
             </button>
           ) : host && status === 'lobby' ? (

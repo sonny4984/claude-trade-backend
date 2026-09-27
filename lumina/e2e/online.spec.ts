@@ -1,11 +1,21 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { ClaudeHub } from './claude-mock';
+import { startBroker, type TestBroker } from './broker';
 
 /**
- * 온라인 대전 — 브라우저 컨텍스트 둘(방장 기기·친구 기기)을 가짜 claude.ai 런타임 허브로 잇는다.
+ * 온라인 대전 — 브라우저 컨텍스트 둘(방장 기기·친구 기기)을 테스트 프로세스 안의 MQTT 서버(aedes)로 잇는다.
+ * 앱은 ?broker=ws://127.0.0.1:포트 로 공개 중계 서버 대신 이 서버를 쓴다 (localhost에서만 받아들임).
  * 기기 둘을 띄우므로 데스크톱 프로젝트에서 한 번만 돈다.
  */
 test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, '두 기기 시험은 한 번만');
+
+let broker: TestBroker;
+test.beforeAll(async () => {
+  broker = await startBroker();
+});
+test.afterAll(async () => {
+  await broker.close();
+});
+const withBroker = (path: string): string => `${path}${path.includes('?') ? '&' : '?'}broker=${encodeURIComponent(broker.url)}`;
 
 interface Device {
   page: Page;
@@ -13,7 +23,7 @@ interface Device {
   errors: string[];
 }
 
-async function device(browser: Browser, hub: ClaudeHub, path = '/'): Promise<Device> {
+async function device(browser: Browser, path = '/'): Promise<Device> {
   const ctx = await browser.newContext({ viewport: { width: 430, height: 900 } });
   const page = await ctx.newPage();
   const errors: string[] = [];
@@ -22,7 +32,6 @@ async function device(browser: Browser, hub: ClaudeHub, path = '/'): Promise<Dev
     if (m.type() === 'error' && !/ERR_FAILED|fonts\.g/.test(m.text())) errors.push(m.text());
   });
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
-  await hub.attach(page);
   await page.addInitScript((s) => {
     try {
       if (sessionStorage.getItem('e2e-init')) return;
@@ -33,16 +42,16 @@ async function device(browser: Browser, hub: ClaudeHub, path = '/'): Promise<Dev
       /* 저장소가 막힌 환경 */
     }
   }, { aiSpeed: 'fast', hints: 'unlimited', confirmDraw: false, show3d: false });
-  await page.goto(path);
-  await expect(page.locator('.wordmark')).toHaveText('LUMINA');
+  await page.goto(path.includes('broker=') ? path : withBroker(path));
   return { page, ctx, errors };
 }
 
 /** 방장: 방을 만들고 코드를 돌려준다 */
 async function createRoom(host: Page, game: 'lumina' | 'coda'): Promise<string> {
+  await expect(host.locator('.wordmark')).toHaveText('LUMINA');
   await host.locator('.plate-online').click();
   await host.locator('.ol-name').fill('방장');
-  if (game === 'coda') await host.locator('.seg button', { hasText: '다빈치' }).click();
+  await host.locator(`.ol-game[data-game="${game}"]`).click();
   await host.locator('.ol-create').click();
   const codeEl = host.locator('.ol-code');
   await expect(codeEl).toBeVisible();
@@ -51,6 +60,7 @@ async function createRoom(host: Page, game: 'lumina' | 'coda'): Promise<string> 
 
 /** 친구: 캐릭터·이름을 고르고 코드로 들어간다 */
 async function joinRoom(guest: Page, code: string): Promise<void> {
+  await expect(guest.locator('.wordmark')).toHaveText('LUMINA');
   await guest.locator('.plate-online').click();
   await guest.locator('.ol-pick-btn').nth(1).click();
   await guest.locator('.ol-name').fill('친구');
@@ -73,14 +83,19 @@ async function applyHint(page: Page): Promise<boolean> {
 }
 
 test('온라인 루미큐브: 방 만들기 → 코드로 참가 → 친구의 첫 등록이 방장 판에 그대로', async ({ browser }) => {
-  const hub = new ClaudeHub();
   // 시드 2: 방장·친구·AI 셋이면 친구(1번 자리)가 먼저 두고 첫 차례에 등록할 수 있다 (scripts/online-check.ts)
-  const host = await device(browser, hub, '/?seed=2');
-  const guest = await device(browser, hub);
-
+  const host = await device(browser, '/?seed=2');
   const code = await createRoom(host.page, 'lumina');
-  expect(code).toMatch(/^[a-z0-9]{4}$/);
-  await joinRoom(guest.page, code);
+  expect(code).toMatch(/^[a-z0-9]{6}$/);
+
+  // 초대 링크: 친구는 링크를 열면 바로 입장 화면 → 캐릭터 고르고 "입장하기"
+  const link = await host.page.locator('.ol-link').inputValue();
+  expect(link).toContain(`room=${code}`);
+  const guest = await device(browser, link.replace(/^https?:\/\/[^/]+/, ''));
+  await expect(guest.page.locator('.ol-invited')).toBeVisible();
+  await guest.page.locator('.ol-pick-btn').nth(1).click();
+  await guest.page.locator('.ol-name').fill('친구');
+  await guest.page.locator('.ol-enter').click();
 
   // 로비: 둘 다 두 자리를 본다 → 방장이 AI를 앉히면 친구 화면에도 셋
   const seats = (p: Page) => p.locator('.ol-seat:not(.ol-seat-empty)');
@@ -170,10 +185,10 @@ async function codaStep(p: Page): Promise<string | null> {
 }
 
 test('온라인 다빈치 코드: 친구의 추리를 방장이 판정하고 두 화면이 같은 판을 본다', async ({ browser }) => {
-  const hub = new ClaudeHub();
-  const host = await device(browser, hub, '/?seed=5');
-  const guest = await device(browser, hub);
+  const host = await device(browser, '/?seed=5');
+  const guest = await device(browser);
   const code = await createRoom(host.page, 'coda');
+  // 코드를 손으로 쳐서 들어가는 길
   await joinRoom(guest.page, code);
   await expect(host.page.locator('.ol-seat:not(.ol-seat-empty)')).toHaveCount(2);
   await host.page.locator('.ol-foot .btn-primary').click();
