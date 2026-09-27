@@ -77,6 +77,15 @@ export function Home() {
             <i data-c="b" />
           </span>
         </button>
+        <button type="button" className="plate-btn plate-gomoku" onClick={() => store.go('gomoku-setup')}>
+          <span className="plate-label">{t('gomoku.title')}</span>
+          <span className="plate-sub">{t('gomoku.sub')}</span>
+          <span className="plate-stones" aria-hidden="true">
+            <i data-s="1" />
+            <i data-s="2" />
+            <i data-s="1" />
+          </span>
+        </button>
         <button type="button" className="plate-btn plate-online" onClick={() => store.go('online')}>
           <span className="plate-label">{t('online.title')}</span>
           <span className="plate-sub">{room ? t('online.resumeInfo', { code: room.code.toUpperCase(), role: t(`online.${room.role}`) }) : t('online.sub')}</span>

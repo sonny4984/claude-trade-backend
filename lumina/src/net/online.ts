@@ -799,4 +799,5 @@ useOnline.subscribe((st, prev) => {
   if (st.sending === prev.sending) return;
   useGame.setState({ waiting: st.sending });
   useCoda.setState({ waiting: st.sending });
+  for (const g of Object.values(gameApis)) g?.().setWaiting?.(st.sending);
 });

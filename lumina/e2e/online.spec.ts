@@ -220,3 +220,55 @@ test('온라인 다빈치 코드: 친구의 추리를 방장이 판정하고 두
   await host.ctx.close();
   await guest.ctx.close();
 });
+
+/** 오목판의 교차점 (x, y)를 누른다 — 두 번 누르면 놓인다 */
+async function goTap(p: Page, x: number, y: number, twice = true): Promise<void> {
+  const box = await p.locator('.go-board').boundingBox();
+  if (!box) throw new Error('no board');
+  const cx = box.x + ((x + 1) / 16) * box.width;
+  const cy = box.y + ((y + 1) / 16) * box.height;
+  await p.mouse.click(cx, cy);
+  if (twice) {
+    await p.waitForTimeout(120);
+    await p.mouse.click(cx, cy);
+  }
+}
+
+test('온라인 오목: 초대 링크로 들어온 친구와 번갈아 두면 두 화면에 같은 돌이 놓인다', async ({ browser }) => {
+  const host = await device(browser);
+  await expect(host.page.locator('.wordmark')).toHaveText('LUMINA');
+  await host.page.locator('.plate-online').click();
+  await host.page.locator('.ol-name').fill('방장');
+  await host.page.locator('.ol-game[data-game="gomoku"]').click();
+  await host.page.locator('.ol-create').click();
+  const link = await host.page.locator('.ol-link').inputValue();
+  const guest = await device(browser, link.replace(/^https?:\/\/[^/]+/, ''));
+  await guest.page.locator('.ol-name').fill('친구');
+  await guest.page.locator('.ol-enter').click();
+  await expect(host.page.locator('.ol-seat:not(.ol-seat-empty)')).toHaveCount(2);
+  // 오목은 두 자리뿐 — AI 추가 버튼이 없다
+  await expect(host.page.locator('.add-seat')).toHaveCount(0);
+  await host.page.locator('.ol-foot .btn-primary').click();
+  await expect(host.page.locator('.gomoku')).toBeVisible();
+  await expect(guest.page.locator('.gomoku')).toBeVisible();
+
+  // 방장(흑)이 먼저: 한가운데
+  await goTap(host.page, 7, 7);
+  await expect(host.page.locator('.go-stone')).toHaveCount(1);
+  await expect(guest.page.locator('.go-stone')).toHaveCount(1);
+  // 친구(백): 첫 번 누르면 미리보기만, 두 번째에 놓인다 → 방장이 판정해 두 화면에 같이
+  await goTap(guest.page, 8, 8, false);
+  await expect(guest.page.locator('.go-preview')).toHaveCount(1);
+  await expect(guest.page.locator('.go-stone')).toHaveCount(1);
+  await goTap(guest.page, 8, 8, false);
+  await expect(host.page.locator('.go-stone')).toHaveCount(2);
+  await expect(guest.page.locator('.go-stone')).toHaveCount(2);
+  await expect(host.page.locator('.go-stone[data-stone="2"]')).toHaveCount(1);
+  // 차례가 아닌 쪽은 둘 수 없다
+  await goTap(guest.page, 3, 3);
+  await expect(guest.page.locator('.go-stone')).toHaveCount(2);
+  expect(host.errors).toEqual([]);
+  expect(guest.errors).toEqual([]);
+  await host.ctx.close();
+  await guest.ctx.close();
+});

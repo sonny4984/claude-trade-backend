@@ -1,0 +1,281 @@
+/*
+ * 오목 — 테이블(펠트) 위의 나무 오목판, 코코아 흑돌과 크림 백돌.
+ * 판은 SVG라 어떤 크기에서도 선명하다. 색은 --go-* 변수로 테마마다 바꾼다.
+ */
+:root {
+  --go-wood-0: #e8c38c;
+  --go-wood-1: #d4a15e;
+  --go-line: rgba(78, 48, 20, 0.78);
+  --go-black: #231a16;
+  --go-black-hi: #6d5c52;
+  --go-white: #ece2d0;
+}
+:root[data-lumina-theme='picnic'] {
+  --go-wood-0: #f8d9a3;
+  --go-wood-1: #ebb970;
+  --go-line: rgba(122, 76, 32, 0.72);
+  --go-black: #3a2920;
+  --go-black-hi: #8f6f5c;
+  --go-white: #fff1dc;
+}
+:root[data-lumina-theme='midnight'],
+:root[data-lumina-theme='glass'] {
+  --go-wood-0: #d8c19a;
+  --go-wood-1: #b99a68;
+}
+
+.go-felt {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  container-type: size;
+}
+.go-board {
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  max-width: 100%;
+  max-height: 100%;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 8px 14px rgba(90, 50, 10, 0.28));
+  outline: none;
+}
+.go-board[data-active] {
+  cursor: pointer;
+}
+.go-board:focus-visible .go-wood {
+  stroke: var(--focus);
+  stroke-width: 0.08;
+}
+.go-lines line {
+  stroke: var(--go-line);
+  stroke-width: 0.045;
+  stroke-linecap: square;
+}
+.go-star {
+  fill: var(--go-line);
+}
+.go-shadow {
+  fill: rgba(60, 30, 8, 0.28);
+}
+.go-stone {
+  animation: go-drop 240ms var(--ease) both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.go-stone[data-stone='2'] > circle:nth-child(2) {
+  stroke: rgba(120, 90, 50, 0.35);
+  stroke-width: 0.03;
+}
+.go-stone[data-win] > circle:nth-child(2) {
+  stroke: var(--select);
+  stroke-width: 0.09;
+}
+@keyframes go-drop {
+  from {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+.go-last[data-stone='1'] {
+  fill: #ffffff;
+}
+.go-last[data-stone='2'] {
+  fill: var(--ink-red);
+}
+.go-winline {
+  stroke: var(--select);
+  stroke-width: 0.14;
+  stroke-linecap: round;
+  opacity: 0.85;
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: go-line 700ms 200ms var(--ease-in-out) forwards;
+}
+@keyframes go-line {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.go-preview {
+  opacity: 0.62;
+}
+.go-preview-ring {
+  fill: none;
+  stroke: var(--select);
+  stroke-width: 0.07;
+  animation: go-pulse 1.1s var(--ease-in-out) infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes go-pulse {
+  50% {
+    transform: scale(1.12);
+    opacity: 0.5;
+  }
+}
+.go-hint {
+  fill: none;
+  stroke: var(--fresh);
+  stroke-width: 0.08;
+  stroke-dasharray: 0.22 0.16;
+}
+.go-forbid line {
+  stroke: var(--danger);
+  stroke-width: 0.07;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
+
+/* 두 사람 */
+.go-players {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.go-player {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 3px 12px 3px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1.5px solid var(--panel-line);
+  transition:
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+.go-player[data-current] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.go-player[data-won] {
+  border-color: var(--select);
+}
+.go-player .portrait {
+  border-radius: 50%;
+  background: var(--portrait-bg);
+}
+.go-player-name {
+  display: grid;
+  line-height: 1.15;
+}
+.go-player-name b {
+  font-size: 14px;
+}
+.go-player-name small {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.go-dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--go-black-hi), var(--go-black));
+}
+.go-dot[data-stone='2'] {
+  background: radial-gradient(circle at 35% 30%, #ffffff, var(--go-white));
+  box-shadow: inset 0 0 0 1px rgba(80, 50, 20, 0.25);
+}
+.seat-side .go-dot {
+  width: 22px;
+  height: 22px;
+}
+
+/* 조작 */
+.go-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.go-actions .tools {
+  display: flex;
+  gap: 2px;
+}
+.go-place {
+  flex: 1;
+}
+
+/* 결과 */
+.go-result-faces {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  margin: 6px 0 4px;
+}
+.go-result-face {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.go-result-face img {
+  border-radius: 50%;
+  background: var(--portrait-bg);
+}
+.go-result-face[data-won] img {
+  box-shadow: 0 0 0 3px var(--select);
+}
+.go-result-face small {
+  color: var(--text-dim);
+}
+
+/* 홈의 오목 판 */
+.plate-stones {
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  display: flex;
+  gap: 4px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.plate-stones i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--go-black-hi), var(--go-black));
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.2);
+}
+.plate-stones i[data-s='2'] {
+  background: radial-gradient(circle at 35% 30%, #ffffff, var(--go-white));
+  box-shadow:
+    inset 0 0 0 1px rgba(80, 50, 20, 0.2),
+    0 2px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* 가로로 낮은 화면: 무대를 접고 판에 자리를 준다 */
+@media (orientation: landscape) and (max-height: 540px) {
+  .game.gomoku .stage {
+    display: none;
+  }
+}
+:root[data-lumina-theme='picnic'] .go-player-name b {
+  font-family: var(--font-cute);
+  font-weight: 400;
+  font-size: 15px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .go-stone,
+  .go-preview-ring,
+  .go-winline {
+    animation: none;
+  }
+  .go-winline {
+    stroke-dashoffset: 0;
+  }
+}
+:root[data-motion='reduced'] .go-stone,
+:root[data-motion='reduced'] .go-preview-ring {
+  animation: none;
+}
+:root[data-motion='reduced'] .go-winline {
+  animation: none;
+  stroke-dashoffset: 0;
+}

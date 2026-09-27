@@ -9,6 +9,7 @@ import './styles/screens.css';
 import './styles/coda.css';
 import './styles/picnic.css';
 import './styles/online.css';
+import './styles/gomoku.css';
 import { App } from './ui/App';
 
 createRoot(document.getElementById('root') as HTMLElement).render(

@@ -184,6 +184,23 @@ test('다빈치 코드 혼자 두기: 시작하면 내 코드가 보이고 추�
   expect(errors).toEqual([]);
 });
 
+test('오목 혼자 두기: 한 수 두면 AI가 받아 두고, 무르기로 되돌린다', async ({ page }) => {
+  const errors = await open(page, {}, '/?seed=7');
+  await page.locator('.plate-gomoku').click();
+  await page.locator('.screen-foot .btn-primary').click();
+  await expect(page.locator('.gomoku')).toBeVisible();
+  const box = await page.locator('.go-board').boundingBox();
+  if (!box) throw new Error('no board');
+  const at = (x: number, y: number) => page.mouse.click(box.x + ((x + 1) / 16) * box.width, box.y + ((y + 1) / 16) * box.height);
+  await at(7, 7);
+  await expect(page.locator('.go-preview')).toHaveCount(1);
+  await page.locator('.go-place').click();
+  await expect(page.locator('.go-stone')).toHaveCount(2, { timeout: 10_000 });
+  await page.locator('.go-actions .tool').first().click();
+  await expect(page.locator('.go-stone')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('가로 폰에서도 랙과 버튼이 화면 안에 있다', async ({ page }, info) => {
   test.skip(info.project.name === 'desktop', '폰 전용');
   await page.setViewportSize({ width: 844, height: 390 });

@@ -90,6 +90,8 @@ export interface OnlineGameApi {
   adoptRemote(payload: unknown, events: readonly unknown[], info: OnlineInfo): void;
   /** 방장: 나간 친구 자리를 AI가 이어 둔다 (못 하면 false) */
   seatToAi(seat: number): boolean;
+  /** 참가자: 방장에게 보낸 수의 답을 기다리는 동안 조작 잠금 */
+  setWaiting?(v: boolean): void;
 }
 
 /** 게임별 손잡이 — 각 게임 저장소가 불러올 때 스스로 등록한다 */
