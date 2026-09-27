@@ -1,0 +1,95 @@
+/**
+ * 불과 얼음 — 단계(맵) 형식과 해석.
+ *
+ * 맵은 글자 칸으로 그린다 (가로 16 × 세로 20, 위가 0행):
+ *   #  블록 (단단함)          .  빈칸
+ *   L  딸기잼 웅덩이 (불만 지나감, 얼음은 녹아요)
+ *   W  블루베리 물 웅덩이 (얼음만 지나감, 불은 꺼져요)
+ *   G  말차 독 웅덩이 (둘 다 위험)          웅덩이는 바닥처럼 딛고 서지만, 밟는 순간 판정한다
+ *   f  불 시작 자리          i  얼음 시작 자리
+ *   F  불의 문 (그 칸에 서면 "문 안")     I  얼음의 문
+ *   r  빨간 사탕 (불이 먹음)             b  파란 사탕 (얼음이 먹음)
+ *   1 2  버튼 — 위에 서 있는 동안 같은 번호의 발판이 움직인다 (아래 칸이 바닥이어야 함)
+ *   3 4  레버 — 밀면 켜지고 반대로 밀면 꺼진다 (켜진 동안 같은 번호의 발판이 움직인다)
+ * 발판(움직이는 판)은 맵 대신 platforms 목록에 적는다: 쉴 때 위치(x, y, 너비, 높이)와 켜졌을 때 옮겨 갈 칸 수.
+ */
+
+export const LEVEL_W = 16;
+export const LEVEL_H = 20;
+
+export type Element = 'fire' | 'ice';
+export type Pool = 'L' | 'W' | 'G';
+
+export interface PlatformDef {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+  /** 켜졌을 때 옮겨 갈 칸 수 */
+  readonly dx: number;
+  readonly dy: number;
+  /** 움직이게 하는 버튼·레버 번호 (1~4) */
+  readonly group: number;
+}
+
+export interface LevelDef {
+  readonly id: string;
+  /** 단계 이름 (i18n 키 fireice.levels.<id>) */
+  readonly map: readonly string[];
+  readonly platforms?: readonly PlatformDef[];
+  /** 별 셋 기준 시간 (초) */
+  readonly par: number;
+}
+
+export interface Cell {
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface ParsedLevel {
+  readonly def: LevelDef;
+  readonly solid: readonly boolean[];
+  readonly pool: readonly (Pool | null)[];
+  readonly spawn: Readonly<Record<Element, Cell>>;
+  readonly door: Readonly<Record<Element, Cell>>;
+  readonly gems: readonly { readonly id: number; readonly x: number; readonly y: number; readonly el: Element }[];
+  readonly buttons: readonly { readonly x: number; readonly y: number; readonly group: number }[];
+  readonly levers: readonly { readonly id: number; readonly x: number; readonly y: number; readonly group: number }[];
+  readonly platforms: readonly PlatformDef[];
+}
+
+export const at = (x: number, y: number): number => y * LEVEL_W + x;
+
+export function parseLevel(def: LevelDef): ParsedLevel {
+  if (def.map.length !== LEVEL_H || def.map.some((row) => row.length !== LEVEL_W)) throw new Error(`level ${def.id}: map must be ${LEVEL_W}×${LEVEL_H}`);
+  const solid: boolean[] = [];
+  const pool: (Pool | null)[] = [];
+  const spawn: Partial<Record<Element, Cell>> = {};
+  const door: Partial<Record<Element, Cell>> = {};
+  const gems: { id: number; x: number; y: number; el: Element }[] = [];
+  const buttons: { x: number; y: number; group: number }[] = [];
+  const levers: { id: number; x: number; y: number; group: number }[] = [];
+  for (let y = 0; y < LEVEL_H; y++) {
+    for (let x = 0; x < LEVEL_W; x++) {
+      const ch = (def.map[y] as string)[x] as string;
+      const isPool = ch === 'L' || ch === 'W' || ch === 'G';
+      solid.push(ch === '#' || isPool);
+      pool.push(isPool ? (ch as Pool) : null);
+      if (ch === 'f') spawn.fire = { x, y };
+      else if (ch === 'i') spawn.ice = { x, y };
+      else if (ch === 'F') door.fire = { x, y };
+      else if (ch === 'I') door.ice = { x, y };
+      else if (ch === 'r' || ch === 'b') gems.push({ id: gems.length, x, y, el: ch === 'r' ? 'fire' : 'ice' });
+      else if (ch === '1' || ch === '2') buttons.push({ x, y, group: Number(ch) });
+      else if (ch === '3' || ch === '4') levers.push({ id: levers.length, x, y, group: Number(ch) });
+    }
+  }
+  if (!spawn.fire || !spawn.ice || !door.fire || !door.ice) throw new Error(`level ${def.id}: needs f, i, F, I`);
+  return { def, solid, pool, spawn: spawn as Record<Element, Cell>, door: door as Record<Element, Cell>, gems, buttons, levers, platforms: def.platforms ?? [] };
+}
+
+/** 이 원소가 이 웅덩이를 밟으면 위험한가 */
+export function deadly(el: Element, p: Pool | null): boolean {
+  if (!p) return false;
+  return p === 'G' || (p === 'L' && el === 'ice') || (p === 'W' && el === 'fire');
+}
