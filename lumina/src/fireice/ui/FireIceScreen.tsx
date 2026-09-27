@@ -11,6 +11,7 @@ import { OnlineChip, OnlineNotice } from '../../ui/online/OnlineNotice';
 import type { Element } from '../level';
 import { burst, buildSprites, buildStatic, drawFrame, stepParticles, type Particle, type Sprites } from '../render';
 import { levelCount, levelDef, myElement, pad, runtime, unlocked, useFireIce, type FireIceSession } from '../store';
+import { FullscreenButton } from '../../ui/fullscreen';
 
 const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyA', 'KeyD', 'KeyW', 'KeyS']);
 
@@ -260,6 +261,7 @@ function Menu({ session }: { session: FireIceSession }) {
           <button type="button" className="btn btn-secondary" onClick={() => setView('levels')}>
             {t('fireice.pickLevel')}
           </button>
+          <FullscreenButton />
           <button type="button" className="btn btn-secondary" onClick={() => go('settings')}>
             {t('menu.settings')}
           </button>

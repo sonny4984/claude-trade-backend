@@ -20,6 +20,7 @@ import { FireIceSetup } from '../fireice/ui/FireIceSetup';
 import { FireIceScreen } from '../fireice/ui/FireIceScreen';
 import { useOnline } from '../net/online';
 import { readInvite } from '../net/site';
+import { FullscreenHelp } from './fullscreen';
 
 /** 테마·접근성 설정을 <html> 속성으로 */
 function useDocumentSettings(): void {
@@ -89,6 +90,7 @@ export function App() {
       {screen === 'fireice-setup' && <FireIceSetup />}
       {screen === 'fireice' && <FireIceScreen />}
       <Toasts />
+      <FullscreenHelp />
     </div>
   );
 }

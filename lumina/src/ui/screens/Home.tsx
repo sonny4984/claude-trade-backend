@@ -9,6 +9,7 @@ import { Tile } from '../components/Tile';
 import { Icon } from '../components/Icon';
 import { TS } from '../../game/fixtures';
 import { useT } from '../../i18n';
+import { FullscreenButton, FullscreenHint } from '../fullscreen';
 
 const DECOR = [TS('r4 r5 r6 r7'), TS('b9 o9 k9'), TS('o11 o12 J'), TS('k1 k2 k3')];
 
@@ -46,6 +47,7 @@ export function Home() {
         <p className="wordmark-sub">{t('brand.sub')}</p>
         <p className="tagline">{t('brand.tagline')}</p>
       </header>
+      <FullscreenHint />
       <nav className="home-plate" aria-label="menu">
         {saved && (
           <button type="button" className="plate-btn plate-primary" onClick={() => store.resume()}>
@@ -117,6 +119,7 @@ export function Home() {
         <button type="button" className="link-btn" onClick={() => store.go('settings')}>
           <Icon name="gear" size={18} /> {t('home.settings')}
         </button>
+        <FullscreenButton className="link-btn" />
       </footer>
     </div>
   );

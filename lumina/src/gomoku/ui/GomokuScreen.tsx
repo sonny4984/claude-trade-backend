@@ -15,6 +15,7 @@ import type { StagePlate, StageReaction } from '../../stage/Stage3D';
 import { currentPlayer } from '../engine';
 import { isMyTurn, useGomoku, viewerSeat, type GomokuSession } from '../store';
 import { Board } from './Board';
+import { FullscreenButton } from '../../ui/fullscreen';
 
 const Stage3D = lazy(() => import('../../stage/Stage3D'));
 
@@ -120,6 +121,7 @@ function Menu({ session }: { session: GomokuSession }) {
               {t('gomoku.resign')}
             </button>
           )}
+          <FullscreenButton />
           <button type="button" className="btn btn-secondary" onClick={() => go('settings')}>
             {t('menu.settings')}
           </button>

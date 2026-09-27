@@ -9,6 +9,7 @@ import { Icon } from '../components/Icon';
 import { translateList, useLang, useT } from '../../i18n';
 import { LESSONS } from '../../lessons/lessons';
 import { makeShareCard } from './shareCard';
+import { FullscreenButton } from '../fullscreen';
 
 function CharacterImg({ id, ex = 'idle', size = 44 }: { id: CharacterId; ex?: Expression; size?: number }) {
   const src = usePortrait(id, ex, size > 64 ? 256 : 128);
@@ -77,6 +78,7 @@ export function MenuSheet() {
           <button type="button" className="btn btn-secondary" onClick={() => store.go('rules')}>
             {t('menu.rules')}
           </button>
+          <FullscreenButton />
           <button type="button" className="btn btn-secondary" onClick={() => store.go('settings')}>
             {t('menu.settings')}
           </button>

@@ -15,6 +15,7 @@ import { isHumanTurn, useCoda, valueText, viewerOf, type CodaSession } from '../
 import { CodaTile } from './CodaTile';
 import { CodaStage } from './CodaStage';
 import { OnlineChip, OnlineNotice } from '../../ui/online/OnlineNotice';
+import { FullscreenButton } from '../../ui/fullscreen';
 
 type T = ReturnType<typeof useT>;
 
@@ -310,6 +311,7 @@ function Menu() {
           <button type="button" className="btn btn-secondary" onClick={() => go('rules')}>
             {t('menu.rules')}
           </button>
+          <FullscreenButton />
           <button type="button" className="btn btn-secondary" onClick={() => go('settings')}>
             {t('menu.settings')}
           </button>
