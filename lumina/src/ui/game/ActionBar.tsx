@@ -49,6 +49,7 @@ export function ActionBar() {
           <Icon name="reset" />
           <span>{t('action.reset')}</span>
         </button>
+        {!session.online && (
         <button type="button" className="tool" disabled={hintDisabled} onClick={() => store.requestHint()} title="H" aria-label={t('action.hint')} aria-keyshortcuts="H" data-active={hint.level > 0 || undefined}>
           <Icon name="hint" />
           <span>
@@ -56,6 +57,7 @@ export function ActionBar() {
             {hintsSetting === 'limited' && Number.isFinite(hintsLeft) ? ` ${hintsLeft}` : ''}
           </span>
         </button>
+        )}
         <button type="button" className="tool" onClick={cycleSort} disabled={!human} title="S" aria-label={t('action.sort')} aria-keyshortcuts="S">
           <Icon name="sort" />
           <span>{t('action.sort')}</span>

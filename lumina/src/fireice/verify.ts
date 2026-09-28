@@ -210,7 +210,8 @@ export function movesFrom(level: ParsedLevel, occ: Occ, el: Element, x: number, 
   return [...out.values()];
 }
 
-interface State {
+/** 풀이 모형의 한 상태: 두 캐릭터 칸, 레버 비트, 주운 열쇠 비트, 연 자물쇠 비트 */
+export interface SolverState {
   readonly f: Cell;
   readonly i: Cell;
   readonly lev: number;
@@ -309,11 +310,18 @@ export interface PathState {
 type Step = { readonly prev: State; readonly by: Element | 'lever' | 'unlock'; readonly to: Cell | null; readonly via: Cell | null; readonly viaKind: 'jelly' | 'portal' | null };
 
 /** 둘 다 문에 닿을 수 있는지 (그리고 사탕을 각자 먹을 수 있는지). path: 가장 짧은 풀이 (시작 → 끝) */
-export function verifyLevel(level: ParsedLevel, limit = 400_000, analyze = false): VerifyResult & { readonly path: readonly PathState[]; readonly deadEnds: number } {
+type State = SolverState;
+
+export function verifyLevel(level: ParsedLevel, limit = 400_000, analyze = false): VerifyResult & { readonly path: readonly PathState[]; readonly deadEnds: number; readonly truncated: boolean } {
+  return searchFrom(level, { f: level.spawn.fire, i: level.spawn.ice, lev: 0, keys: 0, open: 0 }, limit, analyze);
+}
+
+/** 아무 상태에서나 풀어 보기 (게임 중 힌트·막힘 알림) — truncated면 한도에 걸려 끝까지 못 본 것 */
+export function searchFrom(level: ParsedLevel, from: SolverState, limit = 400_000, analyze = false): VerifyResult & { readonly path: readonly PathState[]; readonly deadEnds: number; readonly truncated: boolean } {
   // analyze: 되돌릴 수 없이 막힌 상태(어디로 가도 통과 못 함)가 몇 개인지도 센다 — 단계가 얼마나 머리를 쓰게 하는지 가늠
   const rev = analyze ? new Map<string, string[]>() : null;
   const goals: string[] = [];
-  const start: State = pickKeys(level, { f: level.spawn.fire, i: level.spawn.ice, lev: 0, keys: 0, open: 0 });
+  const start: State = pickKeys(level, from);
   const seen = new Map<string, number>([[key(start), 0]]);
   const parent = new Map<string, Step | null>([[key(start), null]]);
   const queue: State[] = [start];
@@ -374,5 +382,5 @@ export function verifyLevel(level: ParsedLevel, limit = 400_000, analyze = false
     while (stack.length) for (const p of rev.get(stack.pop() as string) ?? []) if (!good.has(p)) good.add(p), stack.push(p);
     deadEnds = seen.size - good.size;
   }
-  return { solvable: solvedAt >= 0, states: seen.size, gemsReachable: [...gems].sort((a, b) => a - b), steps: solvedAt, path, deadEnds };
+  return { solvable: solvedAt >= 0, states: seen.size, gemsReachable: [...gems].sort((a, b) => a - b), steps: solvedAt, path, deadEnds, truncated: solvedAt < 0 && seen.size >= limit };
 }

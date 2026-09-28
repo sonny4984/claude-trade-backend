@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { LEVELS } from '../levels';
 import { LEVEL_H, at, parseLevel, type Element, type LevelDef, type ParsedLevel } from '../level';
-import { verifyLevel } from '../verify';
+import { searchFrom, verifyLevel } from '../verify';
+import { describeHint } from '../hintStep';
 import { replay } from './bot';
 import { NO_INPUT, PHYS, cleared, newWorld, step, type Input, type WorldEvent, type WorldState } from '../world';
 
@@ -262,4 +263,21 @@ describe('불과 얼음 단계 — 실제 물리로 풀이 따라가기', () => 
       expect(r.ok).toBe(true);
     });
   }
+});
+
+describe('불과 얼음 힌트·막힘', () => {
+  const lv = (id: string): ParsedLevel => parseLevel(LEVELS.find((l) => l.id === id) as LevelDef);
+  it('처음 자리에서 힌트는 누가 어디로 갈지 알려 준다', () => {
+    const l = lv('keyhole');
+    const r = searchFrom(l, { f: l.spawn.fire, i: l.spawn.ice, lev: 0, keys: 0, open: 0 });
+    const h = describeHint(l, r.path);
+    expect(r.solvable).toBe(true);
+    expect(h?.kind).toBe('move');
+  });
+  it('교대 근무: 얼음이 먼저 떨어지고 불이 레버 방 밖에 있으면 막힘', () => {
+    const l = lv('shift');
+    const r = searchFrom(l, { f: l.spawn.fire, i: { x: 14, y: 17 }, lev: 0b10, keys: 0, open: 0 });
+    expect(r.solvable).toBe(false);
+    expect(r.truncated).toBe(false);
+  });
 });

@@ -895,7 +895,8 @@ export const useGame = create<State & Actions>((set, get) => {
 
     requestHint: () => {
       const s = get().session;
-      if (!s || !currentSeatIsHuman(s) || get().curtain) return;
+      // 온라인 판에서는 힌트 없음 (서로 공정하게)
+      if (!s || s.online || !currentSeatIsHuman(s) || get().curtain) return;
       const h = get().hint;
       if (h.level === 0) {
         if (s.hintsLeft <= 0) {

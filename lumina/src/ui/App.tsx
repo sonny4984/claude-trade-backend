@@ -21,7 +21,7 @@ import { FireIceScreen } from '../fireice/ui/FireIceScreen';
 import { useOnline } from '../net/online';
 import { CommsLayer } from './online/Comms';
 import { readInvite } from '../net/site';
-import { FullscreenHelp } from './fullscreen';
+import { FullscreenHelp, canFullscreen, enterFullscreen, isFullscreen, isStandalone } from './fullscreen';
 
 /** 테마·접근성 설정을 <html> 속성으로 */
 function useDocumentSettings(): void {
@@ -76,10 +76,21 @@ function useKeepAwake(on: boolean): void {
   }, [on]);
 }
 
+/** 폰에서 게임 화면에 들어오면 첫 터치에 전체 화면으로 (들어올 때마다 한 번, 끄면 다시 안 켬) */
+function useAutoFullscreen(game: boolean): void {
+  useEffect(() => {
+    if (!game || !canFullscreen() || isFullscreen() || isStandalone() || !matchMedia('(pointer: coarse)').matches) return;
+    const go = (): void => void enterFullscreen();
+    window.addEventListener('pointerup', go, { once: true });
+    return () => window.removeEventListener('pointerup', go);
+  }, [game]);
+}
+
 export function App() {
   useDocumentSettings();
   const screen = useGame((s) => s.screen);
   useKeepAwake(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'online');
+  useAutoFullscreen(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice');
   const show3d = useSettings((s) => s.show3d);
   useEffect(() => {
     if (!show3d) return;

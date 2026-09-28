@@ -85,7 +85,7 @@ function Stage({ session }: { session: FireIceSession }) {
       const mine = myElement(s);
       const marker: Element | null = s.mode === 'solo' ? ctl : mine;
       const markerText = s.mode === 'online' ? tr('fireice.me') : '';
-      drawFrame(ctx, w, { tile, dpr, now, staticLayer, sprites, particles: particles.current, marker, markerText, jellyHit: jellyHit.current });
+      drawFrame(ctx, w, { tile, dpr, now, staticLayer, sprites, particles: particles.current, marker, markerText, jellyHit: jellyHit.current, alpha: runtime.alpha, hint: useFireIce.getState().hint });
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -187,9 +187,11 @@ function Status({ session }: { session: FireIceSession }) {
     return () => window.clearInterval(id);
   }, [session.online]);
   let text: string;
+  const hint = useFireIce((s) => s.hint);
   const tipKey = `fireice.tips.${levelDef(session.level).id}`;
   const tip = t(tipKey);
-  if (waiting) text = t('online.sending');
+  if (hint) text = t(`fireice.hint.${hint.kind}`, { el: t(`fireice.${hint.el}`), dir: t(hint.on ? 'fireice.hint.right' : 'fireice.hint.left') });
+  else if (waiting) text = t('online.sending');
   else if (time < 6 && tip !== tipKey && session.status === 'playing') text = tip;
   else if (session.online && !friend) text = t('fireice.waitFriend');
   else if (atDoor.fire !== atDoor.ice) text = t('fireice.waitDoor', { el: t(`fireice.${atDoor.fire ? 'fire' : 'ice'}`) });
@@ -200,6 +202,29 @@ function Status({ session }: { session: FireIceSession }) {
     <p className="status fi-status" aria-live="polite">
       <span className="status-text">{text}</span>
     </p>
+  );
+}
+
+/** 풀이기가 보기에 막혔을 때: 다시 하기 / 계속 */
+function Stuck({ session }: { session: FireIceSession }) {
+  const t = useT();
+  const stuck = useFireIce((s) => s.stuck);
+  const oops = useFireIce((s) => s.oops);
+  if (!stuck || oops || session.status !== 'playing') return null;
+  const st = useFireIce.getState();
+  return (
+    <div className="fi-stuck" role="alert">
+      <b>{t('fireice.stuckTitle')}</b>
+      <span>{t('fireice.stuckText')}</span>
+      <div className="fi-stuck-btns">
+        <button type="button" className="btn btn-primary" onClick={() => st.restart()}>
+          {t('fireice.stuckRetry')}
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={() => st.dismissStuck()}>
+          {t('fireice.stuckKeep')}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -399,6 +424,7 @@ export function FireIceScreen() {
         if (st.overlay === 'menu') st.closeOverlay();
         else if (st.overlay === null) st.openMenu();
       } else if (e.code === 'KeyR' && st.overlay === null && !st.oops) st.restart();
+      else if (e.code === 'KeyH' && st.overlay === null) st.askHint();
     };
     const up = (e: KeyboardEvent): void => {
       pad.keys.delete(e.code);
@@ -430,6 +456,9 @@ export function FireIceScreen() {
         </div>
         <div className="hud-right">
           <OnlineChip />
+          <button type="button" className="icon-btn fi-hint-btn" aria-label={t('fireice.hintBtn')} title="H" aria-keyshortcuts="H" onClick={() => useFireIce.getState().askHint()}>
+            <Icon name="hint" />
+          </button>
           <span className="hud-chip fi-gem-chip" aria-label={t('fireice.gems', { n: gems, total })}>
             <i className="fi-candy" data-el="fire" aria-hidden="true" />
             {gems}/{total}
@@ -443,6 +472,7 @@ export function FireIceScreen() {
       <Status session={session} />
       <Controls session={session} />
       <Oops session={session} />
+      <Stuck session={session} />
       <OnlineNotice />
       <Menu session={session} />
       <Clear session={session} />

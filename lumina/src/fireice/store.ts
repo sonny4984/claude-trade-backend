@@ -9,7 +9,8 @@
 import { create } from 'zustand';
 import { LEVELS } from './levels';
 import { parseLevel, type Element, type Pool } from './level';
-import { NO_INPUT, cleared, newWorld, setPuppet, step, type Input, type WorldEvent, type WorldState } from './world';
+import { solve, solverState, type HintStep } from './hints';
+import { NO_INPUT, cleared, newWorld, setPuppet, step, type Input, type WorldEvent, type WorldState, markPrev, PHYS } from './world';
 import { isCharacterId, type CharacterId } from '../characters/roster';
 import { useGame } from '../store/game';
 import { readJSON, writeJSON } from '../store/storage';
@@ -70,6 +71,12 @@ interface FireIceStore {
   atDoor: Readonly<Record<Element, boolean>>;
   progress: Progress;
   waiting: boolean;
+  /** 힌트: 다음 한 수 (반짝이는 칸) — 따라가거나 9초 지나면 사라진다 */
+  hint: (HintStep & { readonly at: number; readonly sig: string }) | null;
+  /** 풀이기가 보기에 이 상태로는 둘 다 문까지 못 감 */
+  stuck: boolean;
+  askHint: () => void;
+  dismissStuck: () => void;
   start: (cfg: FireIceConfig, level: number) => void;
   playLevel: (level: number) => void;
   restart: () => void;
@@ -110,6 +117,8 @@ interface PuppetTrack {
   rx: number;
   ry: number;
   at: number;
+  /** 보낸 쪽 세계 시각 (초) */
+  t: number;
 }
 
 export type FxType = 'gem' | 'jump' | 'dead' | 'land' | 'bounce' | 'key' | 'unlock' | 'warp';
@@ -121,11 +130,22 @@ export const runtime: {
   sendAt: number;
   restartTimer: ReturnType<typeof setTimeout> | null;
   puppet: PuppetTrack | null;
+  /** 받은 친구 몸 신호들 (보낸 쪽 시각 순) — 0.12초 늦게 둘 사이를 이어 부드럽게 그린다 */
+  snaps: PuppetTrack[];
+  /** 내 시계 − 보낸 쪽 시각 (가장 빨리 온 신호 기준) */
+  offset: number | null;
+  /** 그리기 보간 비율 (마지막 걸음 뒤 남은 시간 / 한 걸음) */
+  alpha: number;
+  /** 막힘 검사: 마지막 검사 시각·상태, 사용자가 "계속"을 누른 상태, 검사 중 */
+  checkAt: number;
+  checkSig: string;
+  stuckSig: string;
+  checking: boolean;
   /** 마지막으로 보낸 내 몸 (가만히 있으면 덜 보내려고) */
   lastSent: string;
   /** 화면 효과 대기열 (사탕 톡, 점프 먼지 …) — 화면이 매 프레임 비운다 */
   fx: { readonly type: FxType; readonly x: number; readonly y: number; readonly el: Element }[];
-} = { world: null, acc: 0, hudAt: 0, sendAt: 0, restartTimer: null, puppet: null, lastSent: '', fx: [] };
+} = { world: null, acc: 0, hudAt: 0, sendAt: 0, restartTimer: null, puppet: null, snaps: [], offset: null, alpha: 1, checkAt: 0, checkSig: '', stuckSig: '', checking: false, lastSent: '', fx: [] };
 
 export const levelCount = LEVELS.length;
 export const levelDef = (i: number) => LEVELS[Math.max(0, Math.min(LEVELS.length - 1, i))] as (typeof LEVELS)[number];
@@ -209,11 +229,16 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     runtime.hudAt = 0;
     runtime.sendAt = 0;
     runtime.puppet = null;
+    runtime.snaps = [];
+    runtime.offset = null;
     runtime.lastSent = '';
     runtime.fx = [];
+    runtime.checkAt = 0;
+    runtime.checkSig = '';
+    runtime.stuckSig = '';
     if (runtime.restartTimer) clearTimeout(runtime.restartTimer);
     runtime.restartTimer = null;
-    set({ gems: 0, time: 0, oops: null, atDoor: { fire: false, ice: false } });
+    set({ gems: 0, time: 0, oops: null, atDoor: { fire: false, ice: false }, hint: null, stuck: false });
   };
 
   const publish = (s: FireIceSession): void => {
@@ -366,7 +391,7 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     if (!mine) return;
     const b = w.bodies[mine];
     const plat = b.ground >= 0 ? w.plats[b.ground] : undefined;
-    const msg = { a: s.attempt, x: round(b.x), y: round(b.y), vx: round(b.vx), vy: round(b.vy), f: b.face, g: b.ground !== -2 ? 1 : 0, al: b.alive ? 1 : 0, d: b.atDoor ? 1 : 0, pl: plat ? b.ground : -1, rx: plat ? round(b.x - plat.x) : 0, ry: plat ? round(b.y - plat.y) : 0 };
+    const msg = { a: s.attempt, t: Math.round(w.time * 1000) / 1000, x: round(b.x), y: round(b.y), vx: round(b.vx), vy: round(b.vy), f: b.face, g: b.ground !== -2 ? 1 : 0, al: b.alive ? 1 : 0, d: b.atDoor ? 1 : 0, pl: plat ? b.ground : -1, rx: plat ? round(b.x - plat.x) : 0, ry: plat ? round(b.y - plat.y) : 0 };
     const sig = `${msg.x},${msg.y},${msg.f},${msg.g},${msg.al},${msg.d}`;
     // 공개 중계 서버에 무리 없게 초당 12번까지, 가만히 있으면 1초에 한 번만
     const since = w.time - runtime.sendAt;
@@ -377,22 +402,43 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     bridge.emit?.('fp', msg, true);
   };
 
-  /** 받은 상대 몸을 부드럽게 따라가게 (조금 앞질러 예측) */
-  const drivePuppet = (s: FireIceSession, w: WorldState, dt: number): void => {
+  /**
+   * 친구 몸: 보낸 쪽 시각표로 0.12초 늦게, 앞뒤 두 신호 사이를 이어 그린다 (초당 12번 신호여도 매끄럽게).
+   * 다음 신호가 늦으면 속도·중력으로 0.12초까지만 앞질러 본다. 발판에 탔으면 내 화면의 발판에 붙인다.
+   */
+  const drivePuppet = (s: FireIceSession, w: WorldState): void => {
     const mine = myElement(s);
-    const p = runtime.puppet;
-    if (!mine || !p) return;
+    const list = runtime.snaps;
+    const last = runtime.puppet;
+    if (!mine || !last || !list.length || runtime.offset === null) return;
     const el: Element = mine === 'fire' ? 'ice' : 'fire';
     const b = w.bodies[el];
-    const ahead = Math.min(0.15, (performance.now() - p.at) / 1000);
-    // 발판에 탔으면 내 화면의 발판 위치에 붙인다 (늦게 온 위치 때문에 발판에 파묻히거나 떠 보이지 않게)
-    const plat = p.pl >= 0 ? w.plats[p.pl] : undefined;
-    const tx = (plat ? plat.x + p.rx : p.x) + p.vx * ahead;
-    const ty = plat ? plat.y + p.ry : p.y + (p.ground ? 0 : p.vy * ahead);
-    const k = Math.min(1, dt * 18);
-    const far = Math.abs(tx - b.x) + Math.abs(ty - b.y) > 2.5;
-    setPuppet(w, el, { x: far ? tx : b.x + (tx - b.x) * k, y: far || plat ? ty : b.y + (ty - b.y) * k, vx: p.vx, vy: p.vy, face: p.face, ground: p.ground, alive: p.alive, door: p.door });
-    if (plat) b.ground = p.pl;
+    const rt = performance.now() / 1000 - runtime.offset - 0.12;
+    let i = list.length - 1;
+    while (i > 0 && (list[i] as PuppetTrack).t > rt) i--;
+    const a = list[i] as PuppetTrack;
+    const c = list[i + 1];
+    let x: number;
+    let y: number;
+    let pl = a.pl;
+    let rx = a.rx;
+    let ry = a.ry;
+    if (c && c.t > a.t && Math.abs(c.x - a.x) + Math.abs(c.y - a.y) < 2.5) {
+      const k = Math.max(0, Math.min(1, (rt - a.t) / (c.t - a.t)));
+      x = a.x + (c.x - a.x) * k;
+      y = a.y + (c.y - a.y) * k;
+      if (a.pl >= 0 && a.pl === c.pl) {
+        rx = a.rx + (c.rx - a.rx) * k;
+        ry = a.ry + (c.ry - a.ry) * k;
+      } else pl = -1;
+    } else {
+      const e = Math.max(0, Math.min(0.12, rt - a.t));
+      x = a.x + a.vx * e;
+      y = a.ground ? a.y : a.y + a.vy * e + 0.5 * PHYS.gravity * e * e;
+    }
+    const plat = pl >= 0 ? w.plats[pl] : undefined;
+    setPuppet(w, el, { x: plat ? plat.x + rx : x, y: plat ? plat.y + ry : y, vx: a.vx, vy: a.vy, face: a.face, ground: a.ground, alive: last.alive && a.alive, door: a.door });
+    if (plat) b.ground = pl;
   };
 
   // 온라인: 친구 몸 위치(빠름)와 사탕·레버·넘어짐(확실)
@@ -402,7 +448,17 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     if (!s?.online || !d || seat === s.online.mySeat || d.a !== s.attempt) return;
     const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
     const pl = typeof d.pl === 'number' && Number.isInteger(d.pl) && d.pl >= 0 && d.pl < (runtime.world?.plats.length ?? 0) ? d.pl : -1;
-    runtime.puppet = { x: num(d.x), y: num(d.y), vx: num(d.vx), vy: num(d.vy), face: d.f === -1 ? -1 : 1, ground: d.g === 1, alive: d.al !== 0, door: d.d === 1, pl, rx: num(d.rx), ry: num(d.ry), at: performance.now() };
+    const snap: PuppetTrack = { x: num(d.x), y: num(d.y), vx: num(d.vx), vy: num(d.vy), face: d.f === -1 ? -1 : 1, ground: d.g === 1, alive: d.al !== 0, door: d.d === 1, pl, rx: num(d.rx), ry: num(d.ry), at: performance.now(), t: num(d.t) };
+    const list = runtime.snaps;
+    const prev = list[list.length - 1];
+    if (prev && snap.t < prev.t) return; // 빠른 길은 순서가 바뀔 수 있다
+    // 가만히 있으면 1초에 한 번만 오니, 다시 움직이면 옛 자리를 새 신호 조금 전까지 이어 둔다
+    if (prev && snap.t - prev.t > 0.2) list.push({ ...prev, t: snap.t - 1 / 12, vx: 0, vy: 0 });
+    list.push(snap);
+    if (list.length > 16) list.splice(0, list.length - 16);
+    const off = snap.at / 1000 - snap.t;
+    runtime.offset = runtime.offset === null ? off : Math.min(off, runtime.offset + 0.002);
+    runtime.puppet = snap;
   });
   onRealtime('fe', (seat, data) => {
     const s = get().session;
@@ -432,6 +488,33 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     }
   });
 
+  /** 1.2초마다, 상태(칸·레버·열쇠·자물쇠)가 바뀌었으면 작업자에서 풀어 본다. 막혔으면 알림, 힌트는 따라가면 지움 */
+  const watchStuck = (s: FireIceSession, w: WorldState): void => {
+    const h = get().hint;
+    if (h) {
+      const cur = solverState(w);
+      const b = w.bodies[h.el];
+      const reached = h.kind === 'move' && b.ground !== -2 && Math.floor(b.x + 0.34) === h.x && Math.round(b.y + 0.86) - 1 === h.y;
+      const devices = cur && h.sig.split(',').slice(4).join() !== cur.sig.split(',').slice(4).join();
+      if (reached || devices || performance.now() - h.at > 9000) set({ hint: null });
+    }
+    if (runtime.checking || w.time - runtime.checkAt < 1.2) return;
+    const cur = solverState(w);
+    if (!cur || cur.sig === runtime.checkSig) return;
+    runtime.checkAt = w.time;
+    runtime.checkSig = cur.sig;
+    runtime.checking = true;
+    const { id, attempt } = s;
+    void solve(w).then((r) => {
+      runtime.checking = false;
+      const now = get().session;
+      if (!r || !now || now.id !== id || now.attempt !== attempt || now.status !== 'playing') return;
+      const still = runtime.world ? solverState(runtime.world)?.sig === r.sig : false;
+      if (!r.solvable && !r.truncated && still && r.sig !== runtime.stuckSig) set({ stuck: true, hint: null });
+      else if (r.solvable && get().stuck) set({ stuck: false });
+    });
+  };
+
   const frame = (dtReal: number): void => {
     const st = get();
     const s = st.session;
@@ -444,7 +527,8 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     const playing = s.status === 'playing';
     while (runtime.acc >= DT) {
       runtime.acc -= DT;
-      if (s.online) drivePuppet(s, w, DT);
+      markPrev(w);
+      if (s.online) drivePuppet(s, w);
       const inputs = playing && !get().oops ? currentInputs(s, st.control) : { fire: NO_INPUT, ice: NO_INPUT };
       const t0 = w.time;
       const events = step(w, inputs, DT);
@@ -456,6 +540,8 @@ export const useFireIce = create<FireIceStore>((set, get) => {
         break;
       }
     }
+    runtime.alpha = runtime.acc / DT;
+    if (playing && !get().oops) watchStuck(s, w);
     if (s.online && playing) sendBody(s, w);
     if (w.time - runtime.hudAt >= 0.2 || runtime.hudAt === 0) {
       runtime.hudAt = w.time || 0.001;
@@ -476,6 +562,8 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     atDoor: { fire: false, ice: false },
     progress: loadProgress(),
     waiting: false,
+    hint: null,
+    stuck: false,
 
     start: (cfg, level) => {
       writeJSON(SETUP_KEY, cfg);
@@ -535,6 +623,26 @@ export const useFireIce = create<FireIceStore>((set, get) => {
       set({ control: get().control === 'fire' ? 'ice' : 'fire' });
       sfx('button');
       buzz('tap');
+    },
+
+    askHint: () => {
+      const w = runtime.world;
+      const s = get().session;
+      if (!w || !s || s.status !== 'playing' || get().oops) return;
+      if (!solverState(w)) {
+        set({ hint: null });
+        return;
+      }
+      void solve(w).then((r) => {
+        if (!r || get().session?.id !== s.id) return;
+        if (!r.solvable && !r.truncated) set({ stuck: true, hint: null });
+        else set({ hint: r.hint ? { ...r.hint, at: performance.now(), sig: r.sig } : null });
+      });
+    },
+
+    dismissStuck: () => {
+      runtime.stuckSig = runtime.checkSig;
+      set({ stuck: false });
     },
 
     openMenu: () => set({ overlay: 'menu' }),

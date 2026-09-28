@@ -40,6 +40,9 @@ export interface Body {
   readonly el: Element;
   x: number;
   y: number;
+  /** 바로 앞 걸음의 자리 — 화면은 둘 사이를 보간해 그린다 (고주사율 화면에서 떨리지 않게) */
+  px: number;
+  py: number;
   vx: number;
   vy: number;
   /** -2 공중, -1 블록 위, 0 이상 발판 번호 */
@@ -57,6 +60,8 @@ export interface Body {
 export interface Plat {
   x: number;
   y: number;
+  px: number;
+  py: number;
 }
 
 export interface WorldState {
@@ -97,14 +102,16 @@ export type WorldEvent =
 
 function spawnBody(level: ParsedLevel, el: Element): Body {
   const c = level.spawn[el];
-  return { el, x: c.x + (1 - PHYS.w) / 2, y: c.y + 1 - PHYS.h - EPS, vx: 0, vy: 0, ground: -1, coyote: 0, buffer: 0, face: el === 'fire' ? 1 : -1, alive: true, atDoor: false, jumpHeld: false, bouncing: false };
+  const x = c.x + (1 - PHYS.w) / 2;
+  const y = c.y + 1 - PHYS.h - EPS;
+  return { el, x, y, px: x, py: y, vx: 0, vy: 0, ground: -1, coyote: 0, buffer: 0, face: el === 'fire' ? 1 : -1, alive: true, atDoor: false, jumpHeld: false, bouncing: false };
 }
 
 export function newWorld(level: ParsedLevel): WorldState {
   return {
     level,
     bodies: { fire: spawnBody(level, 'fire'), ice: spawnBody(level, 'ice') },
-    plats: level.platforms.map((p) => ({ x: p.x, y: p.y })),
+    plats: level.platforms.map((p) => ({ x: p.x, y: p.y, px: p.x, py: p.y })),
     levers: level.levers.map(() => false),
     gems: level.gems.map(() => false),
     pressed: [false, false, false, false, false],
@@ -436,6 +443,18 @@ export function cleared(w: WorldState): boolean {
 }
 
 /** 온라인 상대 몸에 받은 위치를 넣는다 */
+/** 걸음 직전 자리를 기억 (그리기 보간) */
+export function markPrev(w: WorldState): void {
+  for (const b of Object.values(w.bodies)) {
+    b.px = b.x;
+    b.py = b.y;
+  }
+  for (const p of w.plats) {
+    p.px = p.x;
+    p.py = p.y;
+  }
+}
+
 export function setPuppet(w: WorldState, el: Element, s: { x: number; y: number; vx: number; vy: number; face: 1 | -1; ground: boolean; alive: boolean; door: boolean }): void {
   const b = w.bodies[el];
   b.x = s.x;

@@ -44,6 +44,40 @@ export function isFullscreen(): boolean {
   return !!(d.fullscreenElement || d.webkitFullscreenElement);
 }
 
+/** 전체 화면 켜기만 (조용히 — 안 되면 그냥 둔다). 게임 화면 첫 터치에 쓴다 */
+export async function enterFullscreen(): Promise<void> {
+  if (!canFullscreen() || isFullscreen()) return;
+  const el = document.documentElement as El;
+  try {
+    await (el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen?.());
+  } catch {
+    /* 막힌 곳(앱 안 창 등) */
+  }
+}
+
+/** 카카오톡 안 브라우저에서 밖의 기본 브라우저로 여는 주소 */
+export function kakaoExternalUrl(): string {
+  return `kakaotalk://web/openExternal?url=${encodeURIComponent(location.href)}`;
+}
+
+// 안드로이드 크롬: "앱 설치"를 한 번에 (브라우저가 설치할 수 있다고 알려 줄 때만)
+type InstallEvent = Event & { prompt(): Promise<void> };
+let installEvent: InstallEvent | null = null;
+if (typeof window !== 'undefined')
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installEvent = e as InstallEvent;
+    useFullscreenHelp.setState({ canInstall: true });
+  });
+
+export async function installApp(): Promise<void> {
+  const e = installEvent;
+  if (!e) return;
+  installEvent = null;
+  useFullscreenHelp.setState({ canInstall: false, open: false });
+  await e.prompt().catch(() => undefined);
+}
+
 /** 전체 화면 켜고 끄기. 안 되는 곳이면 안내를 띄운다 */
 export async function toggleFullscreen(): Promise<void> {
   if (!canFullscreen()) {
@@ -67,7 +101,7 @@ export function fullscreenAvailable(): boolean {
   return !isStandalone() && (canFullscreen() || isIOS());
 }
 
-export const useFullscreenHelp = create<{ open: boolean }>(() => ({ open: false }));
+export const useFullscreenHelp = create<{ open: boolean; canInstall: boolean }>(() => ({ open: false, canInstall: false }));
 
 export function useIsFullscreen(): boolean {
   const [on, setOn] = useState(() => typeof document !== 'undefined' && isFullscreen());
@@ -101,7 +135,18 @@ const HINT_KEY = 'lumina.fullscreen-hint.v1';
 export function FullscreenHint() {
   const t = useT();
   const [hidden, setHidden] = useState(() => readJSON<boolean>(HINT_KEY) === true);
-  if (hidden || isStandalone() || !isIOS()) return null;
+  const kakao = inAppBrowser() === 'kakao';
+  // 카카오톡 안에서는 늘 (밖에서 열어야 전체 화면·홈 화면 앱이 된다), 아이폰 사파리는 한 번
+  if (!kakao && (hidden || isStandalone() || !isIOS())) return null;
+  if (kakao)
+    return (
+      <div className="fs-hint" role="note">
+        <a className="fs-hint-body" href={kakaoExternalUrl()}>
+          <b>{t('fullscreen.kakaoTitle')}</b>
+          <span>{t('fullscreen.kakaoSub')}</span>
+        </a>
+      </div>
+    );
   const close = (): void => {
     setHidden(true);
     writeJSON(HINT_KEY, true);
@@ -127,6 +172,7 @@ export function FullscreenHelp() {
   const close = (): void => useFullscreenHelp.setState({ open: false });
   const app = inAppBrowser();
   const ios = isIOS();
+  const canInstall = useFullscreenHelp.getState().canInstall;
   const steps: string[] = [];
   if (app === 'kakao') steps.push(t(ios ? 'fullscreen.stepKakaoIos' : 'fullscreen.stepKakaoAndroid'));
   else if (app === 'other') steps.push(t('fullscreen.stepOtherApp'));
@@ -136,6 +182,20 @@ export function FullscreenHelp() {
   return (
     <Sheet label={t('fullscreen.title')} onClose={close}>
       <h2 className="sheet-title">{t('fullscreen.title')}</h2>
+      {app === 'kakao' && (
+        <div className="sheet-list">
+          <a className="btn btn-primary" href={kakaoExternalUrl()}>
+            {t('fullscreen.openOutside')}
+          </a>
+        </div>
+      )}
+      {canInstall && (
+        <div className="sheet-list">
+          <button type="button" className="btn btn-primary" onClick={() => void installApp()}>
+            {t('fullscreen.install')}
+          </button>
+        </div>
+      )}
       <ol className="fs-steps">
         {steps.map((s, i) => (
           <li key={i}>{s}</li>

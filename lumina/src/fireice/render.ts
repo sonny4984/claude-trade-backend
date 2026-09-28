@@ -273,6 +273,10 @@ export interface DrawOpts {
   readonly marker: Element | null;
   /** 젤리 칸마다 마지막으로 튄 시각 (ms, now와 같은 시계) */
   readonly jellyHit?: ReadonlyMap<number, number>;
+  /** 마지막 걸음과 그 앞 걸음 사이 어디쯤 그릴지 (0~1) */
+  readonly alpha?: number;
+  /** 힌트: 반짝이는 칸 (레버면 밀 쪽 화살표) */
+  readonly hint?: { readonly kind: 'move' | 'lever' | 'unlock'; readonly el: Element; readonly x: number; readonly y: number; readonly on?: boolean } | null;
   readonly markerText: string;
 }
 
@@ -427,6 +431,9 @@ export function drawFrame(ctx: CanvasRenderingContext2D, w: WorldState, o: DrawO
   const T = o.tile;
   const lv = w.level;
   const t = o.now / 1000;
+  const a = o.alpha ?? 1;
+  // 순간이동·다시 시작처럼 크게 뛴 건 보간하지 않는다
+  const lerp = (cur: number, prev: number): number => (Math.abs(cur - prev) > 1.5 ? cur : prev + (cur - prev) * a);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(o.staticLayer, 0, 0);
   ctx.setTransform(o.dpr, 0, 0, o.dpr, 0, 0);
@@ -566,8 +573,8 @@ export function drawFrame(ctx: CanvasRenderingContext2D, w: WorldState, o: DrawO
   lv.platforms.forEach((d, i) => {
     const p = w.plats[i];
     if (!p) return;
-    const x = p.x * T;
-    const y = p.y * T;
+    const x = lerp(p.x, p.px) * T;
+    const y = lerp(p.y, p.py) * T;
     ctx.fillStyle = '#F4C98A';
     ctx.strokeStyle = INK;
     ctx.lineWidth = Math.max(1.2, T * 0.05);
@@ -683,8 +690,8 @@ export function drawFrame(ctx: CanvasRenderingContext2D, w: WorldState, o: DrawO
   for (const el of ['ice', 'fire'] as const) {
     const b = w.bodies[el];
     const col = EL_COLOR[el];
-    const cx = (b.x + PHYS.w / 2) * T;
-    const feet = (b.y + PHYS.h) * T;
+    const cx = (lerp(b.x, b.px) + PHYS.w / 2) * T;
+    const feet = (lerp(b.y, b.py) + PHYS.h) * T;
     const size = T * 1.3;
     const blink = Math.floor(t * 1.3 + (el === 'fire' ? 0 : 0.5)) % 4 === 0 && (t * 1.3) % 1 < 0.12;
     const ex: Expression = !b.alive ? 'sad' : b.atDoor ? 'happy' : b.ground === -2 ? 'surprised' : blink ? 'blink' : 'idle';
@@ -714,11 +721,44 @@ export function drawFrame(ctx: CanvasRenderingContext2D, w: WorldState, o: DrawO
     ctx.restore();
   }
 
+  // 힌트: 캐릭터 색 고리 + 통통 튀는 화살표 (레버는 밀 쪽)
+  if (o.hint) {
+    const h = o.hint;
+    const cx = h.x * T + T / 2;
+    const cy = h.y * T + T / 2;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 6);
+    ctx.save();
+    ctx.strokeStyle = EL_COLOR[h.el].main;
+    ctx.fillStyle = EL_COLOR[h.el].main;
+    ctx.lineWidth = T * 0.09;
+    ctx.globalAlpha = 0.55 + 0.45 * pulse;
+    ctx.beginPath();
+    ctx.arc(cx, cy, T * (0.44 + 0.08 * pulse), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    if (h.kind === 'lever') {
+      const d = h.on ? 1 : -1;
+      const ax = cx + d * T * (0.7 + 0.1 * pulse);
+      ctx.moveTo(ax + d * T * 0.28, cy);
+      ctx.lineTo(ax, cy - T * 0.22);
+      ctx.lineTo(ax, cy + T * 0.22);
+    } else {
+      const ay = cy - T * (0.95 + 0.12 * pulse);
+      ctx.moveTo(cx, ay + T * 0.3);
+      ctx.lineTo(cx - T * 0.22, ay);
+      ctx.lineTo(cx + T * 0.22, ay);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
   // 머리 위 표시
   if (o.marker) {
     const b = w.bodies[o.marker];
-    const cx = (b.x + PHYS.w / 2) * T;
-    const top = b.y * T - T * 0.55 + Math.sin(t * 4) * T * 0.05;
+    const cx = (lerp(b.x, b.px) + PHYS.w / 2) * T;
+    const top = lerp(b.y, b.py) * T - T * 0.55 + Math.sin(t * 4) * T * 0.05;
     ctx.save();
     ctx.fillStyle = EL_COLOR[o.marker].main;
     ctx.strokeStyle = '#FFFFFF';
