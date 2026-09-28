@@ -47,6 +47,11 @@ export const SetView = memo(function SetView({ set, fresh, locked, touched, hint
       data-locked={locked || undefined}
       role="group"
       aria-label={t('table.setLabel', { kind: kindLabel, count: set.tiles.length })}
+      data-can-place={(hasSelection && !locked) || undefined}
+      onClick={(e) => {
+        // 고른 타일이 있으면 세트 아무 데나 눌러도 여기에 (타일·단추를 누른 건 따로 처리)
+        if (!(e.target as HTMLElement).closest('[data-tile-id], button') && !locked) place();
+      }}
     >
       <div className="set-tiles">
         {set.tiles.map((id, i) => {

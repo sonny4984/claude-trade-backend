@@ -99,6 +99,14 @@ test('타일을 테이블로 끌어 놓고 되돌리기·처음으로가 동작�
   await expect(page.locator('.rack .tile')).toHaveCount(14);
   // 한 장짜리 세트로는 등록할 수 없다
   await expect(page.locator('.commit-btn')).toBeDisabled();
+  // 누르고 놓기: 랙 타일을 누르고 빈 탁자를 누르면 새 세트, 다른 타일을 고르고 그 세트를 누르면 그 세트에
+  await page.locator('.rack .tile').first().click();
+  await page.locator('.felt-scroll').click({ position: { x: 8, y: 8 } });
+  await expect(page.locator('.felt .set')).toHaveCount(sets0 + 1);
+  await page.locator('.rack .tile').first().click();
+  await page.locator('.felt .set').last().locator('.tile').first().click();
+  await expect(page.locator('.rack .tile')).toHaveCount(12);
+  await expect(page.locator('.felt .set')).toHaveCount(sets0 + 1);
   expect(errors).toEqual([]);
 });
 

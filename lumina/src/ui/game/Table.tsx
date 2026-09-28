@@ -34,7 +34,16 @@ export function TableArea() {
 
   return (
     <main className="felt" aria-label={t('table.label')} style={{ ['--tw' as string]: `${tw}px` }}>
-      <div className="felt-scroll" data-scroll="felt" data-drop="felt" ref={ref}>
+      <div
+        className="felt-scroll"
+        data-scroll="felt"
+        data-drop="felt"
+        ref={ref}
+        onClick={(e) => {
+          // 고른 타일이 있을 때 빈 탁자를 누르면 새 세트로
+          if (selection.length && humanTurn && !(e.target as HTMLElement).closest('.set, [data-tile-id], button')) useGame.getState().moveSelectionTo({ kind: 'new' });
+        }}
+      >
         <div className="sets">
           {work.sets.map((s) => {
             const before = startMap.get(s.id);

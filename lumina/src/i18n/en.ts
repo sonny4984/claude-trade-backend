@@ -130,6 +130,8 @@ export const en: Dict = {
     reset: 'Start over',
     hint: 'Hint',
     sort: 'Sort',
+    sortNumberShort: 'Numbers',
+    sortColorShort: 'Runs',
     sortColor: 'Colour',
     sortNumber: 'Number',
     sortSmart: 'Smart',

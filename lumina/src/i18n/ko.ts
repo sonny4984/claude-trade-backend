@@ -128,6 +128,8 @@ export const ko = {
     reset: '처음으로',
     hint: '힌트',
     sort: '정렬',
+    sortNumberShort: '숫자끼리',
+    sortColorShort: '색 차례',
     sortColor: '색깔순',
     sortNumber: '숫자순',
     sortSmart: '스마트',

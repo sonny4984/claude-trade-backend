@@ -15,6 +15,11 @@ export function cycleSort(): void {
   store.toastMsg(translate(useSettings.getState().lang, `action.sort${next[0]?.toUpperCase()}${next.slice(1)}`), 'info');
 }
 
+function sortAs(mode: 'color' | 'number'): void {
+  document.documentElement.dataset.sort = mode;
+  useGame.getState().sortRack(mode);
+}
+
 export function ActionBar() {
   const t = useT();
   const session = useGame((s) => s.session);
@@ -58,9 +63,14 @@ export function ActionBar() {
           </span>
         </button>
         )}
-        <button type="button" className="tool" onClick={cycleSort} disabled={!human} title="S" aria-label={t('action.sort')} aria-keyshortcuts="S">
-          <Icon name="sort" />
-          <span>{t('action.sort')}</span>
+        {/* 실제 루미큐브 앱처럼 두 단추: 777 = 같은 숫자끼리, 789 = 같은 색 차례대로 (S 키는 돌려 가며) */}
+        <button type="button" className="tool tool-sort" onClick={() => sortAs('number')} disabled={!human} title="S" aria-label={t('action.sortNumber')} aria-keyshortcuts="S">
+          <b>777</b>
+          <span>{t('action.sortNumberShort')}</span>
+        </button>
+        <button type="button" className="tool tool-sort" onClick={() => sortAs('color')} disabled={!human} aria-label={t('action.sortColor')}>
+          <b className="tool-run">789</b>
+          <span>{t('action.sortColorShort')}</span>
         </button>
       </div>
       <div className="moves">

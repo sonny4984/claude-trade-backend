@@ -109,6 +109,17 @@ function insertIndex(children: { rect: DOMRect }[], x: number, y: number): numbe
   return idx;
 }
 
+/** 세트 바로 곁(가로세로 28px 안)에 놓았으면 그 세트로 — 손가락이 조금 빗나가도 */
+function nearSet(x: number, y: number): DropTarget | null {
+  let best: { id: string; d: number; n: number } | null = null;
+  for (const el of document.querySelectorAll<HTMLElement>('[data-drop="set"]')) {
+    const r = el.getBoundingClientRect();
+    const d = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
+    if (d < 28 && (!best || d < best.d)) best = { id: el.dataset.setId as string, d, n: el.querySelectorAll('[data-tile-id]').length };
+  }
+  return best ? { kind: 'set', setId: best.id, index: best.n } : null;
+}
+
 function computeTarget(x: number, y: number, tiles: readonly TileId[]): DropTarget | null {
   const stack = document.elementsFromPoint(x, y);
   const zoneEl = stack.map((e) => (e as HTMLElement).closest<HTMLElement>('[data-drop]')).find(Boolean) ?? null;
@@ -129,7 +140,8 @@ function computeTarget(x: number, y: number, tiles: readonly TileId[]): DropTarg
     }
     return { kind: 'set', setId, index: insertIndex(kids, x, y) };
   }
-  if (kind === 'new' || kind === 'felt') return { kind: 'new', ...(zoneEl.dataset.before ? { before: zoneEl.dataset.before } : {}) };
+  if (kind === 'felt') return nearSet(x, y) ?? { kind: 'new' };
+  if (kind === 'new') return { kind: 'new', ...(zoneEl.dataset.before ? { before: zoneEl.dataset.before } : {}) };
   if (kind === 'staging') return { kind: 'staging', index: insertIndex(childTiles(zoneEl, exclude), x, y) };
   if (kind === 'rack') return { kind: 'rack', index: insertIndex(childTiles(zoneEl, exclude), x, y) };
   return null;
@@ -265,7 +277,8 @@ function onMove(e: PointerEvent): void {
     const hp = hotPoint(g.lastX, g.lastY);
     autoScroll(hp.y);
     const tiles = useDrag.getState().tiles;
-    const target = computeTarget(hp.x, hp.y, tiles);
+    // 타일(손가락 위) 자리에서 못 찾으면 손가락 자리로 한 번 더
+    const target = computeTarget(hp.x, hp.y, tiles) ?? (g.touch ? computeTarget(g.lastX, g.lastY, tiles) : null);
     const prev = useDrag.getState().target;
     if (!sameTarget(prev, target)) {
       const preview = target ? previewOf(target, tiles) : null;
@@ -290,6 +303,14 @@ function finish(e: PointerEvent, cancelled: boolean): void {
     // 탭
     const now = performance.now();
     const store = useGame.getState();
+    // 고른 타일이 있고 다른 세트의 타일을 눌렀으면: 그 세트에 넣기 (작은 + 단추를 겨누지 않아도)
+    const sel = store.selection;
+    const holder = store.session?.match.game.turn.work.sets.find((x) => x.tiles.includes(gest.id));
+    if (sel.length && holder && !sel.includes(gest.id) && !holder.tiles.some((x) => sel.includes(x))) {
+      lastTap = null;
+      store.moveSelectionTo({ kind: 'set', setId: holder.id });
+      return;
+    }
     if (lastTap && lastTap.id === gest.id && now - lastTap.at < DOUBLE_TAP) {
       lastTap = null;
       store.quickPlay(gest.id);
