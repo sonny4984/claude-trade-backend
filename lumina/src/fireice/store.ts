@@ -105,9 +105,14 @@ interface PuppetTrack {
   ground: boolean;
   alive: boolean;
   door: boolean;
+  /** 친구가 타고 있는 발판 번호(-1 없음)와 그 발판에서의 자리 — 발판은 내 화면의 것에 붙여 그린다 */
+  pl: number;
+  rx: number;
+  ry: number;
   at: number;
 }
 
+export type FxType = 'gem' | 'jump' | 'dead' | 'land' | 'bounce' | 'key' | 'unlock' | 'warp';
 /** 물리 세계와 고리 상태 (zustand 밖) */
 export const runtime: {
   world: WorldState | null;
@@ -119,7 +124,7 @@ export const runtime: {
   /** 마지막으로 보낸 내 몸 (가만히 있으면 덜 보내려고) */
   lastSent: string;
   /** 화면 효과 대기열 (사탕 톡, 점프 먼지 …) — 화면이 매 프레임 비운다 */
-  fx: { readonly type: 'gem' | 'jump' | 'dead' | 'land' | 'bounce'; readonly x: number; readonly y: number; readonly el: Element }[];
+  fx: { readonly type: FxType; readonly x: number; readonly y: number; readonly el: Element }[];
 } = { world: null, acc: 0, hudAt: 0, sendAt: 0, restartTimer: null, puppet: null, lastSent: '', fx: [] };
 
 export const levelCount = LEVELS.length;
@@ -270,7 +275,7 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     const s = get().session;
     if (!s || s.status !== 'playing') return;
     set({ oops: { el, cause } });
-    sfx('lose');
+    sfx('sadsqueak', { pitch: el === 'fire' ? 0.9 : 1.1 });
     buzz('error');
     if (runtime.restartTimer) return;
     const attempt = s.attempt;
@@ -293,7 +298,7 @@ export const useFireIce = create<FireIceStore>((set, get) => {
   const onEvents = (s: FireIceSession, events: readonly WorldEvent[]): void => {
     const online = !!s.online;
     const w = runtime.world;
-    const fx = (type: 'gem' | 'jump' | 'dead' | 'land' | 'bounce', el: Element, x: number, y: number): void => {
+    const fx = (type: FxType, el: Element, x: number, y: number): void => {
       if (runtime.fx.length < 40) runtime.fx.push({ type, el, x, y });
     };
     const feet = (el: Element): [number, number] => {
@@ -306,6 +311,11 @@ export const useFireIce = create<FireIceStore>((set, get) => {
         if (g) fx('gem', e.el, g.x + 0.5, g.y + 0.5);
       } else if (e.type === 'jump' || e.type === 'land' || e.type === 'dead') fx(e.type, e.el, ...feet(e.el));
       else if (e.type === 'bounce') fx('bounce', e.el, e.x, e.y);
+      else if (e.type === 'teleport') fx('warp', e.el, e.x + 0.5, e.y + 0.5);
+      else if (e.type === 'key' || e.type === 'unlock') {
+        const c = e.type === 'key' ? w?.level.keys[e.id] : w?.level.locks[e.id];
+        if (c) fx(e.type, e.el, c.x + 0.5, c.y + 0.5);
+      }
       switch (e.type) {
         case 'gem':
           sfx('pop', { pitch: e.el === 'fire' ? 1.15 : 1.35 });
@@ -320,11 +330,23 @@ export const useFireIce = create<FireIceStore>((set, get) => {
           if (e.on) sfx('tick');
           break;
         case 'jump':
-          sfx('pick', { pitch: e.el === 'fire' ? 1.1 : 1.3 });
+          sfx('squeak', { pitch: e.el === 'fire' ? 0.92 : 1.08 });
           break;
         case 'bounce':
-          sfx('pop', { pitch: 0.55 });
+          sfx('wheek', { pitch: e.el === 'fire' ? 0.92 : 1.08 });
           buzz('tap');
+          break;
+        case 'key':
+        case 'unlock':
+          sfx(e.type === 'key' ? 'meld' : 'commit', { pitch: 1.2 });
+          buzz('tap');
+          if (online) bridge.emit?.('fe', { a: s.attempt, k: e.type, id: e.id });
+          break;
+        case 'teleport':
+          sfx('wheek', { pitch: e.el === 'fire' ? 1.25 : 1.4 });
+          break;
+        case 'gate':
+          sfx('slide', { pitch: e.open ? 1.3 : 0.8 });
           break;
         case 'door':
           if (e.in) sfx('hint');
@@ -343,7 +365,8 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     const mine = myElement(s);
     if (!mine) return;
     const b = w.bodies[mine];
-    const msg = { a: s.attempt, x: round(b.x), y: round(b.y), vx: round(b.vx), vy: round(b.vy), f: b.face, g: b.ground !== -2 ? 1 : 0, al: b.alive ? 1 : 0, d: b.atDoor ? 1 : 0 };
+    const plat = b.ground >= 0 ? w.plats[b.ground] : undefined;
+    const msg = { a: s.attempt, x: round(b.x), y: round(b.y), vx: round(b.vx), vy: round(b.vy), f: b.face, g: b.ground !== -2 ? 1 : 0, al: b.alive ? 1 : 0, d: b.atDoor ? 1 : 0, pl: plat ? b.ground : -1, rx: plat ? round(b.x - plat.x) : 0, ry: plat ? round(b.y - plat.y) : 0 };
     const sig = `${msg.x},${msg.y},${msg.f},${msg.g},${msg.al},${msg.d}`;
     // 공개 중계 서버에 무리 없게 초당 12번까지, 가만히 있으면 1초에 한 번만
     const since = w.time - runtime.sendAt;
@@ -362,11 +385,14 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     const el: Element = mine === 'fire' ? 'ice' : 'fire';
     const b = w.bodies[el];
     const ahead = Math.min(0.15, (performance.now() - p.at) / 1000);
-    const tx = p.x + p.vx * ahead;
-    const ty = p.y + (p.ground ? 0 : p.vy * ahead);
+    // 발판에 탔으면 내 화면의 발판 위치에 붙인다 (늦게 온 위치 때문에 발판에 파묻히거나 떠 보이지 않게)
+    const plat = p.pl >= 0 ? w.plats[p.pl] : undefined;
+    const tx = (plat ? plat.x + p.rx : p.x) + p.vx * ahead;
+    const ty = plat ? plat.y + p.ry : p.y + (p.ground ? 0 : p.vy * ahead);
     const k = Math.min(1, dt * 18);
     const far = Math.abs(tx - b.x) + Math.abs(ty - b.y) > 2.5;
-    setPuppet(w, el, { x: far ? tx : b.x + (tx - b.x) * k, y: far ? ty : b.y + (ty - b.y) * k, vx: p.vx, vy: p.vy, face: p.face, ground: p.ground, alive: p.alive, door: p.door });
+    setPuppet(w, el, { x: far ? tx : b.x + (tx - b.x) * k, y: far || plat ? ty : b.y + (ty - b.y) * k, vx: p.vx, vy: p.vy, face: p.face, ground: p.ground, alive: p.alive, door: p.door });
+    if (plat) b.ground = p.pl;
   };
 
   // 온라인: 친구 몸 위치(빠름)와 사탕·레버·넘어짐(확실)
@@ -375,7 +401,8 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     const d = data as Record<string, unknown> | null;
     if (!s?.online || !d || seat === s.online.mySeat || d.a !== s.attempt) return;
     const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
-    runtime.puppet = { x: num(d.x), y: num(d.y), vx: num(d.vx), vy: num(d.vy), face: d.f === -1 ? -1 : 1, ground: d.g === 1, alive: d.al !== 0, door: d.d === 1, at: performance.now() };
+    const pl = typeof d.pl === 'number' && Number.isInteger(d.pl) && d.pl >= 0 && d.pl < (runtime.world?.plats.length ?? 0) ? d.pl : -1;
+    runtime.puppet = { x: num(d.x), y: num(d.y), vx: num(d.vx), vy: num(d.vy), face: d.f === -1 ? -1 : 1, ground: d.g === 1, alive: d.al !== 0, door: d.d === 1, pl, rx: num(d.rx), ry: num(d.ry), at: performance.now() };
   });
   onRealtime('fe', (seat, data) => {
     const s = get().session;
@@ -390,6 +417,14 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     } else if (d.k === 'lever' && id >= 0 && id < w.levers.length && typeof d.on === 'boolean') {
       if (w.levers[id] !== d.on) sfx('slide');
       w.levers[id] = d.on;
+    } else if (d.k === 'key' && id >= 0 && id < w.keysGot.length && !w.keysGot[id]) {
+      w.keysGot[id] = true;
+      w.keyCount++;
+      sfx('meld', { pitch: 1.2 });
+    } else if (d.k === 'unlock' && id >= 0 && id < w.lockOpen.length && !w.lockOpen[id]) {
+      w.lockOpen[id] = true;
+      w.keyCount = Math.max(0, w.keyCount - 1);
+      sfx('commit', { pitch: 1.2 });
     } else if (d.k === 'dead' && (d.el === 'fire' || d.el === 'ice') && (d.cause === 'L' || d.cause === 'W' || d.cause === 'G')) {
       const p = runtime.puppet;
       if (p) p.alive = false;

@@ -22,10 +22,21 @@ type Occ = Set<number>;
 export interface Move {
   readonly cell: Cell;
   readonly via?: Cell;
+  /** via가 젤리(튀기)인지 순간이동 구멍인지 */
+  readonly viaKind?: 'jelly' | 'portal';
 }
 
-function platCells(level: ParsedLevel, active: readonly boolean[]): Occ {
+/** 움직이는 벽: 발판 + 닫힌 문 + 잠긴 자물쇠 */
+function platCells(level: ParsedLevel, active: readonly boolean[], open = 0): Occ {
   const occ: Occ = new Set();
+  level.gate.forEach((g, i) => {
+    if (!g) return;
+    const on = active[Math.abs(g)] ?? false;
+    if (g > 0 ? !on : on) occ.add(i);
+  });
+  level.locks.forEach((l) => {
+    if (!(open & (1 << l.id))) occ.add(at(l.x, l.y));
+  });
   for (const d of level.platforms) {
     const on = active[d.group] ?? false;
     const px = d.x + (on ? d.dx : 0);
@@ -133,12 +144,25 @@ function bounceFrom(level: ParsedLevel, occ: Occ, el: Element, x: number, y: num
 /** 한 캐릭터가 한 번에 갈 수 있는 곳들 */
 export function movesFrom(level: ParsedLevel, occ: Occ, el: Element, x: number, y: number): Move[] {
   const out = new Map<number, Move>();
-  const add = (c: Cell, via?: Cell): void => {
+  const add = (c0: Cell, via0?: Cell, kind0?: 'jelly' | 'portal'): void => {
+    let c = c0;
+    let via = via0;
+    let kind = kind0;
+    // 순간이동 구멍에 들어서면 짝 칸으로 (짝 칸이 막혔으면 구멍 칸에 선다). 젤리로 튀어 구멍에 내리는 길은 뺀다
+    const dest = level.portal.get(at(c.x, c.y));
+    if (dest) {
+      if (via) return;
+      if (standable(level, occ, el, dest.x, dest.y)) {
+        via = c;
+        kind = 'portal';
+        c = dest;
+      }
+    }
     if (c.x === x && c.y === y) return;
     const k = at(c.x, c.y);
-    // 같은 칸이면 젤리 없이 가는 길을 더 좋게 본다
+    // 같은 칸이면 젤리·구멍 없이 가는 길을 더 좋게 본다
     if (out.has(k) && !out.get(k)?.via) return;
-    out.set(k, via ? { cell: c, via } : { cell: c });
+    out.set(k, via ? { cell: c, via, viaKind: kind } : { cell: c });
   };
   const land = (d: ReturnType<typeof drop>): void => {
     if (!d) return;
@@ -146,7 +170,7 @@ export function movesFrom(level: ParsedLevel, occ: Occ, el: Element, x: number, 
       add({ x: d.x, y: d.y });
       return;
     }
-    for (const c of bounceFrom(level, occ, el, d.x, d.y)) add(c, { x: d.x, y: d.y });
+    for (const c of bounceFrom(level, occ, el, d.x, d.y)) add(c, { x: d.x, y: d.y }, 'jelly');
   };
   // 걷기·걸어서 떨어지기
   for (const dx of [-1, 1]) {
@@ -176,9 +200,18 @@ interface State {
   readonly f: Cell;
   readonly i: Cell;
   readonly lev: number;
+  /** 주운 열쇠 (비트) */
+  readonly keys: number;
+  /** 연 자물쇠 (비트) */
+  readonly open: number;
 }
 
-const key = (s: State): string => `${s.f.x},${s.f.y},${s.i.x},${s.i.y},${s.lev}`;
+const key = (s: State): string => `${s.f.x},${s.f.y},${s.i.x},${s.i.y},${s.lev},${s.keys},${s.open}`;
+const bitCount = (n: number): number => {
+  let c = 0;
+  for (let v = n; v; v &= v - 1) c++;
+  return c;
+};
 
 function activeOf(level: ParsedLevel, s: State): boolean[] {
   const act = [false, false, false, false, false];
@@ -189,12 +222,19 @@ function activeOf(level: ParsedLevel, s: State): boolean[] {
   return act;
 }
 
+/** 선 칸에 열쇠가 있으면 줍는다 (열쇠는 둘이 함께 쓴다) */
+function pickKeys(level: ParsedLevel, s: State): State {
+  let keys = s.keys;
+  for (const k of level.keys) if ((s.f.x === k.x && s.f.y === k.y) || (s.i.x === k.x && s.i.y === k.y)) keys |= 1 << k.id;
+  return keys === s.keys ? s : { ...s, keys };
+}
+
 /** 장치가 바뀐 뒤: 발판에 탄 캐릭터를 옮기고, 발이 뜨면 떨어뜨린다 (죽거나 끼이면 null) */
 function settle(level: ParsedLevel, before: State, after: State): State | null {
   const a0 = activeOf(level, before);
   const a1 = activeOf(level, after);
-  const occ0 = platCells(level, a0);
-  const occ1 = platCells(level, a1);
+  const occ0 = platCells(level, a0, before.open);
+  const occ1 = platCells(level, a1, after.open);
   const carry = (c: Cell): Cell => {
     for (const d of level.platforms) {
       const on0 = a0[d.group] ?? false;
@@ -213,14 +253,19 @@ function settle(level: ParsedLevel, before: State, after: State): State | null {
   const fix = (c: Cell, el: Element): Cell | null => {
     const moved = occ0.has(at(c.x, c.y + 1)) ? carry(c) : c;
     if (solid(level, occ1, el, moved.x, moved.y)) return null;
-    if (standable(level, occ1, el, moved.x, moved.y)) return moved;
-    const d = drop(level, occ1, el, moved.x, moved.y);
-    return d && !d.jelly ? { x: d.x, y: d.y } : null;
+    let end: Cell | null = moved;
+    if (!standable(level, occ1, el, moved.x, moved.y)) {
+      const d = drop(level, occ1, el, moved.x, moved.y);
+      end = d && !d.jelly ? { x: d.x, y: d.y } : null;
+    }
+    // 장치 때문에 떨어져 구멍 칸에 내리는 경우는 보수적으로 뺀다
+    if (end && end !== c && (end.x !== c.x || end.y !== c.y) && level.portal.has(at(end.x, end.y))) return null;
+    return end;
   };
   const f = fix(after.f, 'fire');
   const i = fix(after.i, 'ice');
   if (!f || !i) return null;
-  return { f, i, lev: after.lev };
+  return pickKeys(level, { f, i, lev: after.lev, keys: after.keys, open: after.open });
 }
 
 export interface VerifyResult {
@@ -236,19 +281,24 @@ export interface PathState {
   readonly i: Cell;
   /** 레버 켜짐 (비트) */
   readonly lev: number;
-  /** 이 상태로 오려고 움직인 쪽 (처음 상태는 null) — 발판에 실려 같이 옮겨진 쪽과 구별 */
-  readonly by: Element | 'lever' | null;
+  readonly keys: number;
+  readonly open: number;
+  /** 이 상태로 오려고 움직인 쪽 (처음 상태는 null) — 발판에 실려 같이 옮겨진 쪽과 구별. unlock은 자물쇠 열기 */
+  readonly by: Element | 'lever' | 'unlock' | null;
   /** 움직인 쪽이 간 칸 (발판이 싣고 가기 전) */
   readonly to: Cell | null;
-  /** 젤리를 밟고 튀어서 갔다면 밟은 자리 (젤리 바로 위 칸) */
+  /** 젤리를 밟고 튀었거나 순간이동 구멍으로 갔다면 그 칸 */
   readonly via: Cell | null;
+  readonly viaKind: 'jelly' | 'portal' | null;
 }
+
+type Step = { readonly prev: State; readonly by: Element | 'lever' | 'unlock'; readonly to: Cell | null; readonly via: Cell | null; readonly viaKind: 'jelly' | 'portal' | null };
 
 /** 둘 다 문에 닿을 수 있는지 (그리고 사탕을 각자 먹을 수 있는지). path: 가장 짧은 풀이 (시작 → 끝) */
 export function verifyLevel(level: ParsedLevel, limit = 400_000): VerifyResult & { readonly path: readonly PathState[] } {
-  const start: State = { f: level.spawn.fire, i: level.spawn.ice, lev: 0 };
+  const start: State = pickKeys(level, { f: level.spawn.fire, i: level.spawn.ice, lev: 0, keys: 0, open: 0 });
   const seen = new Map<string, number>([[key(start), 0]]);
-  const parent = new Map<string, { readonly prev: State; readonly by: Element | 'lever'; readonly to: Cell | null; readonly via: Cell | null } | null>([[key(start), null]]);
+  const parent = new Map<string, Step | null>([[key(start), null]]);
   const queue: State[] = [start];
   const gems = new Set<number>();
   let solvedAt = -1;
@@ -264,27 +314,34 @@ export function verifyLevel(level: ParsedLevel, limit = 400_000): VerifyResult &
       solvedAt = depth;
       goal = s;
     }
-    const occ = platCells(level, activeOf(level, s));
-    const next: { readonly n: State; readonly by: Element | 'lever'; readonly to: Cell | null; readonly via: Cell | null }[] = [];
-    for (const m of movesFrom(level, occ, 'fire', s.f.x, s.f.y)) next.push({ n: { ...s, f: m.cell }, by: 'fire', to: m.cell, via: m.via ?? null });
-    for (const m of movesFrom(level, occ, 'ice', s.i.x, s.i.y)) next.push({ n: { ...s, i: m.cell }, by: 'ice', to: m.cell, via: m.via ?? null });
+    const occ = platCells(level, activeOf(level, s), s.open);
+    const next: { readonly n: State; readonly by: Step['by']; readonly to: Cell | null; readonly via: Cell | null; readonly viaKind: Step['viaKind'] }[] = [];
+    for (const m of movesFrom(level, occ, 'fire', s.f.x, s.f.y)) next.push({ n: { ...s, f: m.cell }, by: 'fire', to: m.cell, via: m.via ?? null, viaKind: m.viaKind ?? null });
+    for (const m of movesFrom(level, occ, 'ice', s.i.x, s.i.y)) next.push({ n: { ...s, i: m.cell }, by: 'ice', to: m.cell, via: m.via ?? null, viaKind: m.viaKind ?? null });
     level.levers.forEach((l, k) => {
-      if ((s.f.x === l.x && s.f.y === l.y) || (s.i.x === l.x && s.i.y === l.y)) next.push({ n: { ...s, lev: s.lev ^ (1 << k) }, by: 'lever', to: null, via: null });
+      if ((s.f.x === l.x && s.f.y === l.y) || (s.i.x === l.x && s.i.y === l.y)) next.push({ n: { ...s, lev: s.lev ^ (1 << k) }, by: 'lever', to: null, via: null, viaKind: null });
     });
-    for (const { n, by, to, via } of next) {
+    // 자물쇠: 남은 열쇠가 있고 바로 옆(같은 줄)에 서 있으면 연다
+    if (bitCount(s.keys) > bitCount(s.open))
+      for (const lk of level.locks) {
+        if (s.open & (1 << lk.id)) continue;
+        const near = (c: Cell): boolean => c.y === lk.y && Math.abs(c.x - lk.x) === 1;
+        if (near(s.f) || near(s.i)) next.push({ n: { ...s, open: s.open | (1 << lk.id) }, by: 'unlock', to: null, via: null, viaKind: null });
+      }
+    for (const { n, by, to, via, viaKind } of next) {
       const st = settle(level, s, n);
       if (!st) continue;
       const k = key(st);
       if (seen.has(k)) continue;
       seen.set(k, depth + 1);
-      parent.set(k, { prev: s, by, to, via });
+      parent.set(k, { prev: s, by, to, via, viaKind });
       queue.push(st);
     }
   }
   const path: PathState[] = [];
   for (let c: State | null = goal; c; ) {
     const p = parent.get(key(c)) ?? null;
-    path.unshift({ ...c, by: p?.by ?? null, to: p?.to ?? null, via: p?.via ?? null });
+    path.unshift({ ...c, by: p?.by ?? null, to: p?.to ?? null, via: p?.via ?? null, viaKind: p?.viaKind ?? null });
     c = p?.prev ?? null;
   }
   return { solvable: solvedAt >= 0, states: seen.size, gemsReachable: [...gems].sort((a, b) => a - b), steps: solvedAt, path };

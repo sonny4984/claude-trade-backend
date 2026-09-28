@@ -41,7 +41,7 @@ interface Strat {
  * 한 몸놀림을 복사본에서 해 본다. 목표 칸에 (한 번이라도) 내려섰으면 그 세계를 돌려준다.
  * via가 있으면: 먼저 그 칸의 젤리를 밟아 튀어 오른 뒤, 발이 (튄 자리 기준) bounceRise만큼 오르면 목표로 몸을 튼다.
  */
-function attempt(w0: WorldState, el: Element, to: Cell, s: Strat, via: Cell | null = null, bounceRise = 0): WorldState | null {
+function attempt(w0: WorldState, el: Element, to: Cell, s: Strat, via: Cell | null = null, kind: 'jelly' | 'portal' = 'jelly', bounceRise = 0): WorldState | null {
   const w = structuredClone(w0);
   const b = w.bodies[el];
   const feet0 = b.y + PHYS.h;
@@ -52,20 +52,20 @@ function attempt(w0: WorldState, el: Element, to: Cell, s: Strat, via: Cell | nu
   let launchFeet = 0;
   for (let t = 0; t < 4 && calm < 15; t += DT) {
     const target = bounced ? to : (via as Cell);
-    if (via && bounced) steer = b.y + PHYS.h < launchFeet - bounceRise || b.vy > 0;
+    if (via && bounced) steer = kind === 'portal' || b.y + PHYS.h < launchFeet - bounceRise || b.vy > 0;
     else if (!steer && b.y + PHYS.h < feet0 - s.rise) steer = true;
     const err = target.x + 0.5 - (b.x + PHYS.w / 2);
     const v = err - b.vx * 0.12;
     const want = steer ? (Math.abs(v) < 0.06 ? 0 : Math.sign(v)) : 0;
     const ev = tick(w, el, { left: want < 0, right: want > 0, jump: (!via || !bounced) && s.jump && t < s.hold });
     if (!b.alive) return null;
-    if (!bounced && via && ev.some((e) => e.type === 'bounce' && e.el === el && e.x === via.x)) {
+    if (!bounced && via && ev.some((e) => (kind === 'portal' ? e.type === 'teleport' && e.el === el : e.type === 'bounce' && e.el === el && e.x === via.x))) {
       bounced = true;
       launchFeet = via.y + 1;
       continue;
     }
-    // 튀기 전에 다른 젤리를 밟았으면 실패
-    if (!bounced && ev.some((e) => e.type === 'bounce' && e.el === el)) return null;
+    // 튀기(구멍에 들기) 전에 다른 젤리·구멍을 밟았으면 실패
+    if (ev.some((e) => (e.type === 'teleport' || (!bounced && e.type === 'bounce')) && e.el === el)) return null;
     if (bounced && t > 0.05 && same(cellOf(w, el), to)) reached = true;
     calm = bounced && t > 0.1 && b.ground !== -2 && Math.abs(err) < 0.2 && Math.abs(b.vx) < 0.05 ? calm + 1 : 0;
   }
@@ -99,7 +99,27 @@ export function replay(level: ParsedLevel, path: readonly PathState[]): BotResul
   for (let k = 1; k < path.length; k++) {
     const a = path[k - 1] as PathState;
     const n = path[k] as PathState;
-    if (n.by === 'lever') {
+    if (n.by === 'unlock') {
+      // 자물쇠 옆에 선 쪽이 자물쇠 쪽으로 밀어 연 뒤 제자리로
+      const id = level.locks.findIndex((_, i) => ((a.open ^ n.open) >> i) & 1);
+      const lk = level.locks[id];
+      const el = (['fire', 'ice'] as const).find((e) => {
+        const c = cellOf(w, e);
+        return !!lk && !!c && c.y === lk.y && Math.abs(c.x - lk.x) === 1;
+      });
+      if (!lk || !el) return fail(k, `nobody at lock ${id}`);
+      const home = cellOf(w, el) as Cell;
+      const right = lk.x > home.x;
+      for (let t = 0; t < 1 && !w.lockOpen[id]; t += DT) tick(w, el, { left: !right, right, jump: false });
+      if (!w.lockOpen[id]) return fail(k, `lock ${id} stays shut`);
+      const b = w.bodies[el];
+      for (let t = 0; t < 1; t += DT) {
+        const err = home.x + 0.5 - (b.x + PHYS.w / 2);
+        const v = err - b.vx * 0.12;
+        if (Math.abs(err) < 0.1 && Math.abs(b.vx) < 0.05) break;
+        tick(w, el, { left: v < -0.06, right: v > 0.06, jump: false });
+      }
+    } else if (n.by === 'lever') {
       // 레버 칸에 선 쪽이 민다: 켜려면 오른쪽, 끄려면 왼쪽
       const idx = level.levers.findIndex((_, i) => ((a.lev ^ n.lev) >> i) & 1);
       const lv = level.levers[idx];
@@ -116,11 +136,14 @@ export function replay(level: ParsedLevel, path: readonly PathState[]): BotResul
       let done: WorldState | null = null;
       const via = n.via;
       // 젤리로 튀는 길: 젤리까지 가는 몸놀림 × 튄 뒤 몸을 트는 높이
-      const tries: { s: Strat; rise: number }[] = via
+      const portal = n.viaKind === 'portal';
+      const tries: { s: Strat; rise: number }[] = via && portal
+        ? strategies(from, via).map((s) => ({ s, rise: 0 }))
+        : via
         ? strategies(from, via).flatMap((s) => [Math.max(0.3, via.y - to.y + 0.05), 1, 2, 3, 4, 5, 0].map((rise) => ({ s, rise })))
         : strategies(from, to).map((s) => ({ s, rise: 0 }));
       for (const { s, rise } of tries) {
-        const r = attempt(w, el, to, s, via, rise);
+        const r = attempt(w, el, to, s, via, portal ? 'portal' : 'jelly', rise);
         if (!r) continue;
         // 레버를 지나며 잘못 건드렸으면, 레버 칸에 서 있을 때 되돌린다
         r.level.levers.forEach((lv, i) => {

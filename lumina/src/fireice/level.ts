@@ -15,6 +15,11 @@
  *   J  젤리 — 밟으면 약 6칸 높이로 통 튀어 오른다 (그 위에 서 있을 수는 없음)
  *   H  뜨거운 커튼 — 불만 지나가고 얼음에게는 벽
  *   C  차가운 커튼 — 얼음만 지나가고 불에게는 벽
+ *   5 6 7 8  젤리빈 문 — 1·2·3·4번(버튼·레버)이 켜진 동안 열린다 (꺼지면 닫힘)
+ *   x y  거꾸로 문 — 3·4번 레버가 켜지면 닫힌다 (꺼지면 열림)
+ *   k  쿠키 열쇠 — 누구든 주우면 함께 쓰는 열쇠 하나
+ *   K  자물쇠 문 — 열쇠를 가진 채 옆에서 밀면 열린다 (열쇠 하나 씀)
+ *   @ %  순간이동 구멍 — 같은 글자 두 칸이 한 쌍, 걸어 들어가면 짝 칸으로
  * 발판(움직이는 판)은 맵 대신 platforms 목록에 적는다: 쉴 때 위치(x, y, 너비, 높이)와 켜졌을 때 옮겨 갈 칸 수.
  */
 
@@ -60,6 +65,12 @@ export interface ParsedLevel {
   readonly jelly: readonly boolean[];
   /** 커튼: 지나갈 수 있는 원소 (다른 원소에게는 벽) */
   readonly curtain: readonly (Element | null)[];
+  /** 문: 0 없음, +g = g번이 켜지면 열림, -g = g번이 켜지면 닫힘 */
+  readonly gate: readonly number[];
+  readonly keys: readonly { readonly id: number; readonly x: number; readonly y: number }[];
+  readonly locks: readonly { readonly id: number; readonly x: number; readonly y: number }[];
+  /** 칸 번호 → 순간이동 짝 칸 */
+  readonly portal: ReadonlyMap<number, Cell>;
   readonly pool: readonly (Pool | null)[];
   readonly spawn: Readonly<Record<Element, Cell>>;
   readonly door: Readonly<Record<Element, Cell>>;
@@ -77,6 +88,10 @@ export function parseLevel(def: LevelDef): ParsedLevel {
   const oneway: boolean[] = [];
   const jelly: boolean[] = [];
   const curtain: (Element | null)[] = [];
+  const gate: number[] = [];
+  const keys: { id: number; x: number; y: number }[] = [];
+  const locks: { id: number; x: number; y: number }[] = [];
+  const pairs: Record<string, Cell[]> = {};
   const pool: (Pool | null)[] = [];
   const spawn: Partial<Record<Element, Cell>> = {};
   const door: Partial<Record<Element, Cell>> = {};
@@ -91,6 +106,10 @@ export function parseLevel(def: LevelDef): ParsedLevel {
       oneway.push(ch === '=');
       jelly.push(ch === 'J');
       curtain.push(ch === 'H' ? 'fire' : ch === 'C' ? 'ice' : null);
+      gate.push(ch >= '5' && ch <= '8' ? Number(ch) - 4 : ch === 'x' ? -3 : ch === 'y' ? -4 : 0);
+      if (ch === 'k') keys.push({ id: keys.length, x, y });
+      else if (ch === 'K') locks.push({ id: locks.length, x, y });
+      else if (ch === '@' || ch === '%') (pairs[ch] ??= []).push({ x, y });
       pool.push(isPool ? (ch as Pool) : null);
       if (ch === 'f') spawn.fire = { x, y };
       else if (ch === 'i') spawn.ice = { x, y };
@@ -102,7 +121,14 @@ export function parseLevel(def: LevelDef): ParsedLevel {
     }
   }
   if (!spawn.fire || !spawn.ice || !door.fire || !door.ice) throw new Error(`level ${def.id}: needs f, i, F, I`);
-  return { def, solid, oneway, jelly, curtain, pool, spawn: spawn as Record<Element, Cell>, door: door as Record<Element, Cell>, gems, buttons, levers, platforms: def.platforms ?? [] };
+  const portal = new Map<number, Cell>();
+  for (const [ch, cells] of Object.entries(pairs)) {
+    if (cells.length !== 2) throw new Error(`level ${def.id}: portal ${ch} needs exactly 2 cells`);
+    const [a, b] = cells as [Cell, Cell];
+    portal.set(at(a.x, a.y), b);
+    portal.set(at(b.x, b.y), a);
+  }
+  return { def, solid, oneway, jelly, curtain, gate, keys, locks, portal, pool, spawn: spawn as Record<Element, Cell>, door: door as Record<Element, Cell>, gems, buttons, levers, platforms: def.platforms ?? [] };
 }
 
 /** 이 원소에게 (x, y) 칸이 벽인가 (블록·웅덩이·젤리·막는 커튼) — 발판은 따로 */

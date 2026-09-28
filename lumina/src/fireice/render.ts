@@ -393,6 +393,36 @@ function drawDoorGlow(ctx: CanvasRenderingContext2D, lv: ParsedLevel, el: Elemen
   ctx.restore();
 }
 
+const PORTAL_COLOR = ['#FF6FB5', '#38BDF8', '#A3E635'];
+
+function drawKey(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-0.5);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = Math.max(1, s * 0.07);
+  ctx.fillStyle = '#FFC93C';
+  rr(ctx, -s * 0.1, -s * 0.07, s * 0.58, s * 0.14, s * 0.05);
+  ctx.fill();
+  ctx.stroke();
+  rr(ctx, s * 0.26, 0, s * 0.1, s * 0.2, s * 0.03);
+  ctx.fill();
+  ctx.stroke();
+  rr(ctx, s * 0.4, 0, s * 0.08, s * 0.15, s * 0.03);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(-s * 0.26, 0, s * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#FFF3C4';
+  ctx.beginPath();
+  ctx.arc(-s * 0.26, 0, s * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function drawFrame(ctx: CanvasRenderingContext2D, w: WorldState, o: DrawOpts): void {
   const T = o.tile;
   const lv = w.level;
@@ -554,6 +584,93 @@ export function drawFrame(ctx: CanvasRenderingContext2D, w: WorldState, o: DrawO
       ctx.fill();
     }
   });
+
+  // 순간이동 구멍: 짝마다 같은 색 소용돌이
+  {
+    const pair = new Map<number, number>();
+    for (const [i, d] of lv.portal) {
+      const m = Math.min(i, at(d.x, d.y));
+      if (!pair.has(m)) pair.set(m, pair.size);
+      const col = PORTAL_COLOR[(pair.get(m) ?? 0) % PORTAL_COLOR.length] as string;
+      ctx.save();
+      ctx.translate((i % LEVEL_W) * T + T / 2, Math.floor(i / LEVEL_W) * T + T / 2);
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, T * 0.4, T * 0.48, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = T * 0.08;
+      ctx.setLineDash([T * 0.24, T * 0.12]);
+      ctx.lineDashOffset = -t * T;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = T * 0.06;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, T * 0.18, T * 0.24, 0, t * 3, t * 3 + 4.4);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // 사탕 막대 문: 닫히면 막대 셋(반대로 움직이는 문은 흰 띠), 열리면 흐린 점선
+  for (let y = 0; y < LEVEL_H; y++)
+    for (let x = 0; x < LEVEL_W; x++) {
+      const i = at(x, y);
+      const g = lv.gate[i] ?? 0;
+      if (!g) continue;
+      const col = GROUP_COLOR[Math.abs(g)] ?? '#FFC93C';
+      ctx.strokeStyle = w.gateOpen[i] ? col : INK;
+      ctx.lineWidth = Math.max(1, T * 0.045);
+      if (w.gateOpen[i]) {
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.setLineDash([T * 0.12, T * 0.1]);
+        rr(ctx, x * T + T * 0.1, y * T + T * 0.06, T * 0.8, T * 0.88, T * 0.14);
+        ctx.stroke();
+        ctx.restore();
+        continue;
+      }
+      for (const bx of [0.2, 0.5, 0.8]) {
+        ctx.fillStyle = col;
+        rr(ctx, x * T + (bx - 0.11) * T, y * T + 1, T * 0.22, T - 2, T * 0.1);
+        ctx.fill();
+        ctx.stroke();
+        if (g < 0) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(x * T + (bx - 0.08) * T, y * T + T * 0.42, T * 0.16, T * 0.16);
+        }
+      }
+    }
+
+  // 자물쇠 문: 열쇠 구멍이 있는 쿠키 문
+  lv.locks.forEach((lk, i) => {
+    if (w.lockOpen[i]) return;
+    const x = lk.x * T;
+    const y = lk.y * T;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = Math.max(1.2, T * 0.05);
+    ctx.fillStyle = '#C98B4F';
+    rr(ctx, x + 1, y + 1, T - 2, T - 2, T * 0.14);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#FFD166';
+    rr(ctx, x + T * 0.24, y + T * 0.2, T * 0.52, T * 0.6, T * 0.1);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.arc(x + T / 2, y + T * 0.42, T * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(x + T * 0.46, y + T * 0.44, T * 0.08, T * 0.22);
+  });
+
+  // 열쇠 (둥실둥실) + 가진 열쇠 수 (왼쪽 위)
+  lv.keys.forEach((k, i) => {
+    if (!w.keysGot[i]) drawKey(ctx, k.x * T + T / 2, k.y * T + T / 2 + Math.sin(t * 3 + i) * T * 0.07, T * 0.72);
+  });
+  for (let k = 0; k < w.keyCount; k++) drawKey(ctx, T * (0.6 + k * 0.75), T * 0.5, T * 0.7);
 
   // 사탕
   lv.gems.forEach((g, i) => {

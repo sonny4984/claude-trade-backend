@@ -69,6 +69,16 @@ export interface WorldState {
   time: number;
   /** 밖에서 위치를 넣어 주는 몸 (온라인 상대) */
   readonly puppets: Set<Element>;
+  /** 문 칸이 지금 열려 있나 (칸 번호로) */
+  readonly gateOpen: boolean[];
+  /** 주운 열쇠, 아직 안 쓴 열쇠 수, 열린 자물쇠 */
+  readonly keysGot: boolean[];
+  keyCount: number;
+  readonly lockOpen: boolean[];
+  /** 칸 번호 → 자물쇠 번호 (-1 없음) */
+  readonly lockAt: readonly number[];
+  /** 순간이동한 뒤 구멍 칸을 벗어날 때까지 다시 안 탄다 */
+  readonly portalCool: Record<Element, boolean>;
 }
 
 export type WorldEvent =
@@ -79,6 +89,10 @@ export type WorldEvent =
   | { readonly type: 'jump'; readonly el: Element }
   | { readonly type: 'land'; readonly el: Element }
   | { readonly type: 'bounce'; readonly el: Element; readonly x: number; readonly y: number }
+  | { readonly type: 'key'; readonly id: number; readonly el: Element }
+  | { readonly type: 'unlock'; readonly id: number; readonly el: Element }
+  | { readonly type: 'teleport'; readonly el: Element; readonly x: number; readonly y: number }
+  | { readonly type: 'gate'; readonly open: boolean }
   | { readonly type: 'button'; readonly group: number; readonly on: boolean };
 
 function spawnBody(level: ParsedLevel, el: Element): Body {
@@ -96,7 +110,26 @@ export function newWorld(level: ParsedLevel): WorldState {
     pressed: [false, false, false, false, false],
     time: 0,
     puppets: new Set(),
+    gateOpen: level.gate.map((g) => g < 0),
+    keysGot: level.keys.map(() => false),
+    keyCount: 0,
+    lockOpen: level.locks.map(() => false),
+    lockAt: (() => {
+      const a = new Array<number>(LEVEL_W * LEVEL_H).fill(-1);
+      level.locks.forEach((l) => (a[at(l.x, l.y)] = l.id));
+      return a;
+    })(),
+    portalCool: { fire: false, ice: false },
   };
+}
+
+/** 닫힌 문·잠긴 자물쇠 칸 (모두에게 벽) */
+function dynWall(w: WorldState, tx: number, ty: number): boolean {
+  if (tx < 0 || ty < 0 || tx >= LEVEL_W || ty >= LEVEL_H) return false;
+  const i = at(tx, ty);
+  if (w.level.gate[i] && !w.gateOpen[i]) return true;
+  const l = w.lockAt[i] as number;
+  return l >= 0 && !w.lockOpen[l];
 }
 
 function oneWayAt(level: ParsedLevel, tx: number, ty: number): boolean {
@@ -117,7 +150,7 @@ interface Box {
 function hits(w: WorldState, el: Element, l: number, t: number, r: number, b: number, skip = -1): Box[] {
   const out: Box[] = [];
   for (let ty = Math.floor(t); ty <= Math.floor(b - EPS); ty++)
-    for (let tx = Math.floor(l); tx <= Math.floor(r - EPS); tx++) if (wallFor(w.level, el, tx, ty)) out.push({ l: tx, t: ty, r: tx + 1, b: ty + 1, id: -1 });
+    for (let tx = Math.floor(l); tx <= Math.floor(r - EPS); tx++) if (wallFor(w.level, el, tx, ty) || dynWall(w, tx, ty)) out.push({ l: tx, t: ty, r: tx + 1, b: ty + 1, id: -1 });
   w.level.platforms.forEach((d, i) => {
     if (i === skip) return;
     const p = w.plats[i] as Plat;
@@ -200,6 +233,22 @@ export function step(w: WorldState, inputs: Readonly<Record<Element, Input>>, dt
       events.push({ type: 'button', group: g, on });
     }
   }
+
+  // 1-2) 문: 번호가 켜지면(거꾸로 문은 꺼지면) 열린다. 닫힐 칸에 몸이 있으면 비킬 때까지 열어 둔다
+  let gateMoved = 0;
+  w.level.gate.forEach((g, i) => {
+    if (!g) return;
+    const open = g > 0 ? groupActive(w, g) : !groupActive(w, -g);
+    if (open === w.gateOpen[i]) return;
+    if (!open) {
+      const gx = i % LEVEL_W;
+      const gy = Math.floor(i / LEVEL_W);
+      if (bodies.some((b) => b.alive && b.x < gx + 1 && b.x + PHYS.w > gx && b.y < gy + 1 && b.y + PHYS.h > gy)) return;
+    }
+    w.gateOpen[i] = open;
+    gateMoved = open ? 1 : -1;
+  });
+  if (gateMoved) events.push({ type: 'gate', open: gateMoved > 0 });
 
   // 2) 발판 움직이기 — 탄 몸은 같이 싣고, 몸을 끼우게 되면 그동안 멈춰 기다린다
   const local = bodies.filter((b) => b.alive && !w.puppets.has(b.el));
@@ -310,6 +359,49 @@ export function step(w: WorldState, inputs: Readonly<Record<Element, Input>>, dt
         }
       }
     });
+
+    // 열쇠 줍기 (함께 쓰는 열쇠)
+    w.level.keys.forEach((k, i) => {
+      if (w.keysGot[i]) return;
+      const cx = k.x + 0.5;
+      const cy = k.y + 0.5;
+      const nx = Math.max(b.x, Math.min(cx, b.x + PHYS.w));
+      const ny = Math.max(b.y, Math.min(cy, b.y + PHYS.h));
+      if ((nx - cx) ** 2 + (ny - cy) ** 2 < 0.36 * 0.36) {
+        w.keysGot[i] = true;
+        w.keyCount++;
+        events.push({ type: 'key', id: i, el: b.el });
+      }
+    });
+    // 자물쇠: 열쇠를 가진 채 옆에서 밀면 열린다
+    if (w.keyCount > 0)
+      w.level.locks.forEach((lk, i) => {
+        if (w.lockOpen[i] || w.keyCount <= 0) return;
+        if (b.y < lk.y + 1 && b.y + PHYS.h > lk.y && b.x - 0.06 < lk.x + 1 && b.x + PHYS.w + 0.06 > lk.x) {
+          w.lockOpen[i] = true;
+          w.keyCount--;
+          events.push({ type: 'unlock', id: i, el: b.el });
+        }
+      });
+    // 순간이동: 땅을 딛고 구멍 칸에 들어서면 짝 칸으로 (짝 칸이 막혀 있으면 안 감)
+    {
+      const cxi = Math.floor(b.x + PHYS.w / 2);
+      const cyi = Math.floor(b.y + PHYS.h / 2);
+      const dest = cxi >= 0 && cxi < LEVEL_W && cyi >= 0 && cyi < LEVEL_H ? w.level.portal.get(at(cxi, cyi)) : undefined;
+      if (!dest) w.portalCool[b.el] = false;
+      else if (!w.portalCool[b.el] && b.ground !== -2) {
+        // 짝 칸 한가운데 바닥에 내려놓는다 (칸 안 어긋남을 그대로 옮기면 벽에 걸칠 수 있다)
+        const nx = dest.x + 0.5 - PHYS.w / 2;
+        const ny = dest.y + 1 - PHYS.h;
+        if (!hits(w, b.el, nx, ny, nx + PHYS.w, ny + PHYS.h).length) {
+          b.x = nx;
+          b.y = ny;
+          events.push({ type: 'teleport', el: b.el, x: dest.x, y: dest.y });
+        }
+        // 막혀 있었으면 한 번 내려섰다가 다시 들어와야 한다 (풀이 모형과 같게)
+        w.portalCool[b.el] = true;
+      }
+    }
 
     // 사탕
     w.level.gems.forEach((gm, i) => {

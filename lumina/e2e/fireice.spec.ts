@@ -62,7 +62,7 @@ test('불과 얼음 혼자 하기: 움직이고, 바꾸고, 둘 다 문에 서�
   const touch = info.project.name === 'phone';
   const errors = await open(page);
   await page.locator('.plate-fireice').click();
-  await expect(page.locator('.fi-level')).toHaveCount(13);
+  await expect(page.locator('.fi-level')).toHaveCount(23);
   await expect(page.locator('.fi-level').nth(1)).toBeDisabled();
   await page.locator('.screen-foot .btn-primary').click();
   await expect(page.locator('.fireice')).toBeVisible();

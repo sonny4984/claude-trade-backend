@@ -79,7 +79,7 @@ function Stage({ session }: { session: FireIceSession }) {
         else if (f.type === 'bounce') {
           jellyHit.current.set(f.y * 16 + f.x, now);
           burst(particles.current, f.x + 0.5, f.y, 'rgba(255,140,190,0.8)', 6, 2, 0.06);
-        }
+        } else burst(particles.current, f.x, f.y, f.type === 'key' ? '#FFC93C' : f.type === 'warp' ? '#B884FF' : '#C98B4F', 12, 2.4, 0.07);
       }
       stepParticles(particles.current, dt);
       const mine = myElement(s);

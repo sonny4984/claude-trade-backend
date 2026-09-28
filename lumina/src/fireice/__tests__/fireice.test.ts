@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LEVELS } from '../levels';
-import { LEVEL_H, parseLevel, type Element, type LevelDef, type ParsedLevel } from '../level';
+import { LEVEL_H, at, parseLevel, type Element, type LevelDef, type ParsedLevel } from '../level';
 import { verifyLevel } from '../verify';
 import { replay } from './bot';
 import { NO_INPUT, PHYS, cleared, newWorld, step, type Input, type WorldEvent, type WorldState } from '../world';
@@ -187,6 +187,42 @@ describe('불과 얼음 물리', () => {
     // 얼음: C(9)는 지나가고 H(6)에 막힌다
     expect(w.bodies.ice.x).toBeLessThan(9);
     expect(w.bodies.ice.x).toBeGreaterThanOrEqual(7 - 1e-3);
+  });
+
+  it('젤리빈 문: 버튼을 밟는 동안만 열리고, 닫힌 문은 벽이다', () => {
+    const w = newWorld(mini(['#f....5......1i#', '################']));
+    const g = at(6, LEVEL_H - 2);
+    const right: Input = { left: false, right: true, jump: false };
+    run(w, 1.5, () => ({ fire: right }));
+    expect(w.gateOpen[g]).toBe(false);
+    expect(w.bodies.fire.x + PHYS.w).toBeLessThan(6.01);
+    for (let t = 0; t < 1 && !w.pressed[1]; t += DT) step(w, { fire: NO_INPUT, ice: { left: true, right: false, jump: false } }, DT);
+    run(w, 0.3, () => ({}));
+    expect(w.gateOpen[g]).toBe(true);
+    run(w, 1, () => ({ fire: right }));
+    expect(w.bodies.fire.x).toBeGreaterThan(7);
+  });
+
+  it('열쇠: 주운 뒤 자물쇠를 옆에서 밀면 열리고 열쇠를 하나 쓴다 (없으면 벽)', () => {
+    const right: Input = { left: false, right: true, jump: false };
+    const locked = newWorld(mini(['#f....K.......i#', '################']));
+    run(locked, 1.5, () => ({ fire: right }));
+    expect(locked.lockOpen[0]).toBe(false);
+    expect(locked.bodies.fire.x + PHYS.w).toBeLessThan(6.01);
+    const w = newWorld(mini(['#f.k..K.......i#', '################']));
+    run(w, 2, () => ({ fire: right }));
+    expect(w.keysGot[0]).toBe(true);
+    expect(w.lockOpen[0]).toBe(true);
+    expect(w.keyCount).toBe(0);
+    expect(w.bodies.fire.x).toBeGreaterThan(7);
+  });
+
+  it('순간이동 구멍: 걸어 들어가면 벽 너머 짝 칸으로', () => {
+    const w = newWorld(mini(['#......#.......#', '#f..@..#...@..i#', '################']));
+    const ev = run(w, 1, () => ({ fire: { left: false, right: true, jump: false } }));
+    expect(ev.some((e) => e.type === 'teleport' && e.el === 'fire')).toBe(true);
+    expect(w.bodies.fire.x).toBeGreaterThan(8);
+    expect(w.bodies.fire.alive).toBe(true);
   });
 
   it('둘 다 제 문에 서면 통과', () => {

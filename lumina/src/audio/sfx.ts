@@ -21,10 +21,17 @@ export type SfxName =
   | 'button'
   | 'shuffle'
   | 'hint'
-  | 'pop';
+  | 'pop'
+  /** 기니피그 울음: 점프 꾸잉, 젤리 뀨이잉, 넘어질 때 끼잉 */
+  | 'squeak'
+  | 'wheek'
+  | 'sadsqueak';
 
 type Category = 'tiles' | 'cues' | 'fanfare';
 const CATEGORY: Record<SfxName, Category> = {
+  squeak: 'cues',
+  wheek: 'cues',
+  sadsqueak: 'cues',
   pick: 'tiles',
   place: 'tiles',
   slide: 'tiles',
@@ -110,6 +117,33 @@ function burst(c: AudioContext, out: AudioNode, t: number, filter: BiquadFilterT
   src.stop(t + dur + 0.05);
 }
 
+/** 기니피그 울음 한 번: 세모파가 pts(시각, 높이)를 따라 미끄러지고, 떨림(비브라토)을 얹는다 */
+function squeal(c: AudioContext, out: AudioNode, t: number, pts: readonly (readonly [number, number])[], dur: number, peak: number, vibHz = 26, vibDepth = 55): void {
+  const o = c.createOscillator();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime((pts[0] as readonly [number, number])[1], t);
+  for (const [dt, f] of pts.slice(1)) o.frequency.exponentialRampToValueAtTime(f, t + dt);
+  const lfo = c.createOscillator();
+  lfo.frequency.value = vibHz;
+  const lg = c.createGain();
+  lg.gain.value = vibDepth;
+  lfo.connect(lg).connect(o.frequency);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 1700;
+  bp.Q.value = 0.8;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.012);
+  g.gain.setValueAtTime(peak, t + dur * 0.6);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(bp).connect(g).connect(out);
+  o.start(t);
+  lfo.start(t);
+  o.stop(t + dur + 0.03);
+  lfo.stop(t + dur + 0.03);
+}
+
 export function sfx(name: SfxName, opts: { delay?: number; pitch?: number } = {}): void {
   const vol = volume(name);
   if (vol <= 0.001) return;
@@ -125,6 +159,16 @@ export function sfx(name: SfxName, opts: { delay?: number; pitch?: number } = {}
   out.gain.value = vol;
   out.connect(c.destination);
   switch (name) {
+    case 'squeak':
+      // 꾸(짧고 낮게) + 잉(올라갔다 살짝 내려옴)
+      squeal(c, out, t, [[0, 900 * p], [0.035, 1450 * p], [0.09, 2000 * p], [0.15, 1600 * p]], 0.16, 0.2);
+      break;
+    case 'wheek':
+      squeal(c, out, t, [[0, 1100 * p], [0.18, 2500 * p], [0.3, 2100 * p]], 0.32, 0.2, 22, 70);
+      break;
+    case 'sadsqueak':
+      squeal(c, out, t, [[0, 1700 * p], [0.32, 620 * p]], 0.36, 0.18, 14, 40);
+      break;
     case 'pick':
       burst(c, out, t, 'highpass', 2600, 3200, 0.7, 0.12, 0.018);
       tone(c, out, t, 2300 * p, 'sine', 0.05, 0.002, 0.03, 1800 * p);
