@@ -41,11 +41,11 @@ function walkLevers(level: ParsedLevel, lev: number, from: Cell, m: Move): numbe
 }
 
 /** 움직이는 벽: 발판 + 닫힌 문 + 잠긴 자물쇠 */
-function platCells(level: ParsedLevel, active: readonly boolean[], open = 0): Occ {
+function platCells(level: ParsedLevel, active: readonly boolean[], open = 0, gateActive: readonly boolean[] = active): Occ {
   const occ: Occ = new Set();
   level.gate.forEach((g, i) => {
     if (!g) return;
-    const on = active[Math.abs(g)] ?? false;
+    const on = gateActive[Math.abs(g)] ?? false;
     if (g > 0 ? !on : on) occ.add(i);
   });
   level.locks.forEach((l) => {
@@ -214,6 +214,8 @@ export function movesFrom(level: ParsedLevel, occ: Occ, el: Element, x: number, 
 export interface SolverState {
   readonly f: Cell;
   readonly i: Cell;
+  /** 말차 (둘이서 단계에서는 판 밖 (-1, -1)에 가만히) */
+  readonly l: Cell;
   readonly lev: number;
   /** 주운 열쇠 (비트) */
   readonly keys: number;
@@ -221,7 +223,11 @@ export interface SolverState {
   readonly open: number;
 }
 
-const key = (s: State): string => `${s.f.x},${s.f.y},${s.i.x},${s.i.y},${s.lev},${s.keys},${s.open}`;
+const key = (s: State): string => `${s.f.x},${s.f.y},${s.i.x},${s.i.y},${s.l.x},${s.l.y},${s.lev},${s.keys},${s.open}`;
+/** 상태에서 캐릭터 칸 */
+const cellIn = (s: State, el: Element): Cell => (el === 'fire' ? s.f : el === 'ice' ? s.i : s.l);
+const withCell = (s: State, el: Element, c: Cell): State => (el === 'fire' ? { ...s, f: c } : el === 'ice' ? { ...s, i: c } : { ...s, l: c });
+const anyAt = (s: State, x: number, y: number): boolean => (s.f.x === x && s.f.y === y) || (s.i.x === x && s.i.y === y) || (s.l.x === x && s.l.y === y);
 const bitCount = (n: number): number => {
   let c = 0;
   for (let v = n; v; v &= v - 1) c++;
@@ -230,7 +236,7 @@ const bitCount = (n: number): number => {
 
 function activeOf(level: ParsedLevel, s: State): boolean[] {
   const act = [false, false, false, false, false];
-  for (const b of level.buttons) if ((s.f.x === b.x && s.f.y === b.y) || (s.i.x === b.x && s.i.y === b.y)) act[b.group] = true;
+  for (const b of level.buttons) if (anyAt(s, b.x, b.y)) act[b.group] = true;
   level.levers.forEach((l, k) => {
     if (s.lev & (1 << k)) act[l.group] = true;
   });
@@ -240,7 +246,7 @@ function activeOf(level: ParsedLevel, s: State): boolean[] {
 /** 선 칸에 열쇠가 있으면 줍는다 (열쇠는 둘이 함께 쓴다) */
 function pickKeys(level: ParsedLevel, s: State): State {
   let keys = s.keys;
-  for (const k of level.keys) if ((s.f.x === k.x && s.f.y === k.y) || (s.i.x === k.x && s.i.y === k.y)) keys |= 1 << k.id;
+  for (const k of level.keys) if (anyAt(s, k.x, k.y)) keys |= 1 << k.id;
   return keys === s.keys ? s : { ...s, keys };
 }
 
@@ -279,8 +285,9 @@ function settle(level: ParsedLevel, before: State, after: State): State | null {
   };
   const f = fix(after.f, 'fire');
   const i = fix(after.i, 'ice');
-  if (!f || !i) return null;
-  return pickKeys(level, { f, i, lev: after.lev, keys: after.keys, open: after.open });
+  const l = level.players.includes('leaf') ? fix(after.l, 'leaf') : after.l;
+  if (!f || !i || !l) return null;
+  return pickKeys(level, { f, i, l, lev: after.lev, keys: after.keys, open: after.open });
 }
 
 export interface VerifyResult {
@@ -294,6 +301,7 @@ export interface VerifyResult {
 export interface PathState {
   readonly f: Cell;
   readonly i: Cell;
+  readonly l: Cell;
   /** 레버 켜짐 (비트) */
   readonly lev: number;
   readonly keys: number;
@@ -313,7 +321,7 @@ type Step = { readonly prev: State; readonly by: Element | 'lever' | 'unlock'; r
 type State = SolverState;
 
 export function verifyLevel(level: ParsedLevel, limit = 400_000, analyze = false): VerifyResult & { readonly path: readonly PathState[]; readonly deadEnds: number; readonly truncated: boolean } {
-  return searchFrom(level, { f: level.spawn.fire, i: level.spawn.ice, lev: 0, keys: 0, open: 0 }, limit, analyze);
+  return searchFrom(level, { f: level.spawn.fire, i: level.spawn.ice, l: level.spawn.leaf, lev: 0, keys: 0, open: 0 }, limit, analyze);
 }
 
 /** 아무 상태에서나 풀어 보기 (게임 중 힌트·막힘 알림) — truncated면 한도에 걸려 끝까지 못 본 것 */
@@ -332,27 +340,33 @@ export function searchFrom(level: ParsedLevel, from: SolverState, limit = 400_00
     const s = queue[qi] as State;
     const depth = seen.get(key(s)) as number;
     level.gems.forEach((g) => {
-      const c = g.el === 'fire' ? s.f : s.i;
+      const c = cellIn(s, g.el);
       if (c.x === g.x && c.y === g.y) gems.add(g.id);
     });
-    if (solvedAt < 0 && s.f.x === level.door.fire.x && s.f.y === level.door.fire.y && s.i.x === level.door.ice.x && s.i.y === level.door.ice.y) {
+    const home = level.players.every((e) => cellIn(s, e).x === level.door[e].x && cellIn(s, e).y === level.door[e].y);
+    if (solvedAt < 0 && home) {
       solvedAt = depth;
       goal = s;
     }
-    if (rev && s.f.x === level.door.fire.x && s.f.y === level.door.fire.y && s.i.x === level.door.ice.x && s.i.y === level.door.ice.y) goals.push(key(s));
+    if (rev && home) goals.push(key(s));
     const occ = platCells(level, activeOf(level, s), s.open);
     const next: { readonly n: State; readonly by: Step['by']; readonly to: Cell | null; readonly via: Cell | null; readonly viaKind: Step['viaKind'] }[] = [];
-    for (const m of movesFrom(level, occ, 'fire', s.f.x, s.f.y)) next.push({ n: { ...s, f: m.cell, lev: walkLevers(level, s.lev, s.f, m) }, by: 'fire', to: m.cell, via: m.via ?? null, viaKind: m.viaKind ?? null });
-    for (const m of movesFrom(level, occ, 'ice', s.i.x, s.i.y)) next.push({ n: { ...s, i: m.cell, lev: walkLevers(level, s.lev, s.i, m) }, by: 'ice', to: m.cell, via: m.via ?? null, viaKind: m.viaKind ?? null });
+    for (const el of level.players) {
+      const c = cellIn(s, el);
+      // 움직이는 쪽이 밟고 있던 버튼은 떠나는 순간 풀린다: 그 버튼이 연 문은 곧바로 닫힌다 (발판은 천천히 움직이니 그대로 본다)
+      const onButton = level.buttons.some((bt) => bt.x === c.x && bt.y === c.y);
+      const occEl = onButton ? platCells(level, activeOf(level, s), s.open, activeOf(level, withCell(s, el, { x: -9, y: -9 }))) : occ;
+      for (const m of movesFrom(level, occEl, el, c.x, c.y)) next.push({ n: { ...withCell(s, el, m.cell), lev: walkLevers(level, s.lev, c, m) }, by: el, to: m.cell, via: m.via ?? null, viaKind: m.viaKind ?? null });
+    }
     level.levers.forEach((l, k) => {
-      if ((s.f.x === l.x && s.f.y === l.y) || (s.i.x === l.x && s.i.y === l.y)) next.push({ n: { ...s, lev: s.lev ^ (1 << k) }, by: 'lever', to: null, via: null, viaKind: null });
+      if (anyAt(s, l.x, l.y)) next.push({ n: { ...s, lev: s.lev ^ (1 << k) }, by: 'lever', to: null, via: null, viaKind: null });
     });
     // 자물쇠: 남은 열쇠가 있고 바로 옆(같은 줄)에 서 있으면 연다
     if (bitCount(s.keys) > bitCount(s.open))
       for (const lk of level.locks) {
         if (s.open & (1 << lk.id)) continue;
         const near = (c: Cell): boolean => c.y === lk.y && Math.abs(c.x - lk.x) === 1;
-        if (near(s.f) || near(s.i)) next.push({ n: { ...s, open: s.open | (1 << lk.id) }, by: 'unlock', to: null, via: null, viaKind: null });
+        if (near(s.f) || near(s.i) || near(s.l)) next.push({ n: { ...s, open: s.open | (1 << lk.id) }, by: 'unlock', to: null, via: null, viaKind: null });
       }
     for (const { n, by, to, via, viaKind } of next) {
       const st = settle(level, s, n);

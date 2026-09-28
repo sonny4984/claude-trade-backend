@@ -24,10 +24,11 @@ export function solverState(w: WorldState): { readonly state: SolverState; reado
   };
   const f = cell('fire');
   const i = cell('ice');
-  if (!f || !i || !platformsSettled(w)) return null;
+  const l = w.level.players.includes('leaf') ? cell('leaf') : w.level.spawn.leaf;
+  if (!f || !i || !l || !platformsSettled(w)) return null;
   const bits = (a: readonly boolean[]): number => a.reduce((n, on, k) => (on ? n | (1 << k) : n), 0);
-  const state: SolverState = { f, i, lev: bits(w.levers), keys: bits(w.keysGot), open: bits(w.lockOpen) };
-  return { state, sig: `${f.x},${f.y},${i.x},${i.y},${state.lev},${state.keys},${state.open}` };
+  const state: SolverState = { f, i, l, lev: bits(w.levers), keys: bits(w.keysGot), open: bits(w.lockOpen) };
+  return { state, sig: `${f.x},${f.y},${i.x},${i.y},${l.x},${l.y},${state.lev},${state.keys},${state.open}` };
 }
 
 let worker: Worker | null | undefined;

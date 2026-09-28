@@ -269,14 +269,14 @@ describe('불과 얼음 힌트·막힘', () => {
   const lv = (id: string): ParsedLevel => parseLevel(LEVELS.find((l) => l.id === id) as LevelDef);
   it('처음 자리에서 힌트는 누가 어디로 갈지 알려 준다', () => {
     const l = lv('keyhole');
-    const r = searchFrom(l, { f: l.spawn.fire, i: l.spawn.ice, lev: 0, keys: 0, open: 0 });
+    const r = searchFrom(l, { f: l.spawn.fire, i: l.spawn.ice, l: l.spawn.leaf, lev: 0, keys: 0, open: 0 });
     const h = describeHint(l, r.path);
     expect(r.solvable).toBe(true);
     expect(h?.kind).toBe('move');
   });
   it('교대 근무: 얼음이 먼저 떨어지고 불이 레버 방 밖에 있으면 막힘', () => {
     const l = lv('shift');
-    const r = searchFrom(l, { f: l.spawn.fire, i: { x: 14, y: 17 }, lev: 0b10, keys: 0, open: 0 });
+    const r = searchFrom(l, { f: l.spawn.fire, i: { x: 14, y: 17 }, l: l.spawn.leaf, lev: 0b10, keys: 0, open: 0 });
     expect(r.solvable).toBe(false);
     expect(r.truncated).toBe(false);
   });

@@ -13,6 +13,7 @@ export const GROUP_COLOR: Readonly<Record<number, string>> = { 1: '#FFC93C', 2: 
 const EL_COLOR: Record<Element, { main: string; light: string; glow: string }> = {
   fire: { main: '#FF6A3D', light: '#FFD166', glow: 'rgba(255,120,60,' },
   ice: { main: '#3FA7F5', light: '#BDE8FF', glow: 'rgba(80,180,255,' },
+  leaf: { main: '#2FB36B', light: '#C9F2D4', glow: 'rgba(60,190,110,' },
 };
 const POOL_COLOR: Record<Pool, { deep: string; top: string; shine: string }> = {
   L: { deep: '#F2466B', top: '#FF8AA0', shine: 'rgba(255,255,255,0.55)' },
@@ -145,7 +146,7 @@ export function buildStatic(lv: ParsedLevel, tile: number, dpr: number): HTMLCan
     }
 
   // 문틀 (아치) — 안쪽 불빛은 매 프레임
-  for (const el of ['fire', 'ice'] as const) {
+  for (const el of lv.players) {
     const d = lv.door[el];
     const col = EL_COLOR[el];
     const x0 = d.x * T + T * 0.06;
@@ -170,17 +171,19 @@ export function buildStatic(lv: ParsedLevel, tile: number, dpr: number): HTMLCan
 /** 캐릭터 스프라이트: 표정마다 한 장 (크기는 칸 × 1.3) */
 export type Sprites = Record<Element, Partial<Record<Expression, HTMLCanvasElement>>>;
 
-export function buildSprites(chars: Readonly<Record<Element, CharacterId>>, tile: number, dpr: number): Sprites {
+export function buildSprites(chars: Readonly<Partial<Record<Element, CharacterId>>>, tile: number, dpr: number): Sprites {
   const size = Math.max(24, Math.round(tile * 1.3 * dpr));
-  const out: Sprites = { fire: {}, ice: {} };
-  for (const el of ['fire', 'ice'] as const) {
+  const out: Sprites = { fire: {}, ice: {}, leaf: {} };
+  for (const el of ['fire', 'ice', 'leaf'] as const) {
+    const who = chars[el];
+    if (!who) continue;
     for (const ex of ['idle', 'blink', 'happy', 'surprised', 'sad'] as const) {
       const c = document.createElement('canvas');
       c.width = size;
       c.height = size;
       const ctx = c.getContext('2d');
       if (!ctx) continue;
-      drawCharacter(ctx, chars[el], ex, size);
+      drawCharacter(ctx, who, ex, size);
       accessory(ctx, el, size);
       out[el][ex] = c;
     }
@@ -219,7 +222,7 @@ function accessory(ctx: CanvasRenderingContext2D, el: Element, size: number): vo
       ctx.ellipse(s * (0.5 + dx), s * 0.47, s * 0.05, s * 0.03, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-  } else {
+  } else if (el === 'ice') {
     // 눈꽃 핀
     const cx = s * 0.7;
     const cy = s * 0.17;
@@ -246,6 +249,23 @@ function accessory(ctx: CanvasRenderingContext2D, el: Element, size: number): vo
     ctx.stroke();
     rr(ctx, s * 0.56, s * 0.64, s * 0.08, s * 0.14, s * 0.03);
     ctx.fill();
+    ctx.stroke();
+  } else {
+    // 말차: 머리 위 새싹 두 잎
+    const cx = s * 0.5;
+    const cy = s * 0.2;
+    ctx.fillStyle = '#5BD68A';
+    for (const d of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + s * 0.04);
+      ctx.quadraticCurveTo(cx + d * s * 0.16, cy - s * 0.1, cx + d * s * 0.2, cy + s * 0.01);
+      ctx.quadraticCurveTo(cx + d * s * 0.1, cy + s * 0.07, cx, cy + s * 0.04);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + s * 0.04);
+    ctx.lineTo(cx, cy + s * 0.1);
     ctx.stroke();
   }
   ctx.restore();
@@ -317,7 +337,7 @@ function drawPool(ctx: CanvasRenderingContext2D, x: number, y: number, T: number
 }
 
 function drawCandy(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, el: Element, t: number): void {
-  const col = el === 'fire' ? { a: '#FF4D6D', b: '#FFD1DA' } : { a: '#3D8BFF', b: '#CFE6FF' };
+  const col = el === 'fire' ? { a: '#FF4D6D', b: '#FFD1DA' } : el === 'ice' ? { a: '#3D8BFF', b: '#CFE6FF' } : { a: '#22B862', b: '#CFF5DC' };
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(Math.sin(t * 2.2 + cx) * 0.15);
@@ -376,7 +396,7 @@ function drawDoorGlow(ctx: CanvasRenderingContext2D, lv: ParsedLevel, el: Elemen
     ctx.quadraticCurveTo(cx + T * 0.16, cy + T * 0.02, cx, cy + T * 0.12);
     ctx.quadraticCurveTo(cx - T * 0.16, cy + T * 0.02, cx, cy - T * 0.2);
     ctx.fill();
-  } else {
+  } else if (el === 'ice') {
     ctx.strokeStyle = col.main;
     ctx.lineWidth = T * 0.05;
     ctx.lineCap = 'round';
@@ -387,6 +407,11 @@ function drawDoorGlow(ctx: CanvasRenderingContext2D, lv: ParsedLevel, el: Elemen
       ctx.lineTo(cx + Math.cos(a) * T * 0.14, cy + Math.sin(a) * T * 0.14);
       ctx.stroke();
     }
+  } else {
+    ctx.fillStyle = col.main;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, T * 0.1, T * 0.17, 0.6, 0, Math.PI * 2);
+    ctx.fill();
   }
   if (inside) {
     ctx.fillStyle = col.glow + '0.25)';
@@ -439,8 +464,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, w: WorldState, o: DrawO
   ctx.setTransform(o.dpr, 0, 0, o.dpr, 0, 0);
 
   // 문 안쪽
-  drawDoorGlow(ctx, lv, 'fire', T, w.bodies.fire.atDoor, t);
-  drawDoorGlow(ctx, lv, 'ice', T, w.bodies.ice.atDoor, t);
+  for (const el of lv.players) drawDoorGlow(ctx, lv, el, T, w.bodies[el].atDoor, t);
 
   // 웅덩이
   for (let y = 0; y < LEVEL_H; y++)
@@ -687,13 +711,13 @@ export function drawFrame(ctx: CanvasRenderingContext2D, w: WorldState, o: DrawO
   });
 
   // 캐릭터 (빛무리 → 스프라이트)
-  for (const el of ['ice', 'fire'] as const) {
+  for (const el of [...lv.players].reverse()) {
     const b = w.bodies[el];
     const col = EL_COLOR[el];
     const cx = (lerp(b.x, b.px) + PHYS.w / 2) * T;
     const feet = (lerp(b.y, b.py) + PHYS.h) * T;
     const size = T * 1.3;
-    const blink = Math.floor(t * 1.3 + (el === 'fire' ? 0 : 0.5)) % 4 === 0 && (t * 1.3) % 1 < 0.12;
+    const blink = Math.floor(t * 1.3 + lv.players.indexOf(el) * 0.37) % 4 === 0 && (t * 1.3) % 1 < 0.12;
     const ex: Expression = !b.alive ? 'sad' : b.atDoor ? 'happy' : b.ground === -2 ? 'surprised' : blink ? 'blink' : 'idle';
     const sprite = o.sprites[el][ex] ?? o.sprites[el].idle;
     ctx.save();

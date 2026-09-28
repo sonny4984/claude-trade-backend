@@ -19,20 +19,22 @@ export function describeHint(level: ParsedLevel, path: readonly PathState[]): Hi
   const n = path[1];
   if (!a || !n) return null;
   const at = (c: Cell, x: number, y: number): boolean => c.x === x && c.y === y;
+  const cellOf = (p: PathState, el: Element): Cell => (el === 'fire' ? p.f : el === 'ice' ? p.i : p.l);
+  const who = (test: (c: Cell) => boolean): Element => (['fire', 'ice', 'leaf'] as const).find((e) => test(cellOf(a, e))) ?? 'fire';
   if (n.by === 'lever') {
     const k = level.levers.findIndex((_, i) => ((a.lev ^ n.lev) >> i) & 1);
     const lv = level.levers[k];
     if (!lv) return null;
-    return { kind: 'lever', el: at(a.f, lv.x, lv.y) ? 'fire' : 'ice', x: lv.x, y: lv.y, on: ((n.lev >> k) & 1) === 1 };
+    return { kind: 'lever', el: who((c) => at(c, lv.x, lv.y)), x: lv.x, y: lv.y, on: ((n.lev >> k) & 1) === 1 };
   }
   if (n.by === 'unlock') {
     const k = level.locks.findIndex((_, i) => ((a.open ^ n.open) >> i) & 1);
     const lk = level.locks[k];
     if (!lk) return null;
     const near = (c: Cell): boolean => c.y === lk.y && Math.abs(c.x - lk.x) === 1;
-    return { kind: 'unlock', el: near(a.f) ? 'fire' : 'ice', x: lk.x, y: lk.y };
+    return { kind: 'unlock', el: who(near), x: lk.x, y: lk.y };
   }
-  if (n.by !== 'fire' && n.by !== 'ice') return null;
+  if (n.by !== 'fire' && n.by !== 'ice' && n.by !== 'leaf') return null;
   const el = n.by;
   const changed = (p: PathState, q: PathState): boolean => p.lev !== q.lev || p.keys !== q.keys || p.open !== q.open;
   let k = 1;
@@ -43,6 +45,6 @@ export function describeHint(level: ParsedLevel, path: readonly PathState[]): Hi
       k = j;
       if (changed(p, path[j - 1] as PathState)) break;
     }
-  const c = (path[k] as PathState)[el === 'fire' ? 'f' : 'i'];
+  const c = cellOf(path[k] as PathState, el);
   return { kind: 'move', el, x: c.x, y: c.y };
 }

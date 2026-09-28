@@ -151,6 +151,41 @@ test.describe('온라인', () => {
     await guestCtx.close();
   });
 
+  test('불과 얼음 셋이서 온라인: 세 번째 자리는 말차, 말차가 움직이면 방장 화면에서도', async ({ browser }) => {
+    const withBroker = (p: string): string => `${p}${p.includes('?') ? '&' : '?'}broker=${encodeURIComponent(broker.url)}`;
+    const hostCtx = await browser.newContext({ viewport: { width: 900, height: 900 } });
+    const host = await hostCtx.newPage();
+    const hostErrors = await open(host, withBroker('/'));
+    await host.locator('.plate-online').click();
+    await host.locator('.ol-name').fill('방장');
+    await host.locator('.ol-game[data-game="fireice"]').click();
+    await host.locator('.ol-create').click();
+    const link = await host.locator('.ol-link').inputValue();
+    const path = link.replace(/^https?:\/\/[^/]+/, '');
+    const guests: Page[] = [];
+    for (const name of ['친구', '말차']) {
+      const ctx = await browser.newContext({ viewport: { width: 900, height: 900 } });
+      const g = await ctx.newPage();
+      await open(g, path.includes('broker=') ? path : withBroker(path), false);
+      await g.locator('.ol-name').fill(name);
+      await g.locator('.ol-enter').click();
+      guests.push(g);
+      await expect(host.locator('.ol-seat:not(.ol-seat-empty)')).toHaveCount(guests.length + 1);
+    }
+    await host.locator('.ol-foot .btn-primary').click();
+    const leafPage = guests[1] as Page;
+    await expect(leafPage.locator('.fireice')).toBeVisible();
+    const players = (p: Page) => p.evaluate(() => (window as unknown as { __fireice: { runtime: { world: { level: { players: string[] } } | null } } }).__fireice.runtime.world?.level.players.length ?? 0);
+    await expect.poll(() => players(host)).toBe(3);
+    await expect.poll(() => players(leafPage)).toBe(3);
+    const leafX = (p: Page) => body(p, 'leaf' as 'fire');
+    const x0 = await leafX(host);
+    await runUntil(leafPage, 'right', false, async () => (await leafX(leafPage)) > x0 + 1);
+    await expect.poll(() => leafX(host), { timeout: 5000 }).toBeGreaterThan(x0 + 0.8);
+    expect(hostErrors).toEqual([]);
+    await hostCtx.close();
+  });
+
   test('불과 얼음 온라인: 친구 몸이 따라 움직이고, 사탕과 다시 하기가 두 화면에 같이', async ({ browser }) => {
     const withBroker = (p: string): string => `${p}${p.includes('?') ? '&' : '?'}broker=${encodeURIComponent(broker.url)}`;
     const hostCtx = await browser.newContext({ viewport: { width: 900, height: 900 } });

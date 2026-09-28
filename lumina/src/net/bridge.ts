@@ -9,7 +9,7 @@ export const GAME_SEATS: Readonly<Record<OnlineGame, { readonly min: number; rea
   lumina: { min: 2, max: 4, ai: true },
   coda: { min: 2, max: 4, ai: true },
   gomoku: { min: 2, max: 2, ai: true },
-  fireice: { min: 2, max: 2, ai: false },
+  fireice: { min: 2, max: 3, ai: false },
 };
 
 export function isOnlineGame(x: unknown): x is OnlineGame {

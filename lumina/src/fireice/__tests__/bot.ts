@@ -14,10 +14,11 @@ export function cellOf(w: WorldState, el: Element): Cell | null {
   return { x: Math.floor(b.x + PHYS.w / 2), y: Math.round(b.y + PHYS.h) - 1 };
 }
 
+const pos = (p: PathState, el: Element): Cell => (el === 'fire' ? p.f : el === 'ice' ? p.i : p.l);
 const same = (a: Cell | null, b: Cell): boolean => !!a && a.x === b.x && a.y === b.y;
 
 function tick(w: WorldState, el: Element | null, inp: Input): ReturnType<typeof step> {
-  return step(w, { fire: el === 'fire' ? inp : NO_INPUT, ice: el === 'ice' ? inp : NO_INPUT }, DT);
+  return step(w, el ? { [el]: inp } : {}, DT);
 }
 
 /** 발판이 다 서고 둘 다 땅에 설 때까지 기다린다 */
@@ -25,7 +26,7 @@ function settle(w: WorldState, maxT = 6): void {
   let calm = 0;
   for (let t = 0; t < maxT && calm < 15; t += DT) {
     tick(w, null, NO_INPUT);
-    const still = (['fire', 'ice'] as const).every((e) => !w.bodies[e].alive || (w.bodies[e].ground !== -2 && Math.abs(w.bodies[e].vx) < 0.01));
+    const still = w.level.players.every((e) => !w.bodies[e].alive || (w.bodies[e].ground !== -2 && Math.abs(w.bodies[e].vx) < 0.01));
     calm = platformsSettled(w) && still ? calm + 1 : 0;
   }
 }
@@ -103,7 +104,7 @@ export function replay(level: ParsedLevel, path: readonly PathState[]): BotResul
       // 자물쇠 옆에 선 쪽이 자물쇠 쪽으로 밀어 연 뒤 제자리로
       const id = level.locks.findIndex((_, i) => ((a.open ^ n.open) >> i) & 1);
       const lk = level.locks[id];
-      const el = (['fire', 'ice'] as const).find((e) => {
+      const el = level.players.find((e) => {
         const c = cellOf(w, e);
         return !!lk && !!c && c.y === lk.y && Math.abs(c.x - lk.x) === 1;
       });
@@ -124,15 +125,15 @@ export function replay(level: ParsedLevel, path: readonly PathState[]): BotResul
       const idx = level.levers.findIndex((_, i) => ((a.lev ^ n.lev) >> i) & 1);
       const lv = level.levers[idx];
       if (!lv) return fail(k, 'lever?');
-      const el: Element | null = same(cellOf(w, 'fire'), lv) ? 'fire' : same(cellOf(w, 'ice'), lv) ? 'ice' : null;
+      const el: Element | null = level.players.find((e) => same(cellOf(w, e), lv)) ?? null;
       if (!el) return fail(k, `nobody at lever ${idx}`);
       const on = ((n.lev >> idx) & 1) === 1;
       for (let f = 0; f < 4; f++) tick(w, el, { left: !on, right: on, jump: false });
     } else {
-      const el: Element = n.by === 'ice' ? 'ice' : 'fire';
-      const from = el === 'fire' ? a.f : a.i;
+      const el: Element = n.by === 'ice' || n.by === 'leaf' ? n.by : 'fire';
+      const from = pos(a, el);
       // 움직인 칸 (발판이 움직여 실려 가면 그 뒤 칸은 settle 뒤에 본다)
-      const to = n.to ?? (el === 'fire' ? n.f : n.i);
+      const to = n.to ?? pos(n, el);
       let done: WorldState | null = null;
       const via = n.via;
       // 젤리로 튀는 길: 젤리까지 가는 몸놀림 × 튄 뒤 몸을 트는 높이
@@ -152,7 +153,7 @@ export function replay(level: ParsedLevel, path: readonly PathState[]): BotResul
         });
         settle(r);
         const levOk = r.levers.every((on, i) => on === (((n.lev >> i) & 1) === 1));
-        if (same(cellOf(r, 'fire'), n.f) && same(cellOf(r, 'ice'), n.i) && levOk) {
+        if (level.players.every((e) => same(cellOf(r, e), pos(n, e))) && levOk) {
           done = r;
           break;
         }
@@ -161,7 +162,7 @@ export function replay(level: ParsedLevel, path: readonly PathState[]): BotResul
       w = done;
     }
     settle(w);
-    if (!same(cellOf(w, 'fire'), n.f) || !same(cellOf(w, 'ice'), n.i)) return fail(k, `positions after step: fire ${JSON.stringify(cellOf(w, 'fire'))} ice ${JSON.stringify(cellOf(w, 'ice'))}`);
+    if (!level.players.every((e) => same(cellOf(w, e), pos(n, e)))) return fail(k, `positions after step: ${level.players.map((e) => `${e} ${JSON.stringify(cellOf(w, e))}`).join(' ')}`);
   }
   return cleared(w) ? { ok: true, failedAt: -1, why: '', world: w } : fail(path.length, 'not cleared at the end');
 }

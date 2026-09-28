@@ -8,9 +8,9 @@
  */
 import { create } from 'zustand';
 import { LEVELS } from './levels';
-import { parseLevel, type Element, type Pool } from './level';
+import { ELEMENTS, parseLevel, type Element, type LevelDef, type Pool } from './level';
 import { solve, solverState, type HintStep } from './hints';
-import { NO_INPUT, cleared, newWorld, setPuppet, step, type Input, type WorldEvent, type WorldState, markPrev, PHYS } from './world';
+import { cleared, newWorld, setPuppet, step, type Input, type WorldEvent, type WorldState, markPrev, PHYS } from './world';
 import { isCharacterId, type CharacterId } from '../characters/roster';
 import { useGame } from '../store/game';
 import { readJSON, writeJSON } from '../store/storage';
@@ -23,9 +23,9 @@ export type FireIceMode = 'solo' | 'local' | 'online';
 
 export interface FireIceConfig {
   readonly mode: FireIceMode;
-  /** [불, 얼음] */
-  readonly names: readonly [string, string];
-  readonly characters: readonly [CharacterId, CharacterId];
+  /** [불, 얼음] 또는 [불, 얼음, 말차] (셋이서) */
+  readonly names: readonly string[];
+  readonly characters: readonly CharacterId[];
 }
 
 export interface FireIceResult {
@@ -44,8 +44,8 @@ export interface FireIceSession {
   readonly level: number;
   /** 다시 할 때마다 1씩 (온라인에서 둘이 같은 판인지 맞춰 보는 번호) */
   readonly attempt: number;
-  readonly names: readonly [string, string];
-  readonly characters: readonly [CharacterId, CharacterId];
+  readonly names: readonly string[];
+  readonly characters: readonly CharacterId[];
   readonly status: 'playing' | 'cleared';
   readonly result: FireIceResult | null;
   readonly online?: OnlineInfo | null;
@@ -129,11 +129,10 @@ export const runtime: {
   hudAt: number;
   sendAt: number;
   restartTimer: ReturnType<typeof setTimeout> | null;
-  puppet: PuppetTrack | null;
-  /** 받은 친구 몸 신호들 (보낸 쪽 시각 순) — 0.12초 늦게 둘 사이를 이어 부드럽게 그린다 */
-  snaps: PuppetTrack[];
-  /** 내 시계 − 보낸 쪽 시각 (가장 빨리 온 신호 기준) */
-  offset: number | null;
+  /** 친구 캐릭터마다: 마지막 신호, 받은 신호들(보낸 쪽 시각 순, 0.12초 늦게 이어 그림), 내 시계 − 보낸 쪽 시각 */
+  puppet: Partial<Record<Element, PuppetTrack>>;
+  snaps: Partial<Record<Element, PuppetTrack[]>>;
+  offset: Partial<Record<Element, number>>;
   /** 그리기 보간 비율 (마지막 걸음 뒤 남은 시간 / 한 걸음) */
   alpha: number;
   /** 막힘 검사: 마지막 검사 시각·상태, 사용자가 "계속"을 누른 상태, 검사 중 */
@@ -145,10 +144,18 @@ export const runtime: {
   lastSent: string;
   /** 화면 효과 대기열 (사탕 톡, 점프 먼지 …) — 화면이 매 프레임 비운다 */
   fx: { readonly type: FxType; readonly x: number; readonly y: number; readonly el: Element }[];
-} = { world: null, acc: 0, hudAt: 0, sendAt: 0, restartTimer: null, puppet: null, snaps: [], offset: null, alpha: 1, checkAt: 0, checkSig: '', stuckSig: '', checking: false, lastSent: '', fx: [] };
+} = { world: null, acc: 0, hudAt: 0, sendAt: 0, restartTimer: null, puppet: {}, snaps: {}, offset: {}, alpha: 1, checkAt: 0, checkSig: '', stuckSig: '', checking: false, lastSent: '', fx: [] };
 
 export const levelCount = LEVELS.length;
 export const levelDef = (i: number) => LEVELS[Math.max(0, Math.min(LEVELS.length - 1, i))] as (typeof LEVELS)[number];
+/** 셋이서(말차가 나오는) 단계인가 */
+const TRIO: readonly boolean[] = LEVELS.map((d) => d.map.some((r) => r.includes('m')));
+/** 이 인원(2·3)이 하는 단계들 (전체 목록의 번호, 차례대로) */
+export const levelsFor = (players: number): number[] => LEVELS.map((_, i) => i).filter((i) => TRIO[i] === players >= 3);
+/** 판의 인원: 캐릭터가 셋이면 셋이서 */
+export const playersOf = (s: { readonly characters: readonly unknown[] } | null | undefined): number => (s && s.characters.length >= 3 ? 3 : 2);
+/** 화면에 보이는 단계 번호 (인원별로 1부터) */
+export const levelNo = (i: number): number => levelsFor(TRIO[i] ? 3 : 2).indexOf(i) + 1;
 
 export function starsFor(level: number, time: number, gems: number, total: number): number {
   return 1 + (gems >= total ? 1 : 0) + (time <= levelDef(level).par ? 1 : 0);
@@ -167,15 +174,17 @@ function loadProgress(): Progress {
 
 /** 그 단계를 열었나 (첫 단계, 또는 앞 단계를 통과) */
 export function unlocked(progress: Progress, level: number): boolean {
-  if (level <= 0) return true;
-  const prev = LEVELS[level - 1];
+  const list = levelsFor(TRIO[level] ? 3 : 2);
+  const k = list.indexOf(level);
+  if (k <= 0) return true;
+  const prev = LEVELS[list[k - 1] as number];
   return !!prev && !!progress[prev.id];
 }
 
 /** 처음 할 단계: 아직 못 깬 첫 단계 */
-export function firstOpenLevel(progress: Progress): number {
-  const k = LEVELS.findIndex((d) => !progress[d.id]);
-  return k < 0 ? 0 : k;
+export function firstOpenLevel(progress: Progress, players = 2): number {
+  const list = levelsFor(players);
+  return list.find((i) => !progress[(LEVELS[i] as LevelDef).id]) ?? (list[0] as number);
 }
 
 export function loadFireIceSetup(): FireIceConfig | null {
@@ -185,15 +194,15 @@ export function loadFireIceSetup(): FireIceConfig | null {
   const ch = (x: unknown, d: CharacterId): CharacterId => (isCharacterId(x) ? x : d);
   return {
     mode: raw.mode === 'local' ? 'local' : 'solo',
-    names: [name(raw.names[0], 'Fire'), name(raw.names[1], 'Ice')],
-    characters: [ch(raw.characters[0], 'hwigi'), ch(raw.characters[1], 'ginini')],
+    names: [name(raw.names[0], 'Fire'), name(raw.names[1], 'Ice'), ...(raw.names.length >= 3 ? [name(raw.names[2], 'Matcha')] : [])],
+    characters: [ch(raw.characters[0], 'hwigi'), ch(raw.characters[1], 'ginini'), ...(raw.characters.length >= 3 ? [ch(raw.characters[2], 'pponi')] : [])],
   };
 }
 
-/** 이 기기가 움직이는 쪽 (온라인: 방장 불, 친구 얼음) */
+/** 이 기기가 움직이는 쪽 (온라인: 방장 불, 둘째 자리 얼음, 셋째 자리 말차) */
 export function myElement(s: FireIceSession | null): Element | null {
   if (!s?.online) return null;
-  return s.online.mySeat === 0 ? 'fire' : 'ice';
+  return ELEMENTS[s.online.mySeat] ?? 'fire';
 }
 
 function keyInput(left: string[], right: string[], jump: string[]): Input {
@@ -209,12 +218,11 @@ const ARROWS = keyInput.bind(null, ['ArrowLeft'], ['ArrowRight'], ['ArrowUp']);
 const WASD = keyInput.bind(null, ['KeyA'], ['KeyD'], ['KeyW']);
 const ANY = keyInput.bind(null, ['ArrowLeft', 'KeyA'], ['ArrowRight', 'KeyD'], ['ArrowUp', 'KeyW', 'Space']);
 
-function currentInputs(s: FireIceSession, control: Element): Record<Element, Input> {
+function currentInputs(s: FireIceSession, control: Element): Partial<Record<Element, Input>> {
   if (s.mode === 'local') return { fire: or(ARROWS(), pad.touch.fire), ice: or(WASD(), pad.touch.ice) };
   const mine = s.mode === 'online' ? (myElement(s) ?? 'fire') : control;
   // 혼자·온라인: 터치는 한 묶음(fire 칸)만 쓴다
-  const inp = or(ANY(), pad.touch.fire);
-  return mine === 'fire' ? { fire: inp, ice: NO_INPUT } : { fire: NO_INPUT, ice: inp };
+  return { [mine]: or(ANY(), pad.touch.fire) };
 }
 
 const round = (n: number): number => Math.round(n * 1000) / 1000;
@@ -223,14 +231,14 @@ export const useFireIce = create<FireIceStore>((set, get) => {
   const resetWorld = (s: FireIceSession): void => {
     const w = newWorld(parseLevel(levelDef(s.level)));
     const mine = myElement(s);
-    if (mine) w.puppets.add(mine === 'fire' ? 'ice' : 'fire');
+    if (mine) for (const e of w.level.players) if (e !== mine) w.puppets.add(e);
     runtime.world = w;
     runtime.acc = 0;
     runtime.hudAt = 0;
     runtime.sendAt = 0;
-    runtime.puppet = null;
-    runtime.snaps = [];
-    runtime.offset = null;
+    runtime.puppet = {};
+    runtime.snaps = {};
+    runtime.offset = {};
     runtime.lastSent = '';
     runtime.fx = [];
     runtime.checkAt = 0;
@@ -238,7 +246,7 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     runtime.stuckSig = '';
     if (runtime.restartTimer) clearTimeout(runtime.restartTimer);
     runtime.restartTimer = null;
-    set({ gems: 0, time: 0, oops: null, atDoor: { fire: false, ice: false }, hint: null, stuck: false });
+    set({ gems: 0, time: 0, oops: null, atDoor: { fire: false, ice: false, leaf: false }, hint: null, stuck: false });
   };
 
   const publish = (s: FireIceSession): void => {
@@ -258,7 +266,7 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     mode: cfg.mode,
     level: Math.max(0, Math.min(LEVELS.length - 1, level)),
     attempt: 1,
-    names: cfg.names,
+    names: cfg.names.slice(0, 3),
     characters: cfg.characters,
     status: 'playing',
     result: null,
@@ -408,12 +416,15 @@ export const useFireIce = create<FireIceStore>((set, get) => {
    */
   const drivePuppet = (s: FireIceSession, w: WorldState): void => {
     const mine = myElement(s);
-    const list = runtime.snaps;
-    const last = runtime.puppet;
-    if (!mine || !last || !list.length || runtime.offset === null) return;
-    const el: Element = mine === 'fire' ? 'ice' : 'fire';
+    if (mine) for (const el of w.level.players) if (el !== mine) drivePuppetOf(w, el);
+  };
+  const drivePuppetOf = (w: WorldState, el: Element): void => {
+    const list = runtime.snaps[el];
+    const last = runtime.puppet[el];
+    const off = runtime.offset[el];
+    if (!list?.length || !last || off === undefined) return;
     const b = w.bodies[el];
-    const rt = performance.now() / 1000 - runtime.offset - 0.12;
+    const rt = performance.now() / 1000 - off - 0.12;
     let i = list.length - 1;
     while (i > 0 && (list[i] as PuppetTrack).t > rt) i--;
     const a = list[i] as PuppetTrack;
@@ -445,11 +456,12 @@ export const useFireIce = create<FireIceStore>((set, get) => {
   onRealtime('fp', (seat, data) => {
     const s = get().session;
     const d = data as Record<string, unknown> | null;
-    if (!s?.online || !d || seat === s.online.mySeat || d.a !== s.attempt) return;
+    const el = ELEMENTS[seat];
+    if (!s?.online || !d || !el || seat === s.online.mySeat || d.a !== s.attempt) return;
     const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
     const pl = typeof d.pl === 'number' && Number.isInteger(d.pl) && d.pl >= 0 && d.pl < (runtime.world?.plats.length ?? 0) ? d.pl : -1;
     const snap: PuppetTrack = { x: num(d.x), y: num(d.y), vx: num(d.vx), vy: num(d.vy), face: d.f === -1 ? -1 : 1, ground: d.g === 1, alive: d.al !== 0, door: d.d === 1, pl, rx: num(d.rx), ry: num(d.ry), at: performance.now(), t: num(d.t) };
-    const list = runtime.snaps;
+    const list = (runtime.snaps[el] ??= []);
     const prev = list[list.length - 1];
     if (prev && snap.t < prev.t) return; // 빠른 길은 순서가 바뀔 수 있다
     // 가만히 있으면 1초에 한 번만 오니, 다시 움직이면 옛 자리를 새 신호 조금 전까지 이어 둔다
@@ -457,8 +469,9 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     list.push(snap);
     if (list.length > 16) list.splice(0, list.length - 16);
     const off = snap.at / 1000 - snap.t;
-    runtime.offset = runtime.offset === null ? off : Math.min(off, runtime.offset + 0.002);
-    runtime.puppet = snap;
+    const was = runtime.offset[el];
+    runtime.offset[el] = was === undefined ? off : Math.min(off, was + 0.002);
+    runtime.puppet[el] = snap;
   });
   onRealtime('fe', (seat, data) => {
     const s = get().session;
@@ -481,8 +494,8 @@ export const useFireIce = create<FireIceStore>((set, get) => {
       w.lockOpen[id] = true;
       w.keyCount = Math.max(0, w.keyCount - 1);
       sfx('commit', { pitch: 1.2 });
-    } else if (d.k === 'dead' && (d.el === 'fire' || d.el === 'ice') && (d.cause === 'L' || d.cause === 'W' || d.cause === 'G')) {
-      const p = runtime.puppet;
+    } else if (d.k === 'dead' && (d.el === 'fire' || d.el === 'ice' || d.el === 'leaf') && (d.cause === 'L' || d.cause === 'W' || d.cause === 'G')) {
+      const p = runtime.puppet[d.el];
       if (p) p.alive = false;
       fallen(d.el, d.cause);
     }
@@ -495,7 +508,7 @@ export const useFireIce = create<FireIceStore>((set, get) => {
       const cur = solverState(w);
       const b = w.bodies[h.el];
       const reached = h.kind === 'move' && b.ground !== -2 && Math.floor(b.x + 0.34) === h.x && Math.round(b.y + 0.86) - 1 === h.y;
-      const devices = cur && h.sig.split(',').slice(4).join() !== cur.sig.split(',').slice(4).join();
+      const devices = cur && h.sig.split(',').slice(6).join() !== cur.sig.split(',').slice(6).join();
       if (reached || devices || performance.now() - h.at > 9000) set({ hint: null });
     }
     if (runtime.checking || w.time - runtime.checkAt < 1.2) return;
@@ -529,7 +542,7 @@ export const useFireIce = create<FireIceStore>((set, get) => {
       runtime.acc -= DT;
       markPrev(w);
       if (s.online) drivePuppet(s, w);
-      const inputs = playing && !get().oops ? currentInputs(s, st.control) : { fire: NO_INPUT, ice: NO_INPUT };
+      const inputs = playing && !get().oops ? currentInputs(s, st.control) : {};
       const t0 = w.time;
       const events = step(w, inputs, DT);
       // 통과한 뒤나 넘어진 동안에는 시계를 멈춘다
@@ -546,9 +559,9 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     if (w.time - runtime.hudAt >= 0.2 || runtime.hudAt === 0) {
       runtime.hudAt = w.time || 0.001;
       const gems = w.gems.filter(Boolean).length;
-      const atDoor = { fire: w.bodies.fire.atDoor, ice: w.bodies.ice.atDoor };
+      const atDoor = { fire: w.bodies.fire.atDoor, ice: w.bodies.ice.atDoor, leaf: w.bodies.leaf.atDoor };
       const cur = get();
-      if (cur.gems !== gems || Math.floor(cur.time) !== Math.floor(w.time) || cur.atDoor.fire !== atDoor.fire || cur.atDoor.ice !== atDoor.ice) set({ gems, time: w.time, atDoor });
+      if (cur.gems !== gems || Math.floor(cur.time) !== Math.floor(w.time) || ELEMENTS.some((e) => cur.atDoor[e] !== atDoor[e])) set({ gems, time: w.time, atDoor });
     }
   };
 
@@ -559,7 +572,7 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     gems: 0,
     time: 0,
     oops: null,
-    atDoor: { fire: false, ice: false },
+    atDoor: { fire: false, ice: false, leaf: false },
     progress: loadProgress(),
     waiting: false,
     hint: null,
@@ -578,6 +591,8 @@ export const useFireIce = create<FireIceStore>((set, get) => {
         bridge.send?.('fireice', { type: 'level', level });
         return;
       }
+      // 인원에 맞는 단계만 (셋이서 판은 말차 단계, 둘이서 판은 불·얼음 단계)
+      if (TRIO[level] !== playersOf(s) >= 3) return;
       const next: FireIceSession = { ...s, id: `f${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36)}`, level: Math.max(0, Math.min(LEVELS.length - 1, level)), attempt: 1, status: 'playing', result: null };
       begin(next);
       publish(next);
@@ -600,11 +615,13 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     next: () => {
       const s = get().session;
       if (!s) return;
-      if (s.level + 1 >= LEVELS.length) {
+      const list = levelsFor(playersOf(s));
+      const k = list.indexOf(s.level);
+      if (k < 0 || k + 1 >= list.length) {
         get().quit();
         return;
       }
-      get().playLevel(s.level + 1);
+      get().playLevel(list[k + 1] as number);
     },
 
     quit: () => {
@@ -620,7 +637,8 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     swap: () => {
       const s = get().session;
       if (!s || s.mode !== 'solo') return;
-      set({ control: get().control === 'fire' ? 'ice' : 'fire' });
+      const order: Element[] = playersOf(s) >= 3 ? ['fire', 'ice', 'leaf'] : ['fire', 'ice'];
+      set({ control: order[(order.indexOf(get().control) + 1) % order.length] as Element });
       sfx('button');
       buzz('tap');
     },
@@ -649,9 +667,10 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     closeOverlay: () => set({ overlay: get().session?.status === 'cleared' ? 'clear' : null }),
 
     startOnline: (table, info) => {
-      const seat = (i: number): { name: string; character: CharacterId } => ({ name: table.seats[i]?.name ?? `P${i + 1}`, character: table.seats[i]?.character ?? (i === 0 ? 'hwigi' : 'ginini') });
-      const cfg: FireIceConfig = { mode: 'online', names: [seat(0).name, seat(1).name], characters: [seat(0).character, seat(1).character] };
-      const s = fresh(cfg, firstOpenLevel(get().progress), info);
+      const n = Math.min(3, Math.max(2, table.seats.length));
+      const seats = Array.from({ length: n }, (_, i) => ({ name: table.seats[i]?.name ?? `P${i + 1}`, character: table.seats[i]?.character ?? (['hwigi', 'ginini', 'pponi'] as const)[i] ?? 'hwigi' }));
+      const cfg: FireIceConfig = { mode: 'online', names: seats.map((x) => x.name), characters: seats.map((x) => x.character) };
+      const s = fresh(cfg, firstOpenLevel(get().progress, n), info);
       begin(s);
       publish(s);
     },
@@ -683,8 +702,8 @@ export const useFireIce = create<FireIceStore>((set, get) => {
         mode: 'online',
         level: Math.max(0, Math.min(LEVELS.length - 1, x.level | 0)),
         attempt: x.attempt,
-        names: [String(x.names[0] ?? ''), String(x.names[1] ?? '')],
-        characters: [x.characters[0] as CharacterId, x.characters[1] as CharacterId],
+        names: x.names.slice(0, 3).map((v) => String(v ?? '')),
+        characters: x.characters.slice(0, 3) as CharacterId[],
         status: x.status === 'cleared' ? 'cleared' : 'playing',
         result: x.result ?? null,
         online: info,

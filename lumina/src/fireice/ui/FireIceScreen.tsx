@@ -10,7 +10,7 @@ import { Sheet } from '../../ui/game/Overlays';
 import { OnlineChip, OnlineNotice } from '../../ui/online/OnlineNotice';
 import type { Element } from '../level';
 import { burst, buildSprites, buildStatic, drawFrame, stepParticles, type Particle, type Sprites } from '../render';
-import { levelCount, levelDef, myElement, pad, runtime, unlocked, useFireIce, type FireIceSession } from '../store';
+import { levelDef, levelNo, levelsFor, myElement, pad, playersOf, runtime, unlocked, useFireIce, type FireIceSession } from '../store';
 import { FullscreenButton } from '../../ui/fullscreen';
 
 const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyA', 'KeyD', 'KeyW', 'KeyS']);
@@ -67,7 +67,7 @@ function Stage({ session }: { session: FireIceSession }) {
       if (layers.current.key !== key) {
         c.width = Math.round(16 * tile * dpr);
         c.height = Math.round(20 * tile * dpr);
-        layers.current = { key, staticLayer: buildStatic(w.level, tile, dpr), sprites: buildSprites({ fire: s.characters[0], ice: s.characters[1] }, tile, dpr) };
+        layers.current = { key, staticLayer: buildStatic(w.level, tile, dpr), sprites: buildSprites({ fire: s.characters[0], ice: s.characters[1], leaf: s.characters[2] }, tile, dpr) };
       }
       const { staticLayer, sprites } = layers.current;
       if (!staticLayer || !sprites) return;
@@ -94,7 +94,7 @@ function Stage({ session }: { session: FireIceSession }) {
   const def = levelDef(session.level);
   return (
     <div className="fi-stage" ref={wrap}>
-      <canvas ref={canvas} className="fi-canvas" style={{ width: tile * 16, height: tile * 20 }} role="img" aria-label={t('fireice.stageLabel', { n: session.level + 1, name: t(`fireice.levels.${def.id}`) })} />
+      <canvas ref={canvas} className="fi-canvas" style={{ width: tile * 16, height: tile * 20 }} role="img" aria-label={t('fireice.stageLabel', { n: levelNo(session.level), name: t(`fireice.levels.${def.id}`) })} />
     </div>
   );
 }
@@ -163,7 +163,7 @@ function Controls({ session }: { session: FireIceSession }) {
       {session.mode === 'solo' && (
         <button type="button" className="fi-swap" data-el={control} onClick={() => useFireIce.getState().swap()} aria-label={t('fireice.swap')}>
           <Icon name="swap" size={22} />
-          <span>{t(`fireice.${control === 'fire' ? 'ice' : 'fire'}`)}</span>
+          <span>{t(`fireice.${nextOf(session, control)}`)}</span>
         </button>
       )}
       <div className="fi-pad-group">
@@ -183,18 +183,20 @@ function Status({ session }: { session: FireIceSession }) {
   const [friend, setFriend] = useState(true);
   useEffect(() => {
     if (!session.online) return;
-    const id = window.setInterval(() => setFriend(!!runtime.puppet), 700);
+    const id = window.setInterval(() => setFriend(Object.keys(runtime.puppet).length > 0), 700);
     return () => window.clearInterval(id);
   }, [session.online]);
   let text: string;
   const hint = useFireIce((s) => s.hint);
+  const players = (['fire', 'ice', 'leaf'] as const).slice(0, playersOf(session));
+  const inDoor = players.filter((e) => atDoor[e]);
   const tipKey = `fireice.tips.${levelDef(session.level).id}`;
   const tip = t(tipKey);
   if (hint) text = t(`fireice.hint.${hint.kind}`, { el: t(`fireice.${hint.el}`), dir: t(hint.on ? 'fireice.hint.right' : 'fireice.hint.left') });
   else if (waiting) text = t('online.sending');
   else if (time < 6 && tip !== tipKey && session.status === 'playing') text = tip;
   else if (session.online && !friend) text = t('fireice.waitFriend');
-  else if (atDoor.fire !== atDoor.ice) text = t('fireice.waitDoor', { el: t(`fireice.${atDoor.fire ? 'fire' : 'ice'}`) });
+  else if (inDoor.length > 0 && inDoor.length < players.length) text = t('fireice.waitDoor', { el: inDoor.map((e) => t(`fireice.${e}`)).join('·') });
   else if (session.mode === 'solo') text = t(fine ? 'fireice.keysSolo' : 'fireice.nowSolo', { el: t(`fireice.${control}`) });
   else if (session.mode === 'local') text = t(fine ? 'fireice.keysLocal' : 'fireice.touchLocal');
   else text = t('fireice.youAre', { el: t(`fireice.${myElement(session) ?? 'fire'}`) });
@@ -228,6 +230,12 @@ function Stuck({ session }: { session: FireIceSession }) {
   );
 }
 
+/** 혼자 하기: 바꾸면 다음에 움직일 캐릭터 (셋이서면 불 → 얼음 → 말차) */
+function nextOf(session: FireIceSession, control: string): string {
+  const order = playersOf(session) >= 3 ? ['fire', 'ice', 'leaf'] : ['fire', 'ice'];
+  return order[(order.indexOf(control) + 1) % order.length] as string;
+}
+
 function Oops({ session }: { session: FireIceSession }) {
   const t = useT();
   const oops = useFireIce((s) => s.oops);
@@ -245,13 +253,13 @@ function LevelGrid({ session, onPick }: { session: FireIceSession; onPick: (i: n
   const progress = useFireIce((s) => s.progress);
   return (
     <div className="fi-levels">
-      {Array.from({ length: levelCount }, (_, i) => {
+      {levelsFor(playersOf(session)).map((i) => {
         const def = levelDef(i);
         const best = progress[def.id];
         const open = session.mode === 'online' || unlocked(progress, i);
         return (
           <button key={def.id} type="button" className="fi-level" disabled={!open} data-current={i === session.level || undefined} onClick={() => onPick(i)}>
-            <span className="fi-level-n">{i + 1}</span>
+            <span className="fi-level-n">{levelNo(i)}</span>
             <span className="fi-level-name">{t(`fireice.levels.${def.id}`)}</span>
             <span className="fi-level-stars" aria-label={t('fireice.stars', { n: best?.stars ?? 0 })}>
               {open ? [0, 1, 2].map((k) => <i key={k} data-on={(best?.stars ?? 0) > k || undefined} />) : <Icon name="lock" size={16} />}
@@ -343,12 +351,13 @@ function Clear({ session }: { session: FireIceSession }) {
   const r = session.result;
   const store = useFireIce.getState();
   const def = levelDef(session.level);
-  const last = session.level + 1 >= levelCount;
+  const list = levelsFor(playersOf(session));
+  const last = list.indexOf(session.level) + 1 >= list.length;
   const stars = r?.stars ?? 1;
   return (
     <div className="result-wrap" role="dialog" aria-modal="true" aria-label={t('fireice.clear')}>
       <div className="result fi-result">
-        <p className="result-kicker">{t('fireice.levelTitle', { n: session.level + 1, name: t(`fireice.levels.${def.id}`) })}</p>
+        <p className="result-kicker">{t('fireice.levelTitle', { n: levelNo(session.level), name: t(`fireice.levels.${def.id}`) })}</p>
         <h2 className="result-title">{last ? t('fireice.clearAll') : t('fireice.clear')}</h2>
         <div className="fi-stars" aria-label={t('fireice.stars', { n: stars })}>
           {[0, 1, 2].map((k) => (
@@ -451,7 +460,7 @@ export function FireIceScreen() {
           <Icon name="menu" />
         </button>
         <div className="hud-turn">
-          <span className="fi-level-badge">{session.level + 1}</span>
+          <span className="fi-level-badge">{levelNo(session.level)}</span>
           <span className="hud-turn-text">{t(`fireice.levels.${def.id}`)}</span>
         </div>
         <div className="hud-right">

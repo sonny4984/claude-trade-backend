@@ -19,6 +19,7 @@
  *   x y  거꾸로 문 — 3·4번 레버가 켜지면 닫힌다 (꺼지면 열림)
  *   k  쿠키 열쇠 — 누구든 주우면 함께 쓰는 열쇠 하나
  *   K  자물쇠 문 — 열쇠를 가진 채 옆에서 밀면 열린다 (열쇠 하나 씀)
+ *   m M g  셋이서 하는 단계: 말차 시작 자리, 말차의 문, 초록 사탕 (말차는 말차 늪이 안전, 잼·물은 위험)
  *   @ %  순간이동 구멍 — 같은 글자 두 칸이 한 쌍, 걸어 들어가면 짝 칸으로
  * 발판(움직이는 판)은 맵 대신 platforms 목록에 적는다: 쉴 때 위치(x, y, 너비, 높이)와 켜졌을 때 옮겨 갈 칸 수.
  */
@@ -26,7 +27,9 @@
 export const LEVEL_W = 16;
 export const LEVEL_H = 20;
 
-export type Element = 'fire' | 'ice';
+/** 불·얼음 (+ 셋이서 하는 단계의 말차) */
+export type Element = 'fire' | 'ice' | 'leaf';
+export const ELEMENTS: readonly Element[] = ['fire', 'ice', 'leaf'];
 export type Pool = 'L' | 'W' | 'G';
 
 export interface PlatformDef {
@@ -72,6 +75,9 @@ export interface ParsedLevel {
   /** 칸 번호 → 순간이동 짝 칸 */
   readonly portal: ReadonlyMap<number, Cell>;
   readonly pool: readonly (Pool | null)[];
+  /** 이 단계에 나오는 캐릭터 (둘이면 불·얼음, 셋이면 + 말차) */
+  readonly players: readonly Element[];
+  /** 없는 캐릭터(둘이서 단계의 말차)는 (-1, -1) */
   readonly spawn: Readonly<Record<Element, Cell>>;
   readonly door: Readonly<Record<Element, Cell>>;
   readonly gems: readonly { readonly id: number; readonly x: number; readonly y: number; readonly el: Element }[];
@@ -115,12 +121,17 @@ export function parseLevel(def: LevelDef): ParsedLevel {
       else if (ch === 'i') spawn.ice = { x, y };
       else if (ch === 'F') door.fire = { x, y };
       else if (ch === 'I') door.ice = { x, y };
-      else if (ch === 'r' || ch === 'b') gems.push({ id: gems.length, x, y, el: ch === 'r' ? 'fire' : 'ice' });
+      else if (ch === 'm') spawn.leaf = { x, y };
+      else if (ch === 'M') door.leaf = { x, y };
+      else if (ch === 'r' || ch === 'b' || ch === 'g') gems.push({ id: gems.length, x, y, el: ch === 'r' ? 'fire' : ch === 'b' ? 'ice' : 'leaf' });
       else if (ch === '1' || ch === '2') buttons.push({ x, y, group: Number(ch) });
       else if (ch === '3' || ch === '4') levers.push({ id: levers.length, x, y, group: Number(ch) });
     }
   }
   if (!spawn.fire || !spawn.ice || !door.fire || !door.ice) throw new Error(`level ${def.id}: needs f, i, F, I`);
+  if (!spawn.leaf !== !door.leaf) throw new Error(`level ${def.id}: needs both m and M`);
+  const players: Element[] = spawn.leaf ? ['fire', 'ice', 'leaf'] : ['fire', 'ice'];
+  const none = { x: -1, y: -1 };
   const portal = new Map<number, Cell>();
   for (const [ch, cells] of Object.entries(pairs)) {
     if (cells.length !== 2) throw new Error(`level ${def.id}: portal ${ch} needs exactly 2 cells`);
@@ -128,7 +139,7 @@ export function parseLevel(def: LevelDef): ParsedLevel {
     portal.set(at(a.x, a.y), b);
     portal.set(at(b.x, b.y), a);
   }
-  return { def, solid, oneway, jelly, curtain, gate, keys, locks, portal, pool, spawn: spawn as Record<Element, Cell>, door: door as Record<Element, Cell>, gems, buttons, levers, platforms: def.platforms ?? [] };
+  return { def, solid, oneway, jelly, curtain, gate, keys, locks, portal, pool, players, spawn: { leaf: none, ...spawn } as Record<Element, Cell>, door: { leaf: none, ...door } as Record<Element, Cell>, gems, buttons, levers, platforms: def.platforms ?? [] };
 }
 
 /** 이 원소에게 (x, y) 칸이 벽인가 (블록·웅덩이·젤리·막는 커튼) — 발판은 따로 */
@@ -143,5 +154,6 @@ export function wallFor(level: ParsedLevel, el: Element, x: number, y: number): 
 /** 이 원소가 이 웅덩이를 밟으면 위험한가 */
 export function deadly(el: Element, p: Pool | null): boolean {
   if (!p) return false;
-  return p === 'G' || (p === 'L' && el === 'ice') || (p === 'W' && el === 'fire');
+  // 제 웅덩이만 안전: 잼 = 불, 물 = 얼음, 말차 = 말차
+  return (p === 'L' ? 'fire' : p === 'W' ? 'ice' : 'leaf') !== el;
 }

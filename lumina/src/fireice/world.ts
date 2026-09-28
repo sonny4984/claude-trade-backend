@@ -27,7 +27,6 @@ export const PHYS = {
 } as const;
 
 const EPS = 1e-4;
-export const ELEMENTS: readonly Element[] = ['fire', 'ice'];
 
 export interface Input {
   readonly left: boolean;
@@ -110,7 +109,8 @@ function spawnBody(level: ParsedLevel, el: Element): Body {
 export function newWorld(level: ParsedLevel): WorldState {
   return {
     level,
-    bodies: { fire: spawnBody(level, 'fire'), ice: spawnBody(level, 'ice') },
+    // 둘이서 단계의 말차는 판 밖에 쉬는 몸 (players에 없어서 움직이지도 그려지지도 않는다)
+    bodies: { fire: spawnBody(level, 'fire'), ice: spawnBody(level, 'ice'), leaf: spawnBody(level, 'leaf') },
     plats: level.platforms.map((p) => ({ x: p.x, y: p.y, px: p.x, py: p.y })),
     levers: level.levers.map(() => false),
     gems: level.gems.map(() => false),
@@ -126,7 +126,7 @@ export function newWorld(level: ParsedLevel): WorldState {
       level.locks.forEach((l) => (a[at(l.x, l.y)] = l.id));
       return a;
     })(),
-    portalCool: { fire: false, ice: false },
+    portalCool: { fire: false, ice: false, leaf: false },
   };
 }
 
@@ -227,10 +227,10 @@ function standingOnCell(b: Body, cx: number, cy: number): boolean {
   return feet > cy + 1 - 0.12 && feet < cy + 1 + 0.08 && b.x < cx + 0.8 && b.x + PHYS.w > cx + 0.2;
 }
 
-export function step(w: WorldState, inputs: Readonly<Record<Element, Input>>, dt: number): WorldEvent[] {
+export function step(w: WorldState, inputs: Readonly<Partial<Record<Element, Input>>>, dt: number): WorldEvent[] {
   const events: WorldEvent[] = [];
   w.time += dt;
-  const bodies = ELEMENTS.map((e) => w.bodies[e]);
+  const bodies = w.level.players.map((e) => w.bodies[e]);
 
   // 1) 버튼: 누가 서 있나
   for (let g = 1; g <= 4; g++) {
@@ -439,13 +439,13 @@ export function step(w: WorldState, inputs: Readonly<Record<Element, Input>>, dt
 
 /** 둘 다 문 안에 있으면 통과 */
 export function cleared(w: WorldState): boolean {
-  return w.bodies.fire.alive && w.bodies.ice.alive && w.bodies.fire.atDoor && w.bodies.ice.atDoor;
+  return w.level.players.every((e) => w.bodies[e].alive && w.bodies[e].atDoor);
 }
 
 /** 온라인 상대 몸에 받은 위치를 넣는다 */
 /** 걸음 직전 자리를 기억 (그리기 보간) */
 export function markPrev(w: WorldState): void {
-  for (const b of Object.values(w.bodies)) {
+  for (const b of w.level.players.map((e) => w.bodies[e])) {
     b.px = b.x;
     b.py = b.y;
   }
