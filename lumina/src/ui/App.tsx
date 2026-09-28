@@ -19,6 +19,7 @@ import { GomokuScreen } from '../gomoku/ui/GomokuScreen';
 import { FireIceSetup } from '../fireice/ui/FireIceSetup';
 import { FireIceScreen } from '../fireice/ui/FireIceScreen';
 import { useOnline } from '../net/online';
+import { CommsLayer } from './online/Comms';
 import { readInvite } from '../net/site';
 import { FullscreenHelp } from './fullscreen';
 
@@ -46,9 +47,39 @@ function useDocumentSettings(): void {
   }, [theme, hc, cvd, motion, lang]);
 }
 
+type WakeLockApi = { request(type: 'screen'): Promise<{ release(): Promise<void> }> };
+
+/** 게임·대기실에서는 화면이 꺼지지 않게 (Screen Wake Lock — 되는 브라우저에서만, 앱으로 돌아오면 다시 잡음) */
+function useKeepAwake(on: boolean): void {
+  useEffect(() => {
+    const api = (navigator as Navigator & { wakeLock?: WakeLockApi }).wakeLock;
+    if (!on || !api) return;
+    let lock: { release(): Promise<void> } | null = null;
+    let alive = true;
+    const take = (): void => {
+      if (document.visibilityState !== 'visible') return;
+      api
+        .request('screen')
+        .then((l) => {
+          if (alive) lock = l;
+          else void l.release().catch(() => undefined);
+        })
+        .catch(() => undefined);
+    };
+    take();
+    document.addEventListener('visibilitychange', take);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', take);
+      void lock?.release().catch(() => undefined);
+    };
+  }, [on]);
+}
+
 export function App() {
   useDocumentSettings();
   const screen = useGame((s) => s.screen);
+  useKeepAwake(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'online');
   const show3d = useSettings((s) => s.show3d);
   useEffect(() => {
     if (!show3d) return;
@@ -91,6 +122,7 @@ export function App() {
       {screen === 'fireice' && <FireIceScreen />}
       <Toasts />
       <FullscreenHelp />
+      <CommsLayer />
     </div>
   );
 }

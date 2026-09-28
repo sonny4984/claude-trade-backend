@@ -14,6 +14,7 @@ import { usePortrait } from '../../characters/portrait3d';
 import type { AiLevel } from '../../game/types';
 import { Icon } from '../components/Icon';
 import { useT } from '../../i18n';
+import { CommsButton } from '../online/Comms';
 import { sfx } from '../../audio/sfx';
 
 const LEVELS: AiLevel[] = ['beginner', 'casual', 'advanced', 'expert'];
@@ -297,7 +298,10 @@ function Lobby() {
         {host && status === 'lobby' && <Invite code={table.code} broker={broker} hostName={table.hostName} gameName={gameName} />}
       </section>
       <section className="card">
-        <h2 className="card-title">{t('online.seats', { n, max: rule.max })}</h2>
+        <h2 className="card-title ol-seats-title">
+          {t('online.seats', { n, max: rule.max })}
+          <CommsButton />
+        </h2>
         <ol className="ol-seats">
           {table.seats.map((s, i) => (
             <SeatRow key={`${s.peer ?? 'ai'}-${i}`} seat={s} i={i} host={host && status === 'lobby'} me={s.peer === myPeer} />

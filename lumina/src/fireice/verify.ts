@@ -24,6 +24,20 @@ export interface Move {
   readonly via?: Cell;
   /** via가 젤리(튀기)인지 순간이동 구멍인지 */
   readonly viaKind?: 'jelly' | 'portal';
+  /** 옆 칸으로 걸어간 움직임 (레버 칸을 떠나거나 들어서면 그쪽으로 밀린다) */
+  readonly walk?: -1 | 1;
+}
+
+/** 걸어서 레버 칸을 떠나거나 같은 줄 옆 레버 칸에 들어서면 그쪽으로 민 것 (오른쪽이면 켬, 왼쪽이면 끔) */
+function walkLevers(level: ParsedLevel, lev: number, from: Cell, m: Move): number {
+  if (!m.walk) return lev;
+  let out = lev;
+  level.levers.forEach((l, k) => {
+    const onFrom = l.x === from.x && l.y === from.y;
+    const onTo = l.x === m.cell.x && l.y === m.cell.y && m.cell.y === from.y;
+    if (onFrom || onTo) out = m.walk === 1 ? out | (1 << k) : out & ~(1 << k);
+  });
+  return out;
 }
 
 /** 움직이는 벽: 발판 + 닫힌 문 + 잠긴 자물쇠 */
@@ -144,7 +158,7 @@ function bounceFrom(level: ParsedLevel, occ: Occ, el: Element, x: number, y: num
 /** 한 캐릭터가 한 번에 갈 수 있는 곳들 */
 export function movesFrom(level: ParsedLevel, occ: Occ, el: Element, x: number, y: number): Move[] {
   const out = new Map<number, Move>();
-  const add = (c0: Cell, via0?: Cell, kind0?: 'jelly' | 'portal'): void => {
+  const add = (c0: Cell, via0?: Cell, kind0?: 'jelly' | 'portal', walk?: -1 | 1): void => {
     let c = c0;
     let via = via0;
     let kind = kind0;
@@ -162,12 +176,12 @@ export function movesFrom(level: ParsedLevel, occ: Occ, el: Element, x: number, 
     const k = at(c.x, c.y);
     // 같은 칸이면 젤리·구멍 없이 가는 길을 더 좋게 본다
     if (out.has(k) && !out.get(k)?.via) return;
-    out.set(k, via ? { cell: c, via, viaKind: kind } : { cell: c });
+    out.set(k, via ? { cell: c, via, viaKind: kind } : walk ? { cell: c, walk } : { cell: c });
   };
-  const land = (d: ReturnType<typeof drop>): void => {
+  const land = (d: ReturnType<typeof drop>, walk?: -1 | 1): void => {
     if (!d) return;
     if (!d.jelly) {
-      add({ x: d.x, y: d.y });
+      add({ x: d.x, y: d.y }, undefined, undefined, walk);
       return;
     }
     for (const c of bounceFrom(level, occ, el, d.x, d.y)) add(c, { x: d.x, y: d.y }, 'jelly');
@@ -175,7 +189,7 @@ export function movesFrom(level: ParsedLevel, occ: Occ, el: Element, x: number, 
   // 걷기·걸어서 떨어지기
   for (const dx of [-1, 1]) {
     const nx = x + dx;
-    if (!solid(level, occ, el, nx, y)) land(drop(level, occ, el, nx, y));
+    if (!solid(level, occ, el, nx, y)) land(drop(level, occ, el, nx, y), dx as -1 | 1);
   }
   // 위로 점프: 위로 1칸이면 옆 4, 2칸 3, 3칸 2
   upPaths(level, occ, el, x, y, 15.5, [0, 4, 3, 2], (tx, ty) => land(drop(level, occ, el, tx, ty)));
@@ -295,7 +309,10 @@ export interface PathState {
 type Step = { readonly prev: State; readonly by: Element | 'lever' | 'unlock'; readonly to: Cell | null; readonly via: Cell | null; readonly viaKind: 'jelly' | 'portal' | null };
 
 /** 둘 다 문에 닿을 수 있는지 (그리고 사탕을 각자 먹을 수 있는지). path: 가장 짧은 풀이 (시작 → 끝) */
-export function verifyLevel(level: ParsedLevel, limit = 400_000): VerifyResult & { readonly path: readonly PathState[] } {
+export function verifyLevel(level: ParsedLevel, limit = 400_000, analyze = false): VerifyResult & { readonly path: readonly PathState[]; readonly deadEnds: number } {
+  // analyze: 되돌릴 수 없이 막힌 상태(어디로 가도 통과 못 함)가 몇 개인지도 센다 — 단계가 얼마나 머리를 쓰게 하는지 가늠
+  const rev = analyze ? new Map<string, string[]>() : null;
+  const goals: string[] = [];
   const start: State = pickKeys(level, { f: level.spawn.fire, i: level.spawn.ice, lev: 0, keys: 0, open: 0 });
   const seen = new Map<string, number>([[key(start), 0]]);
   const parent = new Map<string, Step | null>([[key(start), null]]);
@@ -314,10 +331,11 @@ export function verifyLevel(level: ParsedLevel, limit = 400_000): VerifyResult &
       solvedAt = depth;
       goal = s;
     }
+    if (rev && s.f.x === level.door.fire.x && s.f.y === level.door.fire.y && s.i.x === level.door.ice.x && s.i.y === level.door.ice.y) goals.push(key(s));
     const occ = platCells(level, activeOf(level, s), s.open);
     const next: { readonly n: State; readonly by: Step['by']; readonly to: Cell | null; readonly via: Cell | null; readonly viaKind: Step['viaKind'] }[] = [];
-    for (const m of movesFrom(level, occ, 'fire', s.f.x, s.f.y)) next.push({ n: { ...s, f: m.cell }, by: 'fire', to: m.cell, via: m.via ?? null, viaKind: m.viaKind ?? null });
-    for (const m of movesFrom(level, occ, 'ice', s.i.x, s.i.y)) next.push({ n: { ...s, i: m.cell }, by: 'ice', to: m.cell, via: m.via ?? null, viaKind: m.viaKind ?? null });
+    for (const m of movesFrom(level, occ, 'fire', s.f.x, s.f.y)) next.push({ n: { ...s, f: m.cell, lev: walkLevers(level, s.lev, s.f, m) }, by: 'fire', to: m.cell, via: m.via ?? null, viaKind: m.viaKind ?? null });
+    for (const m of movesFrom(level, occ, 'ice', s.i.x, s.i.y)) next.push({ n: { ...s, i: m.cell, lev: walkLevers(level, s.lev, s.i, m) }, by: 'ice', to: m.cell, via: m.via ?? null, viaKind: m.viaKind ?? null });
     level.levers.forEach((l, k) => {
       if ((s.f.x === l.x && s.f.y === l.y) || (s.i.x === l.x && s.i.y === l.y)) next.push({ n: { ...s, lev: s.lev ^ (1 << k) }, by: 'lever', to: null, via: null, viaKind: null });
     });
@@ -332,6 +350,11 @@ export function verifyLevel(level: ParsedLevel, limit = 400_000): VerifyResult &
       const st = settle(level, s, n);
       if (!st) continue;
       const k = key(st);
+      if (rev) {
+        const from = rev.get(k);
+        if (from) from.push(key(s));
+        else rev.set(k, [key(s)]);
+      }
       if (seen.has(k)) continue;
       seen.set(k, depth + 1);
       parent.set(k, { prev: s, by, to, via, viaKind });
@@ -344,5 +367,12 @@ export function verifyLevel(level: ParsedLevel, limit = 400_000): VerifyResult &
     path.unshift({ ...c, by: p?.by ?? null, to: p?.to ?? null, via: p?.via ?? null, viaKind: p?.viaKind ?? null });
     c = p?.prev ?? null;
   }
-  return { solvable: solvedAt >= 0, states: seen.size, gemsReachable: [...gems].sort((a, b) => a - b), steps: solvedAt, path };
+  let deadEnds = 0;
+  if (rev) {
+    const good = new Set(goals);
+    const stack = [...goals];
+    while (stack.length) for (const p of rev.get(stack.pop() as string) ?? []) if (!good.has(p)) good.add(p), stack.push(p);
+    deadEnds = seen.size - good.size;
+  }
+  return { solvable: solvedAt >= 0, states: seen.size, gemsReachable: [...gems].sort((a, b) => a - b), steps: solvedAt, path, deadEnds };
 }

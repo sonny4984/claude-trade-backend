@@ -62,7 +62,7 @@ test('불과 얼음 혼자 하기: 움직이고, 바꾸고, 둘 다 문에 서�
   const touch = info.project.name === 'phone';
   const errors = await open(page);
   await page.locator('.plate-fireice').click();
-  await expect(page.locator('.fi-level')).toHaveCount(23);
+  await expect(page.locator('.fi-level')).toHaveCount(25);
   await expect(page.locator('.fi-level').nth(1)).toBeDisabled();
   await page.locator('.screen-foot .btn-primary').click();
   await expect(page.locator('.fireice')).toBeVisible();
@@ -107,6 +107,48 @@ test.describe('온라인', () => {
   });
   test.afterAll(async () => {
     await broker.close();
+  });
+
+  test('채팅·음성: 대기실에서 글과 빠른 말이 오가고, 둘 다 음성을 켜면 이어진다', async ({ browser }) => {
+    const withBroker = (p: string): string => `${p}${p.includes('?') ? '&' : '?'}broker=${encodeURIComponent(broker.url)}`;
+    const hostCtx = await browser.newContext({ viewport: { width: 900, height: 900 }, permissions: ['microphone'] });
+    const host = await hostCtx.newPage();
+    const hostErrors = await open(host, withBroker('/'));
+    await host.locator('.plate-online').click();
+    await host.locator('.ol-name').fill('방장');
+    await host.locator('.ol-game[data-game="fireice"]').click();
+    await host.locator('.ol-create').click();
+    const link = await host.locator('.ol-link').inputValue();
+    const guestCtx = await browser.newContext({ viewport: { width: 900, height: 900 }, permissions: ['microphone'] });
+    const guest = await guestCtx.newPage();
+    const path = link.replace(/^https?:\/\/[^/]+/, '');
+    const guestErrors = await open(guest, path.includes('broker=') ? path : withBroker(path), false);
+    await guest.locator('.ol-name').fill('친구');
+    await guest.locator('.ol-enter').click();
+    await expect(host.locator('.ol-seat:not(.ol-seat-empty)')).toHaveCount(2);
+
+    // 글: 방장이 보내면 친구 화면 위에 말풍선, 채팅 단추에 새 글 1
+    await host.locator('.ol-seats-title .cm-btn').click();
+    await host.locator('.cm-input input').fill('안녕 꾸잉');
+    await host.locator('.cm-input input').press('Enter');
+    await expect(guest.locator('.cm-toast')).toContainText('안녕 꾸잉');
+    await expect(guest.locator('.ol-seats-title .cm-badge')).toHaveText('1');
+    // 빠른 말: 친구가 "잘했어!" → 방장 채팅 창에
+    await guest.locator('.ol-seats-title .cm-btn').click();
+    await guest.locator('.cm-quick button', { hasText: '잘했어!' }).click();
+    await expect(host.locator('.cm-line').last()).toContainText('잘했어!');
+
+    // 음성: 둘 다 켜면 (가짜 마이크) 서로 "들려요", 한쪽이 끄면 끊긴다
+    await host.getByRole('button', { name: '음성 켜기' }).click();
+    await guest.getByRole('button', { name: '음성 켜기' }).click();
+    await expect(host.locator('.cm-links [data-link="on"]')).toHaveCount(1, { timeout: 20_000 });
+    await expect(guest.locator('.cm-links [data-link="on"]')).toHaveCount(1, { timeout: 20_000 });
+    await guest.getByRole('button', { name: '음성 끄기' }).click();
+    await expect(host.locator('.cm-links [data-link]')).toHaveCount(0);
+    expect(hostErrors).toEqual([]);
+    expect(guestErrors).toEqual([]);
+    await hostCtx.close();
+    await guestCtx.close();
   });
 
   test('불과 얼음 온라인: 친구 몸이 따라 움직이고, 사탕과 다시 하기가 두 화면에 같이', async ({ browser }) => {

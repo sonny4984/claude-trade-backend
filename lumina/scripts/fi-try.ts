@@ -15,9 +15,10 @@ for (const def of defs) {
     console.log(`== ${def.id}: ${(e as Error).message}`);
     continue;
   }
-  const r = verifyLevel(lv, 1_500_000);
+  const r = verifyLevel(lv, 1_500_000, true);
+  const flips = r.path.reduce((n, p, i) => n + (i > 0 && (p.lev !== r.path[i - 1]?.lev || p.open !== r.path[i - 1]?.open) ? 1 : 0), 0);
   const bot = r.solvable ? replay(lv, r.path) : null;
-  console.log(`== ${def.id}: solvable=${r.solvable} steps=${r.steps} states=${r.states} gems=${r.gemsReachable.length}/${lv.gems.length} bot=${bot ? (bot.ok ? 'ok' : `FAIL@${bot.failedAt} ${bot.why}`) : '-'}`);
+  console.log(`== ${def.id}: solvable=${r.solvable} steps=${r.steps} states=${r.states} gems=${r.gemsReachable.length}/${lv.gems.length} devices=${flips} dead=${Math.round((r.deadEnds / r.states) * 100)}% bot=${bot ? (bot.ok ? 'ok' : `FAIL@${bot.failedAt} ${bot.why}`) : '-'}`);
   if (!r.solvable || r.gemsReachable.length < lv.gems.length || (bot && !bot.ok) || only) {
     for (const el of ['fire', 'ice'] as const) {
       const start = lv.spawn[el];

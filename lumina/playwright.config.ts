@@ -21,7 +21,8 @@ export default defineConfig({
     baseURL: 'http://localhost:4173',
     launchOptions: {
       executablePath,
-      args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+      // 음성 채팅 시험: 가짜 마이크, 권한 창 없이
+      args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
     },
   },
   webServer: {

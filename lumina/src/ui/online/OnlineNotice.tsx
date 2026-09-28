@@ -9,6 +9,7 @@ import { useCoda } from '../../coda/store';
 import { useGomoku } from '../../gomoku/store';
 import { useFireIce } from '../../fireice/store';
 import { useT } from '../../i18n';
+import { CommsButton } from './Comms';
 
 /** 닫힌 방에서 나오기: 게임 화면까지 정리하고 홈으로 */
 function leaveGame(): void {
@@ -26,10 +27,13 @@ export function OnlineChip() {
   const connected = useOnline((s) => s.connected);
   if (!code || (status !== 'playing' && status !== 'closed')) return null;
   return (
-    <span className="ol-chip" data-on={connected || undefined} aria-label={`${t('online.codeTitle')} ${code.toUpperCase()} · ${connected ? t('online.connected') : t('online.offline')}`}>
+    <>
+      <CommsButton />
+      <span className="ol-chip" data-on={connected || undefined} aria-label={`${t('online.codeTitle')} ${code.toUpperCase()} · ${connected ? t('online.connected') : t('online.offline')}`}>
       <i aria-hidden="true" />
       {code.toUpperCase()}
-    </span>
+      </span>
+    </>
   );
 }
 
