@@ -15,6 +15,7 @@ import { useOnline } from '../net/online';
 import { useGame } from '../store/game';
 import { useSettings } from '../store/settings';
 import { readJSON, writeJSON } from '../store/storage';
+import { CALL_OVERHEAD, claudeLocked, claudeUsed, spendClaude, tokensOf } from './budget';
 import { FATAL, LIMITED, claudeSample, claudeWriter, polish, polishPick, type HistoryLine, type JsonWriter } from './claude';
 import { GeminiFail, connectGemini, geminiJson, loadGemini, saveGemini, takeKeyFromUrl } from './gemini';
 import { CAST, MAX_PLAYERS, MIN_PLAYERS, PERSONA, aiNight, aiVote, killChoice, lastAct, living, newGame, plan, record, resolveNight, resolveVerdict, resolveVote, tally, toVerdict, aiVerdict, type Act, type Game, type Role, type Said, type Trigger } from './engine';
@@ -123,7 +124,9 @@ interface MafiaState {
   geminiModel: string | null;
   /** Gemini 연결 확인 중 · 실패 이유 */
   geminiState: 'idle' | 'checking' | GeminiFail['code'];
-  note: 'claudeOff' | 'claudeLimit' | 'geminiKey' | 'geminiLimit' | 'geminiBusy' | null;
+  /** 오늘 Claude에 쓴 토큰 (어림) — 한도를 넘으면 내일까지 잠긴다 */
+  claudeUsed: number;
+  note: 'claudeOff' | 'claudeLimit' | 'claudeLocked' | 'geminiKey' | 'geminiLimit' | 'geminiBusy' | null;
   connectGemini(key: string): Promise<boolean>;
   forgetGemini(): void;
   setCfg(p: Partial<MafiaConfig>): void;
@@ -211,12 +214,25 @@ function history(s: MafiaSession): HistoryLine[] {
     }));
 }
 
-/** 대사를 써 줄 쪽: claude.ai면 Claude, 공개 사이트에서 키가 있으면 Gemini, 아니면 없음 (기본 대사) */
+/** 대사를 써 줄 쪽: claude.ai면 Claude(오늘 한도 안에서), 공개 사이트에서 키가 있으면 Gemini, 아니면 없음 (기본 대사) */
 async function writer(): Promise<JsonWriter | null> {
   const { cfg, claudeOk, geminiModel } = get();
-  if (cfg.claude && claudeOk) {
+  if (cfg.claude && claudeOk && !claudeLocked()) {
     const sample = await claudeSample();
-    if (sample) return claudeWriter(sample);
+    if (sample) {
+      const write = claudeWriter(sample);
+      return async (prompt, signal) => {
+        // 보낸 글은 답이 없어도 센다
+        spendClaude(CALL_OVERHEAD + tokensOf(prompt.length));
+        try {
+          const r = await write(prompt, signal);
+          spendClaude(tokensOf(JSON.stringify(r ?? '').length));
+          return r;
+        } finally {
+          useMafia.setState({ claudeUsed: claudeUsed(), ...(claudeLocked() ? { note: 'claudeLocked' as const } : {}) });
+        }
+      };
+    }
   }
   const gem = loadGemini();
   if (cfg.gemini && gem && geminiModel) return (prompt, signal) => geminiJson(gem, prompt, signal);
@@ -646,6 +662,7 @@ export const useMafia = create<MafiaState>((set) => ({
   waiting: false,
   pick: null,
   claudeOk: false,
+  claudeUsed: claudeUsed(),
   geminiModel: loadGemini()?.model ?? null,
   geminiState: 'idle',
   note: null,
@@ -679,7 +696,7 @@ export const useMafia = create<MafiaState>((set) => ({
   },
 
   probe() {
-    void claudeSample().then((s) => set({ claudeOk: !!s }));
+    void claudeSample().then((s) => set({ claudeOk: !!s, claudeUsed: claudeUsed() }));
   },
 
   start() {

@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { aiNight, aiVerdict, aiVote, living, newGame, plan, record, resolveNight, resolveVerdict, resolveVote, rolesFor, suspicion, toVerdict, type Act, type Game, type Side } from '../engine';
 import { cutify, fill, josa, lineFor, parseHuman } from '../talk';
 import { GeminiFail, chooseModel, connectGemini, geminiJson, parseLoose, rankModels } from '../gemini';
 import { buildPrompt, polishPick } from '../claude';
+import { DAILY_TOKENS, claudeLocked, claudeUsed, resetClaudeUsage, spendClaude, tokensOf } from '../budget';
 
 /** AI끼리 한 판 — 밤 → 낮 토론 세 번 → 투표 */
 function autoplay(seed: number, count: number): { winner: Side | null; days: number; lines: number } {
@@ -255,6 +256,28 @@ describe('절약 모드', () => {
     expect(brief).toContain('자유 대화');
     expect([...brief.matchAll(/\{"id":\d+,"name"/g)].length).toBe(1);
     expect(buildPrompt(g, said.slice(0, 1), ['draft'], history, 'en', latest, true)).toContain('Only JSON');
+  });
+});
+
+describe('Claude 하루 한도', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    resetClaudeUsage();
+  });
+
+  it('쓴 만큼 쌓이고, 한도를 넘으면 잠기고, 다음 날 풀린다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 1, 21, 0));
+    resetClaudeUsage();
+    expect(tokensOf(1000)).toBe(900);
+    spendClaude(DAILY_TOKENS - 500);
+    expect(claudeLocked()).toBe(false);
+    spendClaude(600);
+    expect(claudeUsed()).toBe(DAILY_TOKENS + 100);
+    expect(claudeLocked()).toBe(true);
+    vi.setSystemTime(new Date(2026, 9, 2, 7, 0));
+    expect(claudeUsed()).toBe(0);
+    expect(claudeLocked()).toBe(false);
   });
 });
 

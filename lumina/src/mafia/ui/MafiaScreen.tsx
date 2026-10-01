@@ -12,6 +12,7 @@ import { useLang, useT } from '../../i18n';
 import type { Game, Player } from '../engine';
 import { deciders, mySeatOf, useMafia, visible, type MafiaSession, type VoiceMode } from '../store';
 import { nameOf } from '../talk';
+import { DAILY_TOKENS } from '../budget';
 import { canListen, listen } from '../voice';
 
 type T = ReturnType<typeof useT>;
@@ -467,6 +468,7 @@ export function MafiaScreen() {
   useMafia((st) => st.rev);
   const cfg = useMafia((st) => st.cfg);
   const claudeOk = useMafia((st) => st.claudeOk);
+  const locked = useMafia((st) => st.claudeUsed >= DAILY_TOKENS);
   const geminiModel = useMafia((st) => st.geminiModel);
   const note = useMafia((st) => st.note);
   const [armed, setArm] = useState(false);
@@ -508,8 +510,16 @@ export function MafiaScreen() {
           <Icon name={cfg.voice === 'off' ? 'volumeOff' : 'volume'} />
         </button>
         {host && claudeOk ? (
-          <button type="button" className="mf-claude" aria-pressed={cfg.claude} aria-label={cfg.claude ? t('mafia.claudeOffBtn') : t('mafia.claudeOnBtn')} onClick={() => st.setCfg({ claude: !cfg.claude })}>
-            <Icon name="spark" size={16} />
+          <button
+            type="button"
+            className="mf-claude"
+            aria-pressed={cfg.claude && !locked}
+            disabled={locked}
+            aria-label={locked ? t('mafia.claudeLockedBtn') : cfg.claude ? t('mafia.claudeOffBtn') : t('mafia.claudeOnBtn')}
+            title={locked ? t('mafia.claudeLockedBtn') : undefined}
+            onClick={() => st.setCfg({ claude: !cfg.claude })}
+          >
+            <Icon name={locked ? 'lock' : 'spark'} size={16} />
             Claude
           </button>
         ) : host && geminiModel ? (

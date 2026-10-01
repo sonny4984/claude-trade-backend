@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useGame } from '../store/game';
 import { useSettings } from '../store/settings';
-import { unlockAudio } from '../audio/sfx';
+import { loudAudio, unlockAudio } from '../audio/sfx';
 import { loadPortrait3d } from '../characters/portrait3d';
 import { GameScreen } from './game/GameScreen';
 import { Toasts } from './game/Overlays';
@@ -20,7 +20,7 @@ import { FireIceSetup } from '../fireice/ui/FireIceSetup';
 import { FireIceScreen } from '../fireice/ui/FireIceScreen';
 import { MafiaSetup } from '../mafia/ui/MafiaSetup';
 import { MafiaScreen } from '../mafia/ui/MafiaScreen';
-import { claimGeminiLink } from '../mafia/store';
+import { claimGeminiLink, useMafia } from '../mafia/store';
 import { translate } from '../i18n';
 import { useOnline } from '../net/online';
 import { CommsLayer } from './online/Comms';
@@ -119,13 +119,18 @@ export function App() {
   }, []);
   useEffect(() => {
     const unlock = (): void => unlockAudio();
-    window.addEventListener('pointerdown', unlock, { passive: true });
-    window.addEventListener('keydown', unlock);
+    // iOS는 손을 뗄 때(터치 끝·클릭)만 소리를 깨울 수 있다 — 누르는 순간(pointerdown)만 들으면 계속 조용하다
+    const kinds = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
+    for (const k of kinds) window.addEventListener(k, unlock, { passive: true });
     return () => {
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
+      for (const k of kinds) window.removeEventListener(k, unlock);
     };
   }, []);
+  // 마피아 목소리는 아이폰 무음 모드에서도 들리게 (목소리를 끄거나 나가면 원래대로)
+  const mafiaVoice = useMafia((s) => s.cfg.voice);
+  useEffect(() => {
+    loudAudio((screen === 'mafia' || screen === 'mafia-setup') && mafiaVoice !== 'off');
+  }, [screen, mafiaVoice]);
   return (
     <div className="app">
       <div className="room" aria-hidden="true" />

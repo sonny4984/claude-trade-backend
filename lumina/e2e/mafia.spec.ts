@@ -10,24 +10,29 @@ interface Hook {
   store: { getState: () => { session: { game: { phase: string; players: { alive: boolean }[] }; online: { mySeat: number } | null } | null } };
 }
 
-async function open(page: Page, path = '/', home = true): Promise<string[]> {
+/** setup: 마피아 준비 설정에 덧붙일 값 · keep: 처음 열 때 저장소에 함께 넣을 값 */
+async function open(page: Page, path = '/', home = true, setup: Record<string, unknown> = {}, keep: Record<string, unknown> = {}): Promise<string[]> {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
     if (m.type() === 'error' && !/ERR_FAILED|fonts\.g/.test(m.text())) errors.push(m.text());
   });
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
-  await page.addInitScript(() => {
-    try {
-      if (sessionStorage.getItem('e2e-init')) return;
-      sessionStorage.setItem('e2e-init', '1');
-      localStorage.clear();
-      localStorage.setItem('lumina.settings.v1', JSON.stringify({ show3d: false }));
-      localStorage.setItem('lumina.mafia.setup.v1', JSON.stringify({ count: 7, me: 'moka', role: 'random', voice: false, claude: false }));
-    } catch {
-      /* 저장소가 막힌 환경 */
-    }
-  });
+  await page.addInitScript(
+    ([extra, more]) => {
+      try {
+        if (sessionStorage.getItem('e2e-init')) return;
+        sessionStorage.setItem('e2e-init', '1');
+        localStorage.clear();
+        localStorage.setItem('lumina.settings.v1', JSON.stringify({ show3d: false }));
+        localStorage.setItem('lumina.mafia.setup.v1', JSON.stringify({ count: 7, me: 'moka', role: 'random', voice: false, claude: false, ...extra }));
+        for (const [k, v] of Object.entries(more)) localStorage.setItem(k, JSON.stringify(v));
+      } catch {
+        /* 저장소가 막힌 환경 */
+      }
+    },
+    [setup, keep] as const,
+  );
   await page.goto(path);
   if (home) await expect(page.locator('.wordmark')).toHaveText('LUMINA');
   return errors;
@@ -181,6 +186,146 @@ test('Gemini 키 링크(#gemini=키)로 열면 키가 들어가고 주소에서�
   await expect(page.locator('.mf-gemini')).toContainText('연결됨 · gemini-3.5-flash');
   expect(page.url()).not.toContain('link-key');
   expect(await page.evaluate(() => localStorage.getItem('lumina.gemini.v1'))).toContain('link-key');
+  expect(errors).toEqual([]);
+});
+
+test('Claude 하루 한도: 넘으면 내일까지 잠그고 기본 대사로 (아티팩트)', async ({ page }) => {
+  // claude.ai 아티팩트 흉내: Claude를 부를 수 있고, 오늘 한도를 거의 다 쓴 상태
+  await page.addInitScript(() => {
+    const w = window as unknown as { claude: unknown; __calls: number };
+    w.__calls = 0;
+    const json = async (prompt: string): Promise<unknown> => {
+      w.__calls++;
+      const ids = [...prompt.matchAll(/\{"id":(\d+),"name"/g)].map((m) => Number(m[1]));
+      return { lines: ids.map((id) => ({ id, text: `꾸잉! 클로드가 쓴 말 ${id}` })) };
+    };
+    w.claude = { use: async (name: string) => (name === 'sample' ? { json } : null) };
+  });
+  const d = new Date();
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const errors = await open(page, '/', true, { claude: true, role: 'mafia' }, { 'lumina.claude.usage.v1': { day, used: 19500 } });
+  const calls = (): Promise<number> => page.evaluate(() => (window as unknown as { __calls: number }).__calls);
+  await page.locator('.plate-mafia').click();
+  await expect(page.locator('#mf-ai-talk')).toContainText('오늘 Claude 사용: 약 19,500 / 20,000 토큰');
+  await page.getByRole('radio', { name: '7명' }).click();
+  await page.getByRole('button', { name: '시작하기' }).click();
+  await expect(page.locator('.mf-claude[aria-pressed="true"]')).toBeVisible();
+  // 마피아라 밤에 살아남는다: 노릴 친구를 고르면 아침
+  await actNight(page);
+  await expect(page.locator('.mf-line[data-kind="sys"]', { hasText: '아침이 밝았어요' })).toBeVisible();
+  expect(await calls()).toBe(0);
+  if (await page.locator('.mf-skip').isVisible()) await page.locator('.mf-skip').click();
+
+  // 한 번은 Claude가 쓰고, 그걸로 한도를 넘어 잠긴다
+  let before = await page.locator('.mf-line[data-kind="say"]').count();
+  await page.getByPlaceholder('하고 싶은 말').fill('다들 오늘 아침 뭐 먹었어?');
+  await page.getByRole('button', { name: '보내기' }).click();
+  await expect(page.locator('.mf-line[data-kind="say"]').nth(before)).toContainText('클로드가 쓴 말');
+  expect(await calls()).toBe(1);
+  await expect(page.locator('.mf-note')).toContainText('내일까지 잠갔어요');
+  await expect(page.locator('.mf-claude')).toBeDisabled();
+
+  // 잠긴 뒤에는 부르지 않는다
+  if (await page.locator('.mf-skip').isVisible()) await page.locator('.mf-skip').click();
+  before = await page.locator('.mf-line[data-kind="say"]').count();
+  await page.getByPlaceholder('하고 싶은 말').fill('그럼 점심은?');
+  await page.getByRole('button', { name: '보내기' }).click();
+  await expect(page.locator('.mf-line[data-kind="say"]').nth(before)).toBeVisible();
+  await expect(page.locator('.mf-line[data-kind="say"]').nth(before)).not.toContainText('클로드가 쓴 말');
+  expect(await calls()).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test('기니피그 목소리: 아이폰처럼 손을 뗄 때만 소리를 깨워도 들리고, 무음 모드에서도 재생으로', async ({ page }) => {
+  // 아이폰 흉내: 누르는 순간(pointerdown)에는 소리를 못 깨우고, 클릭·손 떼기·키 입력에서만 깨운다
+  await page.addInitScript(() => {
+    const ok = new Set(['click', 'pointerup', 'touchend', 'keydown']);
+    const Real = window.AudioContext;
+    const w = window as unknown as { __ac: { on: boolean; started: number } | null };
+    w.__ac = null;
+    class Phone extends Real {
+      on = false;
+      started = 0;
+      constructor(o?: AudioContextOptions) {
+        super(o);
+        w.__ac = this;
+      }
+      override get state(): AudioContextState {
+        return this.on ? 'running' : 'suspended';
+      }
+      override resume(): Promise<void> {
+        if (window.event && ok.has(window.event.type)) this.on = true;
+        return Promise.resolve();
+      }
+      override createOscillator(): OscillatorNode {
+        const o = super.createOscillator();
+        const start = o.start.bind(o);
+        o.start = (t?: number) => {
+          this.started++;
+          start(t);
+        };
+        return o;
+      }
+    }
+    window.AudioContext = Phone;
+    Object.defineProperty(navigator, 'audioSession', { value: { type: 'auto' }, configurable: true });
+  });
+  const errors = await open(page, '/', true, { voice: 'squeak', role: 'citizen' });
+  const audio = () =>
+    page.evaluate(() => {
+      const w = window as unknown as { __ac: { on: boolean; started: number } | null };
+      return { on: w.__ac?.on ?? false, started: w.__ac?.started ?? 0, session: (navigator as unknown as { audioSession: { type: string } }).audioSession.type };
+    });
+  await page.locator('.plate-mafia').click();
+  await expect(page.locator('.mafia-setup')).toBeVisible();
+  await expect.poll(async () => (await audio()).session).toBe('playback');
+  await page.getByRole('radio', { name: '7명' }).click();
+  await page.getByRole('button', { name: '시작하기' }).click();
+  await page.getByRole('button', { name: '잠들기' }).click();
+  await expect(page.locator('.mf-line[data-kind="say"]').first()).toBeVisible();
+  await expect.poll(async () => (await audio()).started, { timeout: 8000 }).toBeGreaterThan(0);
+  expect((await audio()).on).toBe(true);
+  // 목소리를 끄면 무음 모드를 다시 따른다
+  await page.locator('.mf-head [data-voice]').click();
+  await expect.poll(async () => (await audio()).session).toBe('auto');
+  expect(errors).toEqual([]);
+});
+
+test('기니피그 목소리는 실제로 소리가 난다 (들어 보기를 녹음해 크기 재기)', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __off: OfflineAudioContext | null };
+    w.__off = null;
+    class Tape extends OfflineAudioContext {
+      constructor() {
+        super(1, 48000 * 3, 48000);
+        w.__off = this;
+      }
+      override get state(): AudioContextState {
+        return 'running';
+      }
+      override resume(): Promise<void> {
+        return Promise.resolve();
+      }
+    }
+    (window as unknown as { AudioContext: unknown }).AudioContext = Tape;
+  });
+  const errors = await open(page, '/', true, { voice: 'squeak' });
+  await page.locator('.plate-mafia').click();
+  await page.getByRole('button', { name: '들어 보기' }).click();
+  const level = await page.evaluate(async () => {
+    const off = (window as unknown as { __off: OfflineAudioContext }).__off;
+    const buf = await off.startRendering();
+    const d = buf.getChannelData(0);
+    let peak = 0;
+    let sum = 0;
+    for (const x of d) {
+      peak = Math.max(peak, Math.abs(x));
+      sum += x * x;
+    }
+    return { peak, rms: Math.sqrt(sum / d.length) };
+  });
+  expect(level.peak).toBeGreaterThan(0.05);
+  expect(level.rms).toBeGreaterThan(0.005);
   expect(errors).toEqual([]);
 });
 

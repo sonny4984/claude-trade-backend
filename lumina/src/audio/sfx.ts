@@ -72,7 +72,22 @@ function audio(): AudioContext | null {
 
 export function unlockAudio(): void {
   const c = audio();
-  if (c && c.state === 'suspended') void c.resume().catch(() => undefined);
+  // iOS는 화면이 꺼졌다 켜지거나 전화가 오면 'interrupted'가 되니, 멈춰 있으면 언제든 다시 깨운다
+  if (c && c.state !== 'running') void c.resume().catch(() => undefined);
+}
+
+/**
+ * 아이폰 무음(진동) 모드에서도 들리게 오디오 세션을 '재생'으로 (Safari 16.4+; 안 되는 기기는 그대로).
+ * 마피아 목소리를 켰을 때만 — 다른 게임 효과음은 원래처럼 무음 모드를 따른다.
+ */
+export function loudAudio(on: boolean): void {
+  try {
+    const s = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    const want = on ? 'playback' : 'auto';
+    if (s && s.type !== want) s.type = want;
+  } catch {
+    /* 지원하지 않는 기기 */
+  }
 }
 
 function volume(name: SfxName): number {
@@ -257,7 +272,12 @@ export type TalkMood = 'calm' | 'excited' | 'sad';
 export function squeakTalk(text: string, pitch = 1, mood: TalkMood = 'calm'): number {
   const vol = volume('squeak');
   const c = audio();
-  if (!c || c.state !== 'running' || vol <= 0.001) return 0;
+  if (!c || vol <= 0.001) return 0;
+  if (c.state !== 'running') {
+    // 한 번이라도 누른 뒤면 (데스크톱 등) 여기서 깨어난다 — 이번 줄은 조용히 넘어간다
+    void c.resume().catch(() => undefined);
+    return 0;
+  }
   const chars = [...text].filter((ch) => /[\p{L}\p{N}\s]/u.test(ch)).slice(0, 40);
   const letters = chars.filter((ch) => !/\s/.test(ch));
   if (!letters.length) return 0;

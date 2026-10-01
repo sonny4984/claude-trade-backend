@@ -59,6 +59,10 @@
   background: var(--accent);
   color: var(--accent-ink);
 }
+.mf-claude:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
 .mf-note {
   margin: 0;
   text-align: center;

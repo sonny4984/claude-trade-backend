@@ -12,6 +12,8 @@ import { CAST, MAX_PLAYERS, MIN_PLAYERS, PERSONA, rolesFor, type Role } from '..
 import { squeakTalk, unlockAudio } from '../../audio/sfx';
 import { useMafia, type VoiceMode } from '../store';
 import { GEMINI_KEY_URL } from '../gemini';
+import { DAILY_TOKENS } from '../budget';
+import { siteUrl } from '../../net/site';
 import { canSpeak } from '../voice';
 
 function Avatar({ id }: { id: CharacterId }) {
@@ -75,6 +77,10 @@ export function MafiaSetup() {
   const cfg = useMafia((s) => s.cfg);
   const claudeOk = useMafia((s) => s.claudeOk);
   const geminiModel = useMafia((s) => s.geminiModel);
+  const used = useMafia((s) => s.claudeUsed);
+  const locked = used >= DAILY_TOKENS;
+  const site = siteUrl();
+  const tokens = (n: number): string => (Math.round(n / 100) * 100).toLocaleString(lang === 'ko' ? 'ko-KR' : 'en-US');
   const { setCfg, start, probe } = useMafia.getState();
   useEffect(() => probe(), [probe]);
   const counts = Array.from({ length: MAX_PLAYERS - MIN_PLAYERS + 1 }, (_, i) => MIN_PLAYERS + i);
@@ -142,6 +148,7 @@ export function MafiaSetup() {
             ))}
           </div>
           <p className="mf-sub">{t(`mafia.voiceModeSub.${cfg.voice}`)}</p>
+          {cfg.voice !== 'off' && <p className="mf-sub">{t('mafia.voiceHint')}</p>}
           {cfg.voice === 'squeak' && (
             <div className="mf-voice-tune">
               <label className="mf-slider">
@@ -170,8 +177,16 @@ export function MafiaSetup() {
                   {t('mafia.claude')}
                   <small className="toggle-sub">{t('mafia.claudeSub')}</small>
                 </span>
-                <input type="checkbox" className="switch" checked={cfg.claude} onChange={(e) => setCfg({ claude: e.target.checked })} />
+                <input type="checkbox" className="switch" checked={cfg.claude && !locked} disabled={locked} onChange={(e) => setCfg({ claude: e.target.checked })} />
               </label>
+              <p className="mf-sub mf-usage" data-locked={locked || undefined}>
+                {locked ? t('mafia.claudeLocked', { max: tokens(DAILY_TOKENS) }) : t('mafia.claudeToday', { used: tokens(used), max: tokens(DAILY_TOKENS) })}
+              </p>
+              {locked && site && (
+                <a className="mf-gemini-link" href={site} target="_blank" rel="noopener noreferrer">
+                  {t('mafia.claudeToSite')}
+                </a>
+              )}
               <p className="mf-sub">{t('mafia.geminiElsewhere')}</p>
             </>
           ) : (
