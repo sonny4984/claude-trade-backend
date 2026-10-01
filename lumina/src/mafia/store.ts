@@ -7,7 +7,7 @@
  * 비밀(내 역할, 경찰 조사 결과, 마피아끼리 귓속말)은 줄마다 볼 수 있는 자리(to)를 적어 두고 화면에서 거른다.
  */
 import { create } from 'zustand';
-import { chatter, sfx } from '../audio/sfx';
+import { sfx, squeakTalk, type TalkMood } from '../audio/sfx';
 import type { CharacterId } from '../characters/roster';
 import { translate } from '../i18n';
 import { bridge, gameApis, type OnlineInfo, type TableDoc } from '../net/bridge';
@@ -17,18 +17,18 @@ import { useSettings } from '../store/settings';
 import { readJSON, writeJSON } from '../store/storage';
 import { FATAL, LIMITED, claudeSample, claudeWriter, polish, type HistoryLine, type JsonWriter } from './claude';
 import { GeminiFail, connectGemini, geminiJson, loadGemini, saveGemini, takeKeyFromUrl } from './gemini';
-import { CAST, MAX_PLAYERS, MIN_PLAYERS, PERSONA, aiNight, aiVote, killChoice, lastAct, living, newGame, plan, quietNight, record, resolveNight, resolveVote, tally, type Act, type Game, type Role, type Trigger } from './engine';
+import { CAST, MAX_PLAYERS, MIN_PLAYERS, PERSONA, aiNight, aiVote, killChoice, lastAct, living, newGame, plan, record, resolveNight, resolveVerdict, resolveVote, tally, toVerdict, aiVerdict, type Act, type Game, type Role, type Trigger } from './engine';
 import { humanLine, lineFor, nameOf, narrate, parseHuman, roleName, suggestLine } from './talk';
 import { canSpeak, hush, speak, unlockSpeech } from './voice';
 
-export type VoiceMode = 'speak' | 'babble' | 'off';
-const VOICE_MODES: readonly VoiceMode[] = ['speak', 'babble', 'off'];
+export type VoiceMode = 'squeak' | 'read' | 'off';
+export const VOICE_MODES: readonly VoiceMode[] = ['squeak', 'read', 'off'];
 
 export interface MafiaConfig {
   count: number;
   me: CharacterId;
   role: Role | 'random';
-  /** 대사 소리: 귀여운 목소리로 읽기 · 꾸잉꾸잉 (말 대신 기니피그 수다) · 끄기 */
+  /** 대사 소리: 기니피그 목소리(뀨뀨 동물 소리) · 사람 목소리로 읽기 · 끄기 */
   voice: VoiceMode;
   /** claude.ai에서 Claude가 대사 다듬기 */
   claude: boolean;
@@ -72,7 +72,11 @@ export type MafiaAction =
   | { type: 'ready' }
   | { type: 'vote'; t: number | null }
   | { type: 'night'; t: number | null }
-  | { type: 'whisper'; text: string };
+  | { type: 'whisper'; text: string }
+  /** 변론대에 선 사람의 최후의 변론 (빈 글이면 변론 없이 넘어가기) */
+  | { type: 'defend'; text: string }
+  /** 찬반 투표 (yes = 처형 찬성) */
+  | { type: 'verdict'; yes: boolean };
 
 const SETUP_KEY = 'lumina.mafia.setup.v1';
 const ROLE_CHOICES: readonly (Role | 'random')[] = ['random', 'citizen', 'police', 'doctor', 'mafia'];
@@ -85,8 +89,8 @@ function loadSetup(): MafiaConfig {
     count: Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Math.round(Number(raw?.count)) || 7)),
     me: CAST.includes(raw?.me as CharacterId) ? (raw?.me as CharacterId) : 'moka',
     role: ROLE_CHOICES.includes(raw?.role as Role) ? (raw?.role as Role | 'random') : 'random',
-    // 예전에는 켜기/끄기였다
-    voice: VOICE_MODES.includes(raw?.voice as VoiceMode) ? (raw?.voice as VoiceMode) : (raw?.voice as unknown) === false ? 'off' : 'speak',
+    // 예전 값(켜기/끄기, 'speak'·'babble')은 기니피그 목소리로 — 사람 목소리가 무섭다는 말을 듣고 바꿨다
+    voice: VOICE_MODES.includes(raw?.voice as VoiceMode) ? (raw?.voice as VoiceMode) : (raw?.voice as unknown) === false || (raw?.voice as unknown) === 'off' ? 'off' : 'squeak',
     claude: raw?.claude !== false,
     gemini: raw?.gemini !== false,
   };
@@ -128,6 +132,12 @@ interface MafiaState {
   vote(t: number | null): void;
   night(t: number | null): void;
   whisper(text: string): boolean;
+  /** 변론대에 선 내가 하는 최후의 변론 (빈 글이면 그냥 마치기) */
+  defend(text: string): void;
+  /** 찬반 투표 */
+  verdict(yes: boolean): void;
+  /** "억울해요!" 단추에 쓸 맹세 한 줄 */
+  pleaText(): string;
   skip(): void;
   quit(): void;
   // 온라인 (net/online이 부른다)
@@ -151,6 +161,8 @@ const mafiaSeats = (g: Game): number[] => g.players.filter((p) => p.role === 'ma
 
 /** 방장만 아는 것: 밤에 고른 대상·투표 (넣은 순서 = 마지막에 고른 마피아의 선택이 이긴다) */
 const picks = new Map<number, number | null>();
+/** 방장만 아는 것: 찬반 투표 */
+const verdicts = new Map<number, boolean>();
 let queue: Promise<void> = Promise.resolve();
 let ctl: AbortController | null = null;
 
@@ -265,10 +277,10 @@ function opening(s: MafiaSession): void {
 function dusk(s: MafiaSession): void {
   const g = s.game;
   const L = lang();
-  add(s, 'sys', null, narrate(quietNight(g) ? 'quiet' : 'night', { d: String(g.day) }, L));
+  add(s, 'sys', null, narrate('night', { d: String(g.day) }, L));
   const humans = living(g).filter((p) => p.human && p.role === 'mafia');
   const mate = living(g).find((p) => p.role === 'mafia' && !p.human);
-  if (!humans.length || !mate || quietNight(g)) return;
+  if (!humans.length || !mate) return;
   const t = killChoice(g);
   if (t !== null) add(s, 'secret', mate.id, suggestLine(g, mate.id, t, L), { to: humans.map((p) => p.id) });
 }
@@ -298,7 +310,6 @@ async function endNight(s: MafiaSession): Promise<void> {
   if (doc) n.save = picks.get(doc.id) ?? null;
   const cop = humans.find((p) => p.role === 'police');
   if (cop) n.check = picks.get(cop.id) ?? null;
-  const quiet = quietNight(g);
   const res = resolveNight(g, n);
   s.done = [];
   s.ready = [];
@@ -309,7 +320,7 @@ async function endNight(s: MafiaSession): Promise<void> {
   if (dead) {
     add(s, 'sys', null, narrate('died', { t: nameOf(g, dead.id, L), r: roleName(dead.role, L) }, L), { cue: 'death' });
     if (dead.human) add(s, 'secret', null, narrate('youDied', {}, L), { to: [dead.id] });
-  } else add(s, 'sys', null, narrate(!quiet && res.saved ? 'saved' : 'calm', {}, L), { cue: 'dawn' });
+  } else add(s, 'sys', null, narrate(res.saved ? 'saved' : 'calm', {}, L), { cue: 'dawn' });
   if (g.phase === 'over') {
     finish(s);
     commit(s);
@@ -319,25 +330,69 @@ async function endNight(s: MafiaSession): Promise<void> {
   await talk(s, { k: 'open' });
 }
 
-function endVote(s: MafiaSession): void {
+/** 지목 투표 → 가장 많이 받은 친구가 변론대에 (동점이면 밤으로) */
+async function endVote(s: MafiaSession): Promise<void> {
   const g = s.game;
   const L = lang();
   const ballots = living(g).map((p) => ({ day: g.day, by: p.id, t: p.human ? (picks.get(p.id) ?? null) : aiVote(g, p.id) }));
   for (const b of ballots) add(s, 'vote', b.by, lineFor(g, { day: g.day, by: b.by, act: { k: 'vote', t: b.t } }, L));
   const { counts } = tally(g, ballots);
-  const day = g.day;
-  const out = resolveVote(g, ballots);
+  const accused = resolveVote(g, ballots);
   s.counts = counts;
   s.done = [];
   s.ready = [];
   picks.clear();
-  const gone = out === null ? undefined : g.players[out];
-  if (!gone) add(s, 'sys', null, narrate('tie', {}, L));
+  const p = accused === null ? undefined : g.players[accused];
+  if (!p) {
+    add(s, 'sys', null, narrate('tie', {}, L));
+    dusk(s);
+    return commit(s);
+  }
+  add(s, 'sys', null, narrate('accused', { t: nameOf(g, p.id, L), c: String(counts[p.id] ?? 0) }, L), { cue: 'dawn' });
+  if (p.human) {
+    // 사람이면 직접 변론한다 (기다린다)
+    add(s, 'secret', null, narrate('yourDefense', {}, L), { to: [p.id] });
+    return commit(s);
+  }
+  await talk(s, { k: 'defense', by: p.id });
+  startVerdict(s);
+  // 찬반을 정할 사람이 없으면 (모두 AI이거나 탈락) 바로 결과
+  if (allVoted(g, s.done)) return endVerdict(s);
+  commit(s);
+}
+
+/** 변론이 끝나면 찬반 투표 */
+function startVerdict(s: MafiaSession): void {
+  const g = s.game;
+  if (g.accused === null) return;
+  toVerdict(g);
+  s.done = [];
+  verdicts.clear();
+  add(s, 'sys', null, narrate('verdict', { t: nameOf(g, g.accused, lang()) }, lang()));
+}
+
+/** 찬반 결과: 찬성이 많으면 처형 (마지막 한마디와 정체 공개), 아니면 살아남고 밤 */
+function endVerdict(s: MafiaSession): void {
+  const g = s.game;
+  const L = lang();
+  const t = g.accused;
+  if (t === null) return commit(s);
+  const votes = living(g)
+    .filter((p) => p.id !== t)
+    .map((p) => ({ by: p.id, yes: p.human ? (verdicts.get(p.id) ?? false) : aiVerdict(g, p.id) }));
+  for (const v of votes) if (!g.players[v.by]?.human) add(s, 'vote', v.by, lineFor(g, { day: g.day, by: v.by, act: { k: 'verdict', t, yes: v.yes } }, L));
+  const day = g.day;
+  const r = resolveVerdict(g, votes);
+  s.done = [];
+  verdicts.clear();
+  const p = g.players[t] as Game['players'][number];
+  const name = nameOf(g, t, L);
+  if (!r.executed) add(s, 'sys', null, narrate('spared', { t: name, y: String(r.yes), n: String(r.no) }, L), { cue: 'dawn' });
   else {
-    add(s, 'sys', null, narrate('out', { t: nameOf(g, gone.id, L), c: String(counts[gone.id] ?? 0) }, L));
-    if (!gone.human) add(s, 'say', gone.id, lineFor(g, { day, by: gone.id, act: lastAct(g, gone.id) }, L));
-    add(s, 'sys', null, narrate('reveal', { t: nameOf(g, gone.id, L), r: roleName(gone.role, L) }, L), { cue: gone.role === 'mafia' ? 'caught' : 'death' });
-    if (gone.human) add(s, 'secret', null, narrate('youDied', {}, L), { to: [gone.id] });
+    add(s, 'sys', null, narrate('executed', { t: name, y: String(r.yes), n: String(r.no) }, L));
+    if (!p.human) add(s, 'say', t, lineFor(g, { day, by: t, act: lastAct(g, t) }, L));
+    add(s, 'sys', null, narrate('reveal', { t: name, r: roleName(p.role, L) }, L), { cue: p.role === 'mafia' ? 'caught' : 'death' });
+    if (p.human) add(s, 'secret', null, narrate('youDied', {}, L), { to: [t] });
   }
   if (g.phase === 'over') finish(s);
   else dusk(s);
@@ -346,6 +401,8 @@ function endVote(s: MafiaSession): void {
 
 /** 모두 정했는지 (모두 탈락했으면 누가 누르든 넘어간다) */
 const allIn = (g: Game, have: readonly number[]): boolean => deciders(g).every((x) => have.includes(x));
+/** 찬반 투표는 변론대에 선 사람을 빼고 */
+const allVoted = (g: Game, have: readonly number[]): boolean => deciders(g).every((x) => x === g.accused || have.includes(x));
 
 async function handle(s: MafiaSession, seat: number, a: MafiaAction): Promise<void> {
   const g = s.game;
@@ -393,9 +450,27 @@ async function handle(s: MafiaSession, seat: number, a: MafiaAction): Promise<vo
         picks.set(seat, a.t !== null && a.t !== seat && g.players[a.t]?.alive ? a.t : null);
         if (!s.done.includes(seat)) s.done = [...s.done, seat];
       }
-      if (allIn(g, s.done)) endVote(s);
-      else commit(s);
-      return;
+      if (allIn(g, s.done)) return endVote(s);
+      return commit(s);
+    case 'defend': {
+      if (g.phase !== 'defense' || g.accused !== seat) return commit(s);
+      if (a.text) {
+        add(s, 'chat', seat, a.text);
+        for (const x of parseHuman(g, a.text, seat).acts) record(g, seat, x);
+      }
+      await talk(s, { k: 'defense', by: seat });
+      startVerdict(s);
+      if (allVoted(g, s.done)) return endVerdict(s);
+      return commit(s);
+    }
+    case 'verdict':
+      if (g.phase !== 'verdict') return commit(s);
+      if (p.alive && seat !== g.accused) {
+        verdicts.set(seat, a.yes);
+        if (!s.done.includes(seat)) s.done = [...s.done, seat];
+      }
+      if (allVoted(g, s.done)) return endVerdict(s);
+      return commit(s);
     case 'night':
       if (g.phase !== 'night') return commit(s);
       if (p.alive) {
@@ -448,6 +523,10 @@ function cleanAction(x: unknown, n: number): MafiaAction | null {
       const t = target(a.t);
       return t === undefined ? null : { type: a.type, t };
     }
+    case 'defend':
+      return { type: 'defend', text: text(a.text) };
+    case 'verdict':
+      return typeof a.yes === 'boolean' ? { type: 'verdict', yes: a.yes } : null;
     default:
       return null;
   }
@@ -487,22 +566,29 @@ async function present(l: Line, s: MafiaSession, my: number): Promise<void> {
   // 비밀과 사람이 친 말은 소리 내어 읽지 않는다 (같은 방에 있으면 들리니까)
   if (l.kind === 'say' && p) {
     const per = PERSONA[p.character];
-    if (cfg.voice === 'speak' && canSpeak()) {
-      // 꾸잉 한 번 하고 높은 목소리로
+    if (cfg.voice === 'squeak') {
+      const ms = squeakTalk(l.text, per.pitch / 1.6, moodOf(l.text));
+      // 말풍선을 읽을 시간도 준다
+      await pause(Math.min(3600, Math.max(ms + 250, 700 + l.text.length * 38)), my);
+      return;
+    }
+    if (cfg.voice === 'read' && canSpeak()) {
       sfx('squeak', { pitch: per.pitch / 1.6 });
       await pause(160, my);
       await speak(l.text, { lang: lang(), pitch: per.pitch, rate: per.rate });
       await pause(220, my);
       return;
     }
-    if (cfg.voice === 'babble') {
-      const ms = chatter(l.text, per.pitch / 1.6);
-      await pause(Math.max(ms, 900) + 350, my);
-      return;
-    }
   }
   if (l.kind === 'say') sfx('pop');
   await pause(l.kind === 'say' ? Math.min(3400, 1000 + l.text.length * 45) : l.kind === 'vote' ? 550 : l.kind === 'chat' ? 250 : 450, my);
+}
+
+/** 대사의 기분 — 억울하거나 외치면 들뜬 소리, 슬프면 처진 소리 */
+function moodOf(text: string): TalkMood {
+  if (/(ㅠ|흑|…|슬퍼|눈물|안녕히|잘 있어)/.test(text)) return 'sad';
+  if (/(억울|아니에|아니야|맹세|바칠|바쳐|살려|제발|!)/.test(text)) return 'excited';
+  return 'calm';
 }
 
 /** 새로 붙은 줄을 하나씩 */
@@ -558,7 +644,7 @@ export const useMafia = create<MafiaState>((set) => ({
     const cfg = { ...get().cfg, ...p };
     set({ cfg });
     writeJSON(SETUP_KEY, cfg);
-    if (p.voice && p.voice !== 'speak') hush();
+    if (p.voice && p.voice !== 'read') hush();
   },
 
   async connectGemini(key) {
@@ -633,6 +719,19 @@ export const useMafia = create<MafiaState>((set) => ({
 
   night(t) {
     if (send({ type: 'night', t })) set({ pick: null });
+  },
+
+  pleaText() {
+    const s = get().session;
+    return s ? humanLine(s.game, { k: 'plea' }, lang()) : '';
+  },
+
+  defend(text) {
+    send({ type: 'defend', text: text.trim().slice(0, MAX_TEXT) });
+  },
+
+  verdict(yes) {
+    send({ type: 'verdict', yes });
   },
 
   whisper(text) {
@@ -710,12 +809,17 @@ export const useMafia = create<MafiaState>((set) => ({
     picks.delete(seat);
     s.done = s.done.filter((x) => x !== seat);
     s.ready = s.ready.filter((x) => x !== seat);
-    job((cur) => {
+    verdicts.delete(seat);
+    job(async (cur) => {
       if (cur.id !== s.id) return;
       const g = cur.game;
-      // 그 친구만 기다리던 중이었으면 이어서 진행
-      if (g.phase === 'day' && cur.ready.length && allIn(g, cur.ready)) toVote(cur);
+      // 그 친구만 기다리던 중이었으면 이어서 진행 (변론대에 서 있었으면 AI가 대신 변론)
+      if (g.phase === 'defense' && g.accused === seat) {
+        await talk(cur, { k: 'defense', by: seat });
+        startVerdict(cur);
+      } else if (g.phase === 'day' && cur.ready.length && allIn(g, cur.ready)) toVote(cur);
       else if (g.phase === 'vote' && allIn(g, cur.done) && deciders(g).length) return endVote(cur);
+      else if (g.phase === 'verdict' && allVoted(g, cur.done) && deciders(g).length) return endVerdict(cur);
       else if (g.phase === 'night' && allIn(g, cur.done) && deciders(g).length) return endNight(cur);
       commit(cur);
     });

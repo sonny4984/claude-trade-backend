@@ -9,19 +9,15 @@ import { CHARACTERS } from '../../characters/roster';
 import { Icon } from '../../ui/components/Icon';
 import { OnlineChip, OnlineNotice } from '../../ui/online/OnlineNotice';
 import { useLang, useT } from '../../i18n';
-import { quietNight, type Game, type Player } from '../engine';
+import type { Game, Player } from '../engine';
 import { deciders, mySeatOf, useMafia, visible, type MafiaSession, type VoiceMode } from '../store';
 import { nameOf } from '../talk';
-import { canListen, canSpeak, listen } from '../voice';
+import { canListen, listen } from '../voice';
 
 type T = ReturnType<typeof useT>;
 
-/** 위쪽 소리 단추: 목소리 → 꾸잉꾸잉 → 끄기 → 목소리 (읽어 주기가 안 되는 기기는 건너뛴다) */
-function nextVoice(v: VoiceMode): VoiceMode {
-  if (v === 'speak') return 'babble';
-  if (v === 'babble') return 'off';
-  return canSpeak() ? 'speak' : 'babble';
-}
+/** 위쪽 소리 단추: 켜져 있으면 끄고, 꺼져 있으면 기니피그 목소리로 */
+const nextVoice = (v: VoiceMode): VoiceMode => (v === 'off' ? 'squeak' : 'off');
 
 interface View {
   s: MafiaSession;
@@ -36,7 +32,7 @@ function pickable({ s, g, me }: View, p: Player): boolean {
   if (g.phase === 'night') {
     if (me.role === 'doctor') return true;
     if (me.role === 'police') return p.id !== me.id && !g.checks.some(([t]) => t === p.id);
-    if (me.role === 'mafia') return !quietNight(g) && p.role !== 'mafia';
+    if (me.role === 'mafia') return p.role !== 'mafia';
     return false;
   }
   return (g.phase === 'day' || g.phase === 'vote') && p.id !== me.id;
@@ -78,6 +74,7 @@ function Tile({ v, p }: { v: View; p: Player }) {
         data-me={p.id === v.seat || undefined}
         data-human={(p.human && p.id !== v.seat) || undefined}
         data-speaking={speaking || undefined}
+        data-accused={((g.phase === 'defense' || g.phase === 'verdict') && g.accused === p.id) || undefined}
         aria-pressed={picked}
         aria-disabled={!can}
         onClick={() => can && useMafia.getState().select(p.id)}
@@ -293,7 +290,7 @@ function NightControls({ v }: { v: View }) {
   const st = useMafia.getState();
   const { s, g, me } = v;
   const done = s.done.includes(me.id);
-  const role = me.alive && !(me.role === 'mafia' && quietNight(g)) ? me.role : 'citizen';
+  const role = me.alive ? me.role : 'citizen';
   // 마피아끼리 귓속말 (동료가 살아 있을 때)
   const whisper = me.alive && me.role === 'mafia' && g.players.some((p) => p.alive && p.role === 'mafia' && p.id !== me.id);
   const box = whisper ? <TextBox placeholder={t('mafia.whisperPh')} onSend={(text) => st.whisper(text)} mic={false} /> : null;
@@ -370,6 +367,74 @@ function VoteControls({ v }: { v: View }) {
   );
 }
 
+/** 최후의 변론: 변론대에 선 게 나면 억울함을 말하고 마친다, 아니면 듣는다 */
+function DefenseControls({ v }: { v: View }) {
+  const t = useT();
+  const lang = useLang();
+  const waiting = useMafia((st) => st.waiting);
+  const st = useMafia.getState();
+  const { g, me } = v;
+  const name = g.accused === null ? '' : nameOf(g, g.accused, lang);
+  if (g.accused !== me.id)
+    return (
+      <div className="mf-foot">
+        <p className="mf-prompt">{t('mafia.listenDefense', { name })}</p>
+      </div>
+    );
+  return (
+    <div className="mf-foot">
+      <p className="mf-prompt mf-alert">{t('mafia.yourStand')}</p>
+      <TextBox placeholder={t('mafia.defensePh')} onSend={(text) => (text.trim() ? (st.defend(text), true) : false)} mic />
+      <div className="mf-row">
+        <button type="button" className="btn" disabled={waiting} onClick={() => st.defend(st.pleaText())}>
+          {t('mafia.quickPlea')}
+        </button>
+        <button type="button" className="btn btn-primary" disabled={waiting} onClick={() => st.defend('')}>
+          {t('mafia.endDefense')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 찬반 투표: 변론대의 친구를 처형할지 */
+function VerdictControls({ v }: { v: View }) {
+  const t = useT();
+  const lang = useLang();
+  const waiting = useMafia((st) => st.waiting);
+  const st = useMafia.getState();
+  const { s, g, me } = v;
+  const name = g.accused === null ? '' : nameOf(g, g.accused, lang);
+  const have = [...s.done, ...(g.accused === null ? [] : [g.accused])];
+  if (!me.alive || me.id === g.accused || s.done.includes(me.id))
+    return (
+      <div className="mf-foot">
+        {me.id === g.accused && <p className="mf-prompt mf-alert">{t('mafia.judged')}</p>}
+        {!me.alive && <p className="mf-prompt">{t('mafia.watching')}</p>}
+        {deciders(g).some((x) => x !== g.accused) ? (
+          <Wait v={v} have={have} />
+        ) : (
+          <button type="button" className="btn btn-primary btn-block" disabled={waiting} onClick={() => st.verdict(false)}>
+            {t('mafia.watchVote')}
+          </button>
+        )}
+      </div>
+    );
+  return (
+    <div className="mf-foot">
+      <p className="mf-prompt">{t('mafia.verdictAsk', { name })}</p>
+      <div className="mf-row">
+        <button type="button" className="btn mf-yes" disabled={waiting} onClick={() => st.verdict(true)}>
+          {t('mafia.yes')}
+        </button>
+        <button type="button" className="btn mf-no" disabled={waiting} onClick={() => st.verdict(false)}>
+          {t('mafia.no')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function OverControls({ v }: { v: View }) {
   const t = useT();
   const st = useMafia.getState();
@@ -427,7 +492,7 @@ export function MafiaScreen() {
     else setArm(true);
   };
   const night = g.phase === 'night';
-  const title = g.phase === 'over' ? t('mafia.over') : t(night ? 'mafia.night' : g.phase === 'vote' ? 'mafia.voteTitle' : 'mafia.day', { n: g.day });
+  const title = g.phase === 'over' ? t('mafia.over') : t(`mafia.phaseTitle.${g.phase}`, { n: g.day });
   return (
     <div className="screen mafia-screen" data-phase={g.phase}>
       <header className="mf-head">
@@ -440,7 +505,7 @@ export function MafiaScreen() {
         </h1>
         {s.online && <OnlineChip />}
         <button type="button" className="icon-btn" data-voice={cfg.voice} aria-label={t(`mafia.voiceNext.${cfg.voice}`)} title={t(`mafia.voiceNext.${cfg.voice}`)} onClick={() => st.setCfg({ voice: nextVoice(cfg.voice) })}>
-          <Icon name={cfg.voice === 'off' ? 'volumeOff' : cfg.voice === 'babble' ? 'chat' : 'volume'} />
+          <Icon name={cfg.voice === 'off' ? 'volumeOff' : 'volume'} />
         </button>
         {host && claudeOk ? (
           <button type="button" className="mf-claude" aria-pressed={cfg.claude} aria-label={cfg.claude ? t('mafia.claudeOffBtn') : t('mafia.claudeOnBtn')} onClick={() => st.setCfg({ claude: !cfg.claude })}>
@@ -464,7 +529,19 @@ export function MafiaScreen() {
       </ul>
       <Now v={v} />
       <Log v={v} />
-      {g.phase === 'over' ? <OverControls v={v} /> : night ? <NightControls v={v} /> : g.phase === 'vote' ? <VoteControls v={v} /> : <DayControls v={v} />}
+      {g.phase === 'over' ? (
+        <OverControls v={v} />
+      ) : night ? (
+        <NightControls v={v} />
+      ) : g.phase === 'vote' ? (
+        <VoteControls v={v} />
+      ) : g.phase === 'defense' ? (
+        <DefenseControls v={v} />
+      ) : g.phase === 'verdict' ? (
+        <VerdictControls v={v} />
+      ) : (
+        <DayControls v={v} />
+      )}
     </div>
   );
 }

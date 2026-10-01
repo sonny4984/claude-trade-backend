@@ -4,7 +4,7 @@
  * 진짜 역할을 보내지 않는다 (공개된 사실 + 초안 문장 + 최근 대화만). 사람이 무언가 한 뒤에만 부르고, 실패하면 초안을 그대로 쓴다.
  */
 import type { Lang } from '../i18n';
-import { PERSONA, type Game, type Said } from './engine';
+import { PERSONA, accuseWhy, opinion, suspicion, type Game, type Said, type Why } from './engine';
 import { nameOf, roleName } from './talk';
 
 interface SampleOptions {
@@ -57,6 +57,58 @@ export const claudeWriter =
   (prompt, signal) =>
     sample.json(prompt, { modelTier: 'quick', cache: false, signal });
 
+const REASON = {
+  ko: {
+    votedTown: '{x}에게 투표했는데 {x}는 {xr}였음',
+    accusedTown: '{x}를 몰았는데 {x}는 {xr}였음',
+    defendedMafia: '마피아였던 {x}를 감쌌음',
+    fakeClaim: '역할을 속인 것 같음',
+    claimClash: '{x}와 역할 주장이 겹침',
+    motive: '죽은 {x}가 의심하던 친구',
+    quiet: '말이 너무 없음',
+    gut: '그냥 느낌이 이상함',
+    checked: '느낌이 이상함',
+    claimed: '느낌이 이상함',
+    votedMafia: '느낌이 이상함',
+  },
+  en: {
+    votedTown: 'voted for {x}, who was the {xr}',
+    accusedTown: 'pushed {x}, who was the {xr}',
+    defendedMafia: 'defended {x}, who was Mafia',
+    fakeClaim: 'seems to have faked a role',
+    claimClash: 'role claim clashes with {x}',
+    motive: 'the killed {x} suspected them',
+    quiet: 'too quiet',
+    gut: 'just a hunch',
+    checked: 'a hunch',
+    claimed: 'a hunch',
+    votedMafia: 'a hunch',
+  },
+} as const satisfies Record<Lang, Record<Why, string>>;
+
+/**
+ * 그 친구가 지금 의심하는 둘과 (모두가 아는) 이유 — 대사를 똑똑하게 쓰라고 넘긴다.
+ * 순위는 그 친구의 생각이지만, 이유는 공개된 사실로만 적어서 비밀(역할·조사 결과)이 새지 않는다.
+ * 마피아는 동료를 빼고 시민 눈에 수상한 순서로.
+ */
+export function notesFor(g: Game, i: number, lang: Lang): string {
+  const me = g.players[i];
+  if (!me) return '';
+  const rank = me.role === 'mafia' ? suspicion(g, null) : opinion(g, i);
+  const top = g.players
+    .filter((p) => p.alive && p.id !== i && !(me.role === 'mafia' && p.role === 'mafia'))
+    .sort((a, b) => (rank[b.id] ?? 0) - (rank[a.id] ?? 0))
+    .slice(0, 2);
+  return top
+    .map((p) => {
+      const r = accuseWhy(g, null, p.id);
+      const xr = r.x === undefined ? undefined : g.players[r.x]?.role;
+      const why = REASON[lang][r.why].replace(/\{x\}/g, r.x === undefined ? '' : nameOf(g, r.x, lang)).replace(/\{xr\}/g, xr ? roleName(xr, lang) : '');
+      return `${nameOf(g, p.id, lang)}(${why})`;
+    })
+    .join(', ');
+}
+
 export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly string[], history: readonly HistoryLine[], lang: Lang, latest?: HistoryLine): string {
   const ko = lang === 'ko';
   const nm = (i: number): string => nameOf(g, i, lang);
@@ -85,6 +137,8 @@ export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly str
       style: STYLE[lang][PERSONA[g.players[s.by]?.character ?? 'hwigi'].style],
       kind: free ? (ko ? '자유 대화' : 'free chat') : ko ? '뜻' : 'meaning',
       ...(s.act.k === 'chat' ? { to: nm(s.act.to) } : {}),
+      ...(s.act.k === 'plea' || s.act.k === 'defend' ? { mood: ko ? '억울함 (진짜 죽을 것처럼)' : 'desperate' } : {}),
+      notes: notesFor(g, s.by, lang),
       draft: drafts[id] ?? '',
     });
   });
@@ -98,6 +152,8 @@ export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly str
         '- 없는 역할·조사 결과·사실을 지어내지 마. 살아 있는 친구의 진짜 역할은 아무도 몰라 (자기 역할을 밝히라고 하면 시치미를 떼거나 둘러대).',
         '- 한 줄에 1~2문장, 70자 이내. 이모지와 괄호 설명 없이 대사만.',
         '- 바로 앞 대화에 이어지게 쓰고, 같은 표현을 되풀이하지 마.',
+        '- 의심받거나 변론대에 서면(mood가 "억울함") 진짜 죽을 것처럼 억울해하고, 과장된 맹세로 웃기게 버텨 (예: "제가 마피아면 제 3달치 건초를 다 바칠게용!", "쳇바퀴를 걸고 맹세해용!"). 건초·당근·쳇바퀴 같은 기니피그다운 농담을 섞어.',
+        '- 똑똑하게 말해: notes에 그 친구가 지금 의심하는 친구와 이유(투표 기록, 역할 주장, 누가 누구를 감쌌는지)가 있어. 의심하거나 대답할 때 그런 근거를 들어.',
         '',
         `[상황] ${g.day}일째 낮. 살아 있는 친구: ${alive}`,
         `[밝혀진 사실]\n${facts}`,
@@ -117,6 +173,8 @@ export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly str
         '- Never invent roles, results or facts. Nobody knows the living players’ true roles (if asked to reveal a role, dodge playfully).',
         '- One or two sentences, under 120 characters. No emoji or stage directions.',
         '- Follow on from the latest conversation and do not repeat phrases.',
+        '- When accused or on the stand (mood "desperate"), act like their life depends on it and swear funny oaths (e.g. "If I’m Mafia, I’ll give up three months of hay!"). Add guinea pig jokes (hay, carrots, the wheel).',
+        '- Sound smart: notes lists who that character suspects and why (votes, role claims, who defended whom). Use that evidence when accusing or answering.',
         '',
         `[Situation] Day ${g.day}. Alive: ${alive}`,
         `[Revealed]\n${facts}`,

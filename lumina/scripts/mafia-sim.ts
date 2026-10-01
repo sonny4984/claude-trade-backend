@@ -2,7 +2,7 @@
  * 마피아 AI끼리 여러 판을 돌려 인원별 시민 승률을 본다 (균형 맞추기용).
  * npx tsx scripts/mafia-sim.ts [판 수]
  */
-import { aiNight, aiVote, living, newGame, plan, resolveNight, resolveVote } from '../src/mafia/engine';
+import { aiNight, aiVerdict, aiVote, living, newGame, plan, resolveNight, resolveVerdict, resolveVote, toVerdict } from '../src/mafia/engine';
 
 const N = Number(process.argv[2] ?? 400);
 for (const count of [5, 6, 7, 8]) {
@@ -14,9 +14,18 @@ for (const count of [5, 6, 7, 8]) {
       resolveNight(g, aiNight(g));
       if (g.winner) break;
       for (const k of ['open', 'more', 'more'] as const) plan(g, { k });
-      resolveVote(
+      const accused = resolveVote(
         g,
         living(g).map((p) => ({ day: g.day, by: p.id, t: aiVote(g, p.id) })),
+      );
+      if (accused === null) continue;
+      plan(g, { k: 'defense', by: accused });
+      toVerdict(g);
+      resolveVerdict(
+        g,
+        living(g)
+          .filter((p) => p.id !== accused)
+          .map((p) => ({ by: p.id, yes: aiVerdict(g, p.id) })),
       );
     }
     if (g.winner === 'town') town++;

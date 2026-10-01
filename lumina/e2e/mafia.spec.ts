@@ -40,6 +40,28 @@ const state = (page: Page) =>
     return { phase: s?.game.phase ?? '', alive: s?.game.players[seat]?.alive ?? false };
   });
 
+/** 변론·찬반 투표에서 이 화면이 할 일이 있으면 한 번 한다 (변론 마치기 / 찬성 / 지켜보며 넘기기) */
+async function verdictStep(page: Page): Promise<void> {
+  for (const name of ['변론 마치기', '찬성 (처형)', '투표 보기']) {
+    const b = page.getByRole('button', { name, exact: true });
+    if ((await b.isVisible().catch(() => false)) && (await b.isEnabled().catch(() => false))) {
+      await b.click().catch(() => undefined);
+      return;
+    }
+  }
+}
+
+/** 모든 화면이 밤(또는 끝)에 이를 때까지 변론·찬반을 진행 */
+async function finishVerdict(pages: Page[]): Promise<void> {
+  for (let i = 0; i < 80; i++) {
+    const st = await Promise.all(pages.map((p) => state(p)));
+    if (st.every((x) => x.phase === 'night' || x.phase === 'over')) return;
+    for (const p of pages) await verdictStep(p);
+    await pages[0]?.waitForTimeout(250);
+  }
+  throw new Error('찬반 투표가 끝나지 않음');
+}
+
 /** 밤: 고를 게 있으면 첫 친구를 골라 정하고, 아니면 잠든다 */
 async function actNight(page: Page): Promise<void> {
   if (!(await state(page)).alive) return;
@@ -91,6 +113,8 @@ test('마피아: AI 친구들과 밤·낮 대화·투표', async ({ page }) => {
     await page.getByRole('button', { name: '투표 보기' }).click();
     await page.getByRole('button', { name: '투표 보기' }).click();
   }
+  // 지목 투표 1등은 최후의 변론 → 찬반 투표 (동점이면 바로 밤)
+  await finishVerdict([page]);
   await expect(page.locator('.mf-line[data-kind="vote"]').first()).toBeVisible();
   const after = await state(page);
   expect(['night', 'over']).toContain(after.phase);
@@ -221,6 +245,8 @@ test.describe('온라인', () => {
         await p.getByRole('button', { name: /에게 투표$/ }).click();
       }
       for (const p of all) await expect(p.locator('.mf-line[data-kind="vote"]').first()).toBeVisible();
+      // 변론대에 선 친구가 있으면 최후의 변론과 찬반 투표 (살아 있는 사람이 모두 정해야 끝난다)
+      await finishVerdict(all);
       for (const p of all) expect(['night', 'over']).toContain((await state(p)).phase);
     }
     for (const e of errors) expect(e).toEqual([]);

@@ -472,3 +472,21 @@
   font-size: 13px;
   font-weight: 700;
 }
+
+/* 최후의 변론·찬반 투표 */
+.mf-tile[data-accused] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 35%, transparent);
+}
+.mf-alert {
+  color: var(--danger);
+  font-weight: 800;
+}
+.mf-yes {
+  background: color-mix(in srgb, var(--danger) 18%, var(--panel));
+  border-color: var(--danger);
+}
+.mf-no {
+  background: color-mix(in srgb, var(--valid) 18%, var(--panel));
+  border-color: var(--valid);
+}

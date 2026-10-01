@@ -231,31 +231,101 @@ export function sfx(name: SfxName, opts: { delay?: number; pitch?: number } = {}
   }
 }
 
+/** 한글 모음 → 소리 색 (아·에·어·오·우·으·이) — 띠 거르개 가운데 높이(Hz) */
+const VOWEL_COLOR: readonly number[] = [
+  1500, 1900, 1500, 1900, 1300, 1900, 1300, 1900, // ㅏㅐㅑㅒㅓㅔㅕㅖ
+  1150, 1500, 1900, 1900, 1150, // ㅗㅘㅙㅚㅛ
+  950, 1300, 1900, 2300, 950, // ㅜㅝㅞㅟㅠ
+  1600, 2100, 2300, // ㅡㅢㅣ
+];
+const LATIN_COLOR: Readonly<Record<string, number>> = { a: 1500, e: 1900, i: 2300, o: 1150, u: 950, y: 2100 };
+
+/** 글자 하나의 소리 색 (한글은 모음, 영어는 모음 글자, 그 밖은 "아") */
+function colorOf(ch: string, prev: number): number {
+  const code = ch.charCodeAt(0) - 0xac00;
+  if (code >= 0 && code <= 11171) return VOWEL_COLOR[Math.floor((code % 588) / 28)] ?? 1500;
+  return LATIN_COLOR[ch.toLowerCase()] ?? prev;
+}
+
+export type TalkMood = 'calm' | 'excited' | 'sad';
+
 /**
- * 기니피그 수다: 글자마다 짧은 꾸잉을 높낮이를 바꿔 가며 (말 대신 — 동물의 숲처럼).
- * 묻는 말(?)은 끝을 올리고, 외치는 말(!)은 높게. 걸리는 시간(ms)을 돌려준다.
+ * 기니피그 말소리 — 사람 목소리 대신, 글자마다 아주 짧고 높은 "뀨"를 모음 색깔대로 이어 붙인다 (동물의 숲처럼).
+ * 한 음절은 살짝 올라가며 끝나고(뀨!), 묻는 말은 끝을 올리고, 외치는 말은 높게, 슬픈 말은 내려간다.
+ * pitch: 친구마다 목소리 높이 (1 = 보통). 걸리는 시간(ms)을 돌려준다.
  */
-export function chatter(text: string, pitch = 1): number {
+export function squeakTalk(text: string, pitch = 1, mood: TalkMood = 'calm'): number {
   const vol = volume('squeak');
   const c = audio();
   if (!c || c.state !== 'running' || vol <= 0.001) return 0;
-  const letters = [...text.replace(/[^\p{L}\p{N}]/gu, '')].slice(0, 26);
+  const chars = [...text].filter((ch) => /[\p{L}\p{N}\s]/u.test(ch)).slice(0, 40);
+  const letters = chars.filter((ch) => !/\s/.test(ch));
   if (!letters.length) return 0;
   const out = c.createGain();
   out.gain.value = vol;
   out.connect(c.destination);
   const ask = /[?？]\s*$/.test(text);
-  const shout = /!\s*$/.test(text);
-  const base = 1250 * pitch * (shout ? 1.12 : 1);
+  const shout = /!\s*$/.test(text) || mood === 'excited';
+  const sad = mood === 'sad';
+  const base = 1350 * pitch * (shout ? 1.12 : sad ? 0.88 : 1);
+  const step = shout ? 0.058 : sad ? 0.085 : 0.068;
   let t = c.currentTime + 0.02;
-  letters.forEach((_, i) => {
-    const last = i === letters.length - 1;
-    const d = 0.055 + Math.random() * 0.03;
-    const f = base * (0.85 + Math.random() * 0.35) * (ask && last ? 1.3 : 1);
-    squeal(c, out, t, [[0, f * 0.82], [d * 0.45, f * 1.12], [d, ask && last ? f * 1.35 : f * 0.95]], d, 0.11, 30, 35);
-    t += d + 0.02 + (i % 4 === 3 ? 0.035 : 0);
-  });
-  return Math.round((t - c.currentTime) * 1000);
+  let color = 1500;
+  let said = 0;
+  const total = Math.min(letters.length, 26);
+  for (const ch of chars) {
+    if (said >= total) break;
+    if (/\s/.test(ch)) {
+      t += 0.045;
+      continue;
+    }
+    color = colorOf(ch, color);
+    const last = said === total - 1;
+    // 문장이 갈수록 살짝 내려가는 억양, 글자마다 조금씩 다르게
+    const drift = 1 - (said / Math.max(1, total)) * (sad ? 0.25 : 0.08);
+    const f = base * drift * (0.9 + Math.random() * 0.22);
+    const d = step * (0.85 + Math.random() * 0.3) * (last ? 1.6 : 1);
+    const end = last ? (ask ? 1.45 : sad ? 0.72 : shout ? 1.3 : 0.92) : 1.12;
+    squeakSyllable(c, out, t, f, f * end, d, color);
+    t += d + 0.018;
+    said++;
+  }
+  // 외치는 말 끝에는 "위익!" 하고 한 번 더
+  if (shout && !sad) squeal(c, out, t + 0.02, [[0, base * 0.85], [0.12, base * 1.9], [0.2, base * 1.6]], 0.22, 0.09, 22, 60);
+  return Math.round((t - c.currentTime) * 1000) + (shout ? 240 : 0);
+}
+
+/** 짧은 뀨 하나: 세모파가 f0에서 f1로 미끄러지고, 모음 색 거르개와 아주 작은 떨림 */
+function squeakSyllable(c: AudioContext, out: AudioNode, t: number, f0: number, f1: number, dur: number, color: number): void {
+  const o = c.createOscillator();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(f0 * 0.92, t);
+  o.frequency.exponentialRampToValueAtTime(f0, t + dur * 0.25);
+  o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const lfo = c.createOscillator();
+  lfo.frequency.value = 28;
+  const lg = c.createGain();
+  lg.gain.value = 18;
+  lfo.connect(lg).connect(o.frequency);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = color;
+  bp.Q.value = 1.4;
+  // 거르개를 지나지 않은 맑은 소리도 조금 섞어 휘파람 같은 기니피그 소리를 살린다
+  const dry = c.createGain();
+  dry.gain.value = 0.35;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.13, t + 0.008);
+  g.gain.setValueAtTime(0.13, t + dur * 0.55);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(bp).connect(g);
+  o.connect(dry).connect(g);
+  g.connect(out);
+  o.start(t);
+  lfo.start(t);
+  o.stop(t + dur + 0.02);
+  lfo.stop(t + dur + 0.02);
 }
 
 export function resetSfxThrottle(): void {

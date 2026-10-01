@@ -9,7 +9,8 @@
 import type { CharacterId } from '../characters/roster';
 
 export type Role = 'mafia' | 'police' | 'doctor' | 'citizen';
-export type Phase = 'night' | 'day' | 'vote' | 'over';
+/** 밤 → 낮 토론 → 지목 투표 → 최후의 변론 → 찬반 투표 → 밤 (마피아 앱들처럼) */
+export type Phase = 'night' | 'day' | 'vote' | 'defense' | 'verdict' | 'over';
 export type Style = 'polite' | 'casual' | 'cute' | 'cool';
 export type Side = 'mafia' | 'town';
 
@@ -67,6 +68,10 @@ export type Act =
   | { k: 'react'; ev: 'died' | 'saved' | 'calm'; t?: number }
   | { k: 'vote'; t: number | null }
   | { k: 'last'; role: Role; t?: number }
+  /** 최후의 변론: 억울함과 맹세 (가끔 다른 친구를 대신 지목) */
+  | { k: 'plea'; t?: number }
+  /** 찬반 투표에서 한마디 */
+  | { k: 'verdict'; t: number; yes: boolean }
   /** 사람의 말에 자유롭게 대꾸 (일상 이야기 — 추리에는 쓰지 않는다) */
   | { k: 'chat'; to: number }
   | { k: 'idle' };
@@ -80,6 +85,13 @@ export interface Ballot {
   day: number;
   by: number;
   t: number | null;
+}
+/** 찬반 투표 한 표 (yes = 처형 찬성) */
+export interface Verdict {
+  day: number;
+  by: number;
+  t: number;
+  yes: boolean;
 }
 export interface Death {
   day: number;
@@ -108,6 +120,9 @@ export interface Game {
   claims: Claim[];
   /** 경찰이 밤마다 알아낸 결과 — 경찰 본인만 안다 */
   checks: [number, boolean][];
+  /** 지목 투표에서 뽑혀 변론대에 선 친구 */
+  accused: number | null;
+  verdicts: Verdict[];
   /** 의사가 지난밤 지킨 친구 */
   saved: number | null;
   winner: Side | null;
@@ -143,11 +158,11 @@ function best<T>(xs: readonly T[], score: (x: T) => number): T | undefined {
   return b;
 }
 
-/** 인원별 역할 — AI끼리 수백 판을 돌려 시민 승률이 50~65%쯤 되게 맞췄다 (scripts/mafia-sim.ts) */
+/** 인원별 역할 — 최후의 변론·찬반 투표까지 넣고 AI끼리 수백 판을 돌려 시민 승률이 40~66%쯤 되게 맞췄다 (scripts/mafia-sim.ts) */
 const SETUPS: Record<number, Role[]> = {
   5: ['mafia', 'police', 'citizen', 'citizen', 'citizen'],
   6: ['mafia', 'mafia', 'police', 'doctor', 'citizen', 'citizen'],
-  7: ['mafia', 'mafia', 'police', 'doctor', 'citizen', 'citizen', 'citizen'],
+  7: ['mafia', 'mafia', 'police', 'citizen', 'citizen', 'citizen', 'citizen'],
   8: ['mafia', 'mafia', 'mafia', 'police', 'doctor', 'citizen', 'citizen', 'citizen'],
 };
 export function rolesFor(n: number): Role[] {
@@ -170,7 +185,7 @@ export interface NewGame {
 
 export function newGame(o: NewGame): Game {
   const count = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, o.seats?.length ?? o.count));
-  const g: Game = { seed: o.seed ?? (Math.random() * 2 ** 31) | 0, players: [], mafia: mafiaCount(count), day: 1, phase: 'night', said: [], votes: [], deaths: [], claims: [], checks: [], saved: null, winner: null };
+  const g: Game = { seed: o.seed ?? (Math.random() * 2 ** 31) | 0, players: [], mafia: mafiaCount(count), day: 1, phase: 'night', said: [], votes: [], deaths: [], claims: [], checks: [], accused: null, verdicts: [], saved: null, winner: null };
   const roles = shuffle(g, rolesFor(count));
   const k = o.myRole ? roles.indexOf(o.myRole) : -1;
   if (k > 0) [roles[0], roles[k]] = [roles[k] as Role, roles[0] as Role];
@@ -303,6 +318,12 @@ function weight(g: Game, S: Set<number>, holder: Partial<Record<Role, number>>):
     if (u !== null) w *= a ? (S.has(u) ? 1.6 : 1) : S.has(u) ? 0.92 : 1;
   }
   // 밤에 당한 친구가 전날 의심하던 사람은 입막음 동기가 있다
+  // 찬반 투표: 찬성은 그 친구를 찍은 것, 반대는 감싼 것
+  for (const v of g.verdicts ?? []) {
+    const a = S.has(v.by);
+    const b = S.has(v.t);
+    w *= v.yes ? (a ? (b ? 0.35 : 1.2) : b ? 1.1 : 1) : a ? (b ? 1.5 : 0.9) : b ? 0.92 : 1;
+  }
   for (const d of g.deaths) {
     if (d.cause !== 'night') continue;
     for (const s of g.said) {
@@ -386,6 +407,8 @@ export function accuseWhy(g: Game, viewer: number | null, t: number): { why: Why
   const mafiaDead = new Set(g.deaths.filter((d) => d.role === 'mafia').map((d) => d.who));
   const dm = [...g.said].reverse().find((s) => s.by === t && mafiaDead.has(vouchedBy(s.act) ?? -1));
   if (dm) return { why: 'defendedMafia', x: vouchedBy(dm.act) ?? undefined };
+  const saved = (g.verdicts ?? []).find((v) => v.by === t && !v.yes && mafiaDead.has(v.t));
+  if (saved) return { why: 'defendedMafia', x: saved.t };
   const mo = g.deaths.find((d) => d.cause === 'night' && g.said.some((s) => s.by === d.who && s.day === d.day - 1 && accusedBy(s.act) === t));
   if (mo) return { why: 'motive', x: mo.who };
   if (today(g).length >= 4 && !today(g).some((s) => s.by === t)) return { why: 'quiet' };
@@ -397,14 +420,14 @@ export function trustWhy(g: Game, viewer: number | null, t: number): { why: Why;
   if (v?.role === 'police' && g.checks.some(([x, m]) => x === t && !m)) return { why: 'checked' };
   if (g.claims.some((c) => c.by === t && c.role === 'police')) return { why: 'claimed' };
   const mafiaDead = new Set(g.deaths.filter((d) => d.role === 'mafia').map((d) => d.who));
-  const vm = g.votes.find((b) => b.by === t && b.t !== null && mafiaDead.has(b.t));
+  const vm = g.votes.find((b) => b.by === t && b.t !== null && mafiaDead.has(b.t)) ?? (g.verdicts ?? []).find((v) => v.by === t && v.yes && mafiaDead.has(v.t));
   if (vm && vm.t !== null) return { why: 'votedMafia', x: vm.t };
   return { why: 'gut' };
 }
 
 // ── 낮: 누가 무슨 뜻으로 말할지 ──────────────────────────
 
-export type Trigger = { k: 'open' } | { k: 'more' } | { k: 'human'; by: number; acts: Act[]; ask: boolean; why: number | null; mentions?: number[] };
+export type Trigger = { k: 'open' } | { k: 'more' } | { k: 'human'; by: number; acts: Act[]; ask: boolean; why: number | null; mentions?: number[] } | { k: 'defense'; by: number };
 
 /** 한 번에 이어지는 AI 대사 수 */
 const ROUND = 4;
@@ -577,9 +600,20 @@ export function plan(g: Game, tr: Trigger): Said[] {
     }
     return out;
   }
+  if (tr.k === 'defense') {
+    // 변론대의 친구가 (AI면) 억울함을 호소하고, 한두 친구가 믿는다/못 믿는다
+    const p = g.players[tr.by];
+    if (p?.alive && !p.human) speak(p, pleaAct(g, p.id));
+    used.add(tr.by);
+    for (let k = 0; k < 2; k++) {
+      const j = someone();
+      if (j) speak(j, leans(g, j.id, tr.by) ? { k: 'accuse', t: tr.by, ...accuseWhy(g, j.role === 'mafia' ? null : j.id, tr.by) } : { k: 'trust', t: tr.by, ...trustWhy(g, j.id, tr.by) });
+    }
+    return out;
+  }
   if (tr.k === 'open') {
     const died = g.deaths.find((d) => d.day === g.day && d.cause === 'night');
-    speak(someone(), died ? { k: 'react', ev: 'died', t: died.who } : { k: 'react', ev: quietNight(g) ? 'calm' : 'saved' });
+    speak(someone(), died ? { k: 'react', ev: 'died', t: died.who } : { k: 'react', ev: 'saved' });
   }
   for (const p of living(g).filter((q) => !q.human && accusers(g, q.id).length > 0).slice(0, 2)) speak(p, defendAct(g, p.id));
   for (let k = 0; k < 6 && out.length < ROUND; k++) {
@@ -635,21 +669,82 @@ export function tally(g: Game, ballots: readonly Ballot[]): { out: number | null
   return { out: max > 0 && top.length === 1 ? (top[0] as number) : null, counts };
 }
 
+/** 지목 투표: 가장 많이 받은 한 명이 변론대에 선다 (동점이면 아무도 안 서고 밤) */
 export function resolveVote(g: Game, ballots: readonly Ballot[]): number | null {
   g.votes.push(...ballots);
   const { out } = tally(g, ballots);
-  const p = out === null ? undefined : g.players[out];
-  if (p) {
+  if (out === null || !g.players[out]?.alive) {
+    g.accused = null;
+    g.day += 1;
+    g.phase = 'night';
+    return null;
+  }
+  g.accused = out;
+  g.phase = 'defense';
+  return out;
+}
+
+export function toVerdict(g: Game): void {
+  if (g.phase === 'defense') g.phase = 'verdict';
+}
+
+/** 최후의 변론에서 할 말: 경찰·의사는 역할을 밝히고, 마피아는 가끔 경찰이라고 우기고, 나머지는 억울함을 호소 */
+export function pleaAct(g: Game, i: number): Act {
+  const me = g.players[i] as Player;
+  const claimed = g.claims.some((c) => c.by === i && c.role !== 'citizen');
+  if (me.role === 'police' && !claimed) return { k: 'claim', role: 'police', res: g.checks.map(([t, m]) => [t, m]) };
+  if (me.role === 'doctor' && !claimed) return { k: 'claim', role: 'doctor' };
+  const pub = suspicion(g, null);
+  const others = living(g).filter((p) => p.id !== i && (me.role !== 'mafia' || p.role !== 'mafia'));
+  if (me.role === 'mafia' && !claimed && !g.claims.some((c) => c.role === 'police' && isMafia(g, c.by)) && rand(g) < 0.3) {
+    const goat = best(others, (p) => (pub[p.id] ?? 0) + rand(g) * 0.2);
+    if (goat) return { k: 'claim', role: 'police', res: [[goat.id, true]] };
+  }
+  const op = me.role === 'mafia' ? pub : opinion(g, i);
+  const t = best(others, (p) => (op[p.id] ?? 0) + rand(g) * 0.05);
+  return { k: 'plea', ...(t && rand(g) < 0.6 ? { t: t.id } : {}) };
+}
+
+/** 찬반 투표: 마피아는 동료를 살리고, 시민은 의심이 짙으면 찬성 (변론에서 경찰이라고 하면 머뭇) */
+export function aiVerdict(g: Game, i: number): boolean {
+  const t = g.accused;
+  const me = g.players[i];
+  if (t === null || !me) return false;
+  if (me.role === 'mafia') {
+    if (!isMafia(g, t)) return true;
+    // 동료가 몰렸으면: 어차피 질 것 같으면 같이 찬성해서 시민인 척, 아니면 반대로 살린다
+    const h = heat(g);
+    return (h[t] ?? 0) >= Math.ceil(living(g).length / 2) ? rand(g) < 0.6 : rand(g) < 0.2;
+  }
+  if (me.role === 'police') {
+    const c = g.checks.find(([x]) => x === t);
+    if (c) return c[1];
+  }
+  const op = opinion(g, i)[t] ?? 0;
+  const cop = g.claims.some((c) => c.by === t && c.day === g.day && c.role !== 'citizen');
+  return op > base(g) * (0.95 + (cop ? 0.45 : 0)) - PERSONA[me.character].follow * 0.05;
+}
+
+/** 찬반 결과: 찬성이 반대보다 많으면 처형 */
+export function resolveVerdict(g: Game, votes: readonly { by: number; yes: boolean }[]): { executed: boolean; yes: number; no: number } {
+  const t = g.accused;
+  const yes = votes.filter((v) => v.yes).length;
+  const no = votes.length - yes;
+  const p = t === null ? undefined : g.players[t];
+  if (t !== null) for (const v of votes) g.verdicts.push({ day: g.day, by: v.by, t, yes: v.yes });
+  const executed = !!p && yes > no;
+  if (p && executed) {
     p.alive = false;
     g.deaths.push({ day: g.day, who: p.id, cause: 'vote', role: p.role });
   }
+  g.accused = null;
   g.winner = winnerOf(g);
   if (g.winner) g.phase = 'over';
   else {
     g.day += 1;
     g.phase = 'night';
   }
-  return p ? p.id : null;
+  return { executed, yes, no };
 }
 
 /** 처형당한 AI의 마지막 말 (시민이면 가장 의심하던 친구를 남긴다) */
@@ -736,11 +831,8 @@ export interface NightResult {
   checked: [number, boolean] | null;
 }
 
-/** 8명 판(마피아 셋)은 첫날 밤에 마피아가 서로 얼굴만 익힌다 (안 그러면 마피아가 너무 쉽게 이긴다) */
-export const quietNight = (g: Game): boolean => g.day === 1 && g.players.length === 8;
-
 export function resolveNight(g: Game, n: NightPlan): NightResult {
-  const victim = n.kill === null || quietNight(g) ? undefined : g.players[n.kill];
+  const victim = n.kill === null ? undefined : g.players[n.kill];
   const saved = !!victim && n.kill === n.save;
   let died: number | null = null;
   if (victim?.alive && !saved) {

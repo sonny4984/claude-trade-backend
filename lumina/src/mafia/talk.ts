@@ -48,8 +48,8 @@ export function fill(tpl: string, v: Vars): string {
 
 const KO: Record<string, KoSet> = {
   'react.died': {
-    p: ['{t|가} 당하다니… 너무 슬퍼요.', '마피아는 왜 {t|를} 노렸을까요? 분명 이유가 있어요.', '{t}… 꼭 범인을 찾아 줄게요.'],
-    c: ['{t|가} 당했어… 진짜 화나.', '마피아가 왜 {t|를} 골랐을까? 뭔가 알고 있었던 거야.', '{t}, 복수해 줄게.'],
+    p: ['{t|가} 당하다니… 너무 슬퍼요.', '마피아는 왜 {t|를} 노렸을까요? 분명 뭔가 알고 있었던 거예요.', '{t}… 같이 건초 먹던 사이였는데… 꼭 범인을 찾을게요.', '{t|가} 없으니까 쳇바퀴가 너무 조용해요… 범인 꼭 잡아요!'],
+    c: ['{t|가} 당했어… 진짜 화나!', '마피아가 왜 {t|를} 골랐을까? 뭔가 알고 있었던 거야.', '{t}… 내 쳇바퀴 친구였는데! 복수해 줄게.', '{t}, 네 건초는 내가 지켜 줄게… 범인 잡는다!'],
   },
   'react.saved': {
     p: ['아무도 안 다쳤어요! 의사가 지켜 줬나 봐요.', '휴, 다들 무사하네요. 의사 최고예요.'],
@@ -121,22 +121,38 @@ const KO: Record<string, KoSet> = {
   'res.town': { p: ['{t|는} 시민이에요.'], c: ['{t|는} 시민이야.'] },
   'claim.doctor': { p: ['저 의사예요. 저를 내보내면 다들 위험해져요!', '사실 저 의사예요. 믿어 주세요.'], c: ['나 의사야. 나 내보내면 큰일 나!', '사실 나 의사야. 진짜야.'] },
   'claim.citizen': { p: ['저는 그냥 시민이에요. 정말이에요.'], c: ['나 시민이야, 진짜로.'] },
-  defend: { p: ['저 아니에요! 정말 억울해요.', '저 시민이에요. 믿어 주세요.'], c: ['나 아니야! 왜 나야?', '억울해. 나 시민이라고.'] },
+  defend: {
+    p: ['저 아니에요! 제가 마피아면 {oath}!', '억울해요… 진짜 시민이에요! {oath}!', '저를 의심하다니 꾸잉꾸잉 눈물 나요… 저 마피아 아니에요!', '정말 아니에요! 쳇바퀴를 걸고 맹세해요!'],
+    c: ['나 아니라고! 내가 마피아면 {oath}!', '억울해 진짜… 나 시민이야! {oath}!', '나 의심하는 거 실화야? 꾸잉… 나 아니야!'],
+  },
   'defend.claimed': { p: ['저 진짜 {r|예요}. 믿어 주세요.', '제가 왜 마피아예요? 저 {r|라고} 했잖아요.'], c: ['나 진짜 {r|이야}. 믿어 줘.', '나 {r|라고} 했잖아. 왜 의심해?'] },
   'defend.claimedCounter': { p: ['저 진짜 {r|예요}. 오히려 {x|가} 수상해요.'], c: ['나 진짜 {r|이야}. {x|야말로} 수상해.'] },
-  'defend.x': { p: ['{x}, 저 아니에요. 다시 생각해 봐요.', '{x}, 오해예요. 저 시민이에요.'], c: ['{x|야}, 나 아니라니까.', '{x}, 잘못 짚었어.'] },
-  'defend.counter': {
-    p: ['저 아니에요. 오히려 저를 몰아가는 {x|가} 수상해요.', '왜 저를요? {x|야말로} 수상해요.'],
-    c: ['나 아니야. {x|야말로} 수상하거든?', '{x}, 너 나 몰아가는 거 수상해.'],
+  'defend.x': {
+    p: ['{x}, 저 진짜 아니에요! 제가 마피아면 {oath}!', '{x}, 너무해요… 저 시민이에요. {food} 걸고 맹세해요!', '{x}, 오해예요! 저 죽으면 시민 하나 날아가는 거예요!'],
+    c: ['{x|야}, 나 아니라니까! 내가 마피아면 {oath}!', '{x}, 잘못 짚었어! {food} 걸고 맹세해!'],
   },
+  'defend.counter': {
+    p: ['저 아니에요! 오히려 저를 몰아가는 {x|가} 수상해요. 제가 마피아면 {oath}!', '왜 저를요? {x|야말로} 수상해요! 저는 {food} 걸고 맹세해요!'],
+    c: ['나 아니야! {x|야말로} 수상하거든? 내가 마피아면 {oath}!', '{x}, 너 나 몰아가는 거 수상해. 난 {food} 걸고 맹세해!'],
+  },
+  plea: {
+    p: ['여러분, 제 말 좀 들어 주세요! 저 진짜 마피아 아니에요. 제가 마피아면 {oath}!', '꾸잉… 저 죽으면 시민 하나 날아가는 거예요. 마피아만 신나요! 살려 주세요!', '억울해서 쳇바퀴도 못 돌겠어요… 저 시민이에요! {oath}!', '제발 한 번만 믿어 주세요! {food} 걸고, 제 이름 걸고 맹세해요!'],
+    c: ['잠깐만! 나 진짜 아니야! 내가 마피아면 {oath}!', '나 죽이면 마피아만 좋아해! 진짜야, {food} 걸고 맹세해!', '억울해서 털이 다 설 것 같아… 나 시민이라고!'],
+  },
+  'plea.t': {
+    p: ['저 아니에요! 차라리 {t|를} 보세요! 제가 마피아면 {oath}!', '저 말고 {t|예요}! 저는 끝까지 시민 편이었어요. {oath}!'],
+    c: ['나 아니야! 차라리 {t|를} 봐! 내가 마피아면 {oath}!', '범인은 {t|이야}! 난 진짜 시민이라고! {oath}!'],
+  },
+  'verdict.yes': { p: ['미안해요, 찬성이에요.', '찬성할게요… 건초는 제가 잘 챙겨 줄게요.', '마음이 아프지만 찬성이에요.'], c: ['찬성! 미안해.', '찬성. 변명이 좀 약했어.', '찬성… 꾸잉, 미안!'] },
+  'verdict.no': { p: ['반대예요! 아직 확실하지 않아요.', '반대! {t|를} 한 번만 믿어 봐요.', '반대할게요. 저 맹세가 진심 같아요.'], c: ['반대! 아직 몰라.', '반대야. 살려 주자!', '반대. {t} 맹세가 진짜 같아.'] },
   agree: { p: ['{x} 말이 맞아요. {t|가} 수상해요.', '저도 {x|랑} 같은 생각이에요. {t|가} 이상해요.'], c: ['{x} 말이 맞아. {t} 수상해.', '나도 {x} 말에 동의해. {t} 이상해.'] },
   doubt: { p: ['{t|는} 아닌 것 같아요. {x|가} 너무 몰아가요.', '{x}, {t|는} 시민 같은데요?'], c: ['{t|는} 아닌데? {x} 너무 몰아가는 거 아냐?', '{x}, {t|는} 아닌 것 같아.'] },
   ask: { p: ['{t|는} 누가 수상해요?', '{t}, 어떻게 생각해요?'], c: ['{t}, 넌 누가 수상해?', '{t|는} 어떻게 생각해?'] },
   vote: { p: ['{t}한테 투표할게요.', '저는 {t|를} 찍을게요.'], c: ['{t} 찍을게.', '난 {t}!'] },
   'vote.none': { p: ['이번엔 기권할게요.'], c: ['난 기권.'] },
-  'last.town': { p: ['저 정말 {r|였}어요… 꼭 이겨 줘요.'], c: ['나 진짜 {r|였}는데… 꼭 이겨!'] },
-  'last.townT': { p: ['저 정말 {r|였}어요… {t|를} 꼭 살펴봐 줘요.'], c: ['나 진짜 {r|였}는데… {t|를} 조심해.'] },
-  'last.mafia': { p: ['들켰네요… 하지만 아직 끝난 게 아니에요.'], c: ['흥, 들켰네. 그래도 아직 안 끝났어.'] },
+  'last.town': { p: ['꾸잉… 저 정말 {r|였}어요… 꼭 이겨 주세요!', '흑흑, 제 건초는… 착한 친구들이 나눠 먹어요…'], c: ['나 진짜 {r|였}는데… 꼭 이겨!', '내 건초… 마피아한테는 절대 주지 마…'] },
+  'last.townT': { p: ['저 정말 {r|였}다고요… {t|를} 꼭 살펴봐 줘요… 꾸잉…'], c: ['나 진짜 {r|였}어… {t|를} 조심해…'] },
+  'last.mafia': { p: ['들켰다 꾸잉! 그래도 제 친구들이 복수해 줄 거예요!', '흥, 3달치 건초는 못 바치겠네요! 뀨!'], c: ['들켰네! 그래도 아직 안 끝났어!', '쳇, 건초는 못 줘! 뀨!'] },
   idle: { p: ['음… 아직 잘 모르겠어요.', '다들 수상해 보여요.'], c: ['음… 아직 모르겠어.', '다들 수상해.'] },
   chat: {
     p: ['헤헤, 그렇구나요!', '{to}, 그 말 좋아요.', '음… 그건 잘 모르겠어요.', '{to} 말 들으니까 기분 좋아요.'],
@@ -148,6 +164,7 @@ const KO: Record<string, KoSet> = {
   'me.accuse': { p: ['{t|가} 수상해요.'], c: ['{t|가} 수상해요.'] },
   'me.trust': { p: ['{t|는} 믿어요.'], c: ['{t|는} 믿어요.'] },
   'me.ask': { p: ['다들 누가 제일 수상해요?'], c: ['다들 누가 제일 수상해요?'] },
+  'me.plea': { p: ['억울해요! 저 진짜 마피아 아니에요. 제가 마피아면 {oath}!'], c: ['억울해요! 저 진짜 마피아 아니에요. 제가 마피아면 {oath}!'] },
 };
 
 const EN: Record<string, readonly string[]> = {
@@ -174,9 +191,13 @@ const EN: Record<string, readonly string[]> = {
   'res.town': ['{t} is clear.'],
   'claim.doctor': ['I’m the doctor. Don’t vote me out!'],
   'claim.citizen': ['I’m just a citizen, honestly.'],
-  defend: ['It’s not me! I’m a citizen.', 'Not me, I promise.'],
-  'defend.x': ['{x}, it’s not me. Think again.'],
-  'defend.counter': ['Not me. If anything, {x} is suspicious for pushing me.'],
+  defend: ['It’s not me! If I’m Mafia, {oath}!', 'Not me, I swear on my {food}!'],
+  'defend.x': ['{x}, it’s not me! If I’m Mafia, {oath}!'],
+  'defend.counter': ['Not me! If anything, {x} is suspicious for pushing me. If I’m Mafia, {oath}!'],
+  plea: ['Please listen! I’m really not Mafia. If I am, {oath}!', 'Squeak… vote me out and only the Mafia celebrates!'],
+  'plea.t': ['It’s not me! Look at {t} instead! If I’m Mafia, {oath}!'],
+  'verdict.yes': ['Sorry, I vote yes.', 'Yes… I’ll look after your hay.'],
+  'verdict.no': ['No! We’re not sure yet.', 'No, let’s trust {t} once.'],
   'defend.claimed': ['I really am the {r}. Trust me.'],
   'defend.claimedCounter': ['I really am the {r}. If anything, {x} is suspicious.'],
   agree: ['{x} is right. {t} is suspicious.'],
@@ -184,9 +205,9 @@ const EN: Record<string, readonly string[]> = {
   ask: ['{t}, who do you suspect?', '{t}, what do you think?'],
   vote: ['I’m voting {t}.', '{t}.'],
   'vote.none': ['I’ll pass this time.'],
-  'last.town': ['I really was the {r}… win this!'],
-  'last.townT': ['I really was the {r}… watch {t}!'],
-  'last.mafia': ['You got me… but it’s not over.'],
+  'last.town': ['Squeak… I really was the {r}… win this!'],
+  'last.townT': ['I really was the {r}… watch {t}! Squeak…'],
+  'last.mafia': ['You got me! No hay for you! Wheek!'],
   idle: ['Hmm… not sure yet.', 'Everyone looks suspicious.'],
   chat: ['Hehe, I see!', 'Nice one, {to}.', 'Hmm, not sure about that.'],
   suggest: ['How about {t} tonight?'],
@@ -195,6 +216,7 @@ const EN: Record<string, readonly string[]> = {
   'me.accuse': ['I think {t} is suspicious.'],
   'me.trust': ['I trust {t}.'],
   'me.ask': ['Who do you all suspect?'],
+  'me.plea': ['I’m innocent! If I’m Mafia, {oath}!'],
 };
 
 const NARRATE: Record<string, { ko: string; en: string }> = {
@@ -209,7 +231,11 @@ const NARRATE: Record<string, { ko: string; en: string }> = {
   checkMafia: { ko: '조사 결과: {t|는} 마피아예요!', en: 'Result: {t} is Mafia!' },
   checkTown: { ko: '조사 결과: {t|는} 마피아가 아니에요.', en: 'Result: {t} is not Mafia.' },
   vote: { ko: '투표 시간이에요. 쫓아낼 친구를 골라요.', en: 'Time to vote. Pick who leaves.' },
-  out: { ko: '{t|가} {c}표로 쫓겨났어요.', en: '{t} was voted out with {c} votes.' },
+  accused: { ko: '{t|가} {c}표로 변론대에 올랐어요. 최후의 변론을 들어 봐요!', en: '{t} got {c} votes and takes the stand. Hear the final defense!' },
+  yourDefense: { ko: '당신이 변론대에 섰어요! 억울함을 말하고 "변론 마치기"를 눌러요.', en: 'You’re on the stand! Plead your case, then tap “End defense”.' },
+  verdict: { ko: '{t|를} 처형할까요? 찬반 투표를 해요.', en: 'Execute {t}? Vote yes or no.' },
+  spared: { ko: '찬성 {y} · 반대 {n} — {t|가} 살아남았어요!', en: 'Yes {y} · No {n} — {t} survives!' },
+  executed: { ko: '찬성 {y} · 반대 {n} — {t|가} 처형됐어요.', en: 'Yes {y} · No {n} — {t} is executed.' },
   reveal: { ko: '{t|는} {r|였}어요.', en: '{t} was the {r}.' },
   tie: { ko: '표가 갈려서 아무도 나가지 않았어요.', en: 'Tied vote. Nobody leaves.' },
   townWin: { ko: '시민 승리! 마피아를 모두 찾아냈어요.', en: 'Town wins! All Mafia found.' },
@@ -235,6 +261,23 @@ function choose(key: string, v: Vars, casual: boolean, cool: boolean, lang: Lang
   // 시크한 친구는 짧은 말 중에서
   if (cool) xs = [...xs].sort((a, b) => a.length - b.length).slice(0, Math.ceil(xs.length / 2));
   return fill(xs[Math.floor(rnd() * xs.length)] ?? '', v);
+}
+
+const FOODS = ['건초', '당근', '사과', '해바라기씨', '펠렛', '브로콜리', '바나나칩', '상추', '파프리카'];
+const AMOUNTS = ['3달치', '1년치', '일주일치', '평생 먹을', '몰래 숨겨 둔', '오늘 저녁'];
+const FOODS_EN = ['hay', 'carrots', 'apple slices', 'sunflower seeds', 'pellets', 'broccoli'];
+const AMOUNTS_EN = ['three months of', 'a whole year of', 'all my secret', 'tonight’s'];
+
+/** 억울할 때 거는 맹세: "제 3달치 건초를 다 바칠게요" — 친구 말투에 맞춰 */
+function oathVars(casual: boolean, lang: Lang, rnd: () => number): Vars {
+  const at = <T>(xs: readonly T[]): T => xs[Math.floor(rnd() * xs.length)] as T;
+  if (lang !== 'ko') {
+    const food = at(FOODS_EN);
+    return { food, oath: `I’ll give up ${at(AMOUNTS_EN)} ${food}` };
+  }
+  const food = at(FOODS);
+  const thing = `${at(AMOUNTS)} ${food}${josa(food, '를')}`;
+  return { food, oath: casual ? `내 ${thing} 다 줄게` : `제 ${thing} 다 바칠게요` };
 }
 
 /** t가 거짓으로(또는 둘이 겹치게) 주장한 역할 */
@@ -275,10 +318,17 @@ export function lineFor(g: Game, s: Said, lang: Lang, rnd: () => number = Math.r
     case 'defend': {
       // 경찰·의사라고 밝힌 친구는 그 역할로 해명한다
       const mine = g.claims.find((c) => c.by === s.by && c.role !== 'citizen');
+      const o = oathVars(casual, lang, rnd);
       if (mine) text = say(a.counter && a.x !== undefined ? 'defend.claimedCounter' : 'defend.claimed', { r: roleName(mine.role, lang), x: nm(a.x) });
-      else text = a.x === undefined ? say('defend') : say(a.counter ? 'defend.counter' : 'defend.x', { x: nm(a.x) });
+      else text = a.x === undefined ? say('defend', o) : say(a.counter ? 'defend.counter' : 'defend.x', { x: nm(a.x), ...o });
       break;
     }
+    case 'plea':
+      text = say(a.t === undefined ? 'plea' : 'plea.t', { t: nm(a.t), ...oathVars(casual, lang, rnd) });
+      break;
+    case 'verdict':
+      text = say(a.yes ? 'verdict.yes' : 'verdict.no', { t: nm(a.t) });
+      break;
     case 'agree':
     case 'doubt':
       text = say(a.k, { t: nm(a.t), x: nm(a.x) });
@@ -308,6 +358,7 @@ export function lineFor(g: Game, s: Said, lang: Lang, rnd: () => number = Math.r
 export function humanLine(g: Game, act: Act | null, lang: Lang): string {
   const say = (key: string, v: Vars = {}): string => choose(key, v, false, false, lang, () => 0);
   if (!act) return say('me.ask');
+  if (act.k === 'plea') return say('me.plea', oathVars(false, lang, Math.random));
   if (act.k === 'accuse') return say('me.accuse', { t: nameOf(g, act.t, lang) });
   if (act.k === 'trust') return say('me.trust', { t: nameOf(g, act.t, lang) });
   if (act.k === 'claim') return claimText(g, act, lang, () => 0, false, false);

@@ -19,7 +19,7 @@ function Avatar({ id }: { id: CharacterId }) {
 }
 
 const ROLE_ORDER: readonly (Role | 'random')[] = ['random', 'citizen', 'police', 'doctor', 'mafia'];
-const VOICES: readonly VoiceMode[] = ['speak', 'babble', 'off'];
+const VOICES: readonly VoiceMode[] = ['squeak', 'read', 'off'];
 
 /** Gemini 연결: 키 넣기 → 확인 → 켜고 끄기 (키는 이 기기에만) */
 function GeminiCard() {
@@ -133,7 +133,7 @@ export function MafiaSetup() {
         <section className="card">
           <h2 className="card-title">{t('mafia.talk')}</h2>
           <div className="seg" role="radiogroup" aria-label={t('mafia.voiceMode')}>
-            {VOICES.filter((m) => m !== 'speak' || canSpeak()).map((m) => (
+            {VOICES.filter((m) => m !== 'read' || canSpeak()).map((m) => (
               <button key={m} type="button" role="radio" aria-checked={cfg.voice === m} onClick={() => setCfg({ voice: m })}>
                 {t(`mafia.voiceModes.${m}`)}
               </button>

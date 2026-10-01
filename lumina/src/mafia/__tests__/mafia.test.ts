@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aiNight, aiVote, living, newGame, plan, record, resolveNight, resolveVote, rolesFor, suspicion, type Act, type Game, type Side } from '../engine';
+import { aiNight, aiVerdict, aiVote, living, newGame, plan, record, resolveNight, resolveVerdict, resolveVote, rolesFor, suspicion, toVerdict, type Act, type Game, type Side } from '../engine';
 import { cutify, fill, josa, lineFor, parseHuman } from '../talk';
 import { GeminiFail, chooseModel, connectGemini, geminiJson, parseLoose, rankModels } from '../gemini';
 
@@ -11,29 +11,52 @@ function autoplay(seed: number, count: number): { winner: Side | null; days: num
     resolveNight(g, aiNight(g));
     if (g.winner) break;
     for (const k of ['open', 'more', 'more'] as const) lines += plan(g, { k }).length;
-    resolveVote(
+    const accused = resolveVote(
       g,
       living(g).map((p) => ({ day: g.day, by: p.id, t: aiVote(g, p.id) })),
+    );
+    if (accused === null) continue;
+    lines += plan(g, { k: 'defense', by: accused }).length;
+    toVerdict(g);
+    resolveVerdict(
+      g,
+      living(g)
+        .filter((p) => p.id !== accused)
+        .map((p) => ({ by: p.id, yes: aiVerdict(g, p.id) })),
     );
   }
   return { winner: g.winner, days: g.day, lines };
 }
 
 describe('마피아 규칙', () => {
-  it('인원별 역할: 마피아 1~3, 경찰 하나, 의사는 6명부터', () => {
-    expect(rolesFor(5).filter((r) => r === 'mafia')).toHaveLength(1);
-    expect(rolesFor(5)).not.toContain('doctor');
-    for (const n of [6, 7, 8]) {
-      const r = rolesFor(n);
-      expect(r).toHaveLength(n);
-      expect(r.filter((x) => x === 'mafia')).toHaveLength(n === 8 ? 3 : 2);
-      expect(r.filter((x) => x === 'police')).toHaveLength(1);
-      expect(r.filter((x) => x === 'doctor')).toHaveLength(1);
-    }
+  it('인원별 역할: 마피아 1~3, 경찰 하나, 의사는 6명·8명', () => {
+    const count = (n: number, role: string): number => rolesFor(n).filter((r) => r === role).length;
+    expect([5, 6, 7, 8].map((n) => rolesFor(n).length)).toEqual([5, 6, 7, 8]);
+    expect([5, 6, 7, 8].map((n) => count(n, 'mafia'))).toEqual([1, 2, 2, 3]);
+    expect([5, 6, 7, 8].map((n) => count(n, 'police'))).toEqual([1, 1, 1, 1]);
+    expect([5, 6, 7, 8].map((n) => count(n, 'doctor'))).toEqual([0, 1, 0, 1]);
   });
 
   it('고른 역할을 받는다', () => {
-    for (const role of ['mafia', 'police', 'doctor', 'citizen'] as const) expect(newGame({ count: 7, me: 'moka', myRole: role, seed: 3 }).players[0]?.role).toBe(role);
+    for (const role of ['mafia', 'police', 'doctor', 'citizen'] as const) expect(newGame({ count: 8, me: 'moka', myRole: role, seed: 3 }).players[0]?.role).toBe(role);
+  });
+
+  it('지목 투표 1등은 변론대에 서고, 찬반에서 찬성이 많아야 처형된다', () => {
+    const g = newGame({ count: 7, me: 'moka', seed: 8, allAi: true });
+    g.phase = 'vote';
+    expect(resolveVote(g, [{ day: 1, by: 0, t: 2 }, { day: 1, by: 1, t: 2 }, { day: 1, by: 3, t: 4 }])).toBe(2);
+    expect(g.phase).toBe('defense');
+    const said = plan(g, { k: 'defense', by: 2 });
+    expect(said[0]?.by).toBe(2);
+    expect(['plea', 'claim']).toContain(said[0]?.act.k);
+    toVerdict(g);
+    expect(resolveVerdict(g, [{ by: 0, yes: true }, { by: 1, yes: false }, { by: 3, yes: false }])).toMatchObject({ executed: false, yes: 1, no: 2 });
+    expect(g.players[2]?.alive).toBe(true);
+    expect(g.phase).toBe('night');
+    // 동점이면 아무도 변론대에 서지 않는다
+    g.phase = 'vote';
+    expect(resolveVote(g, [{ day: 2, by: 0, t: 2 }, { day: 2, by: 1, t: 3 }])).toBeNull();
+    expect(g.phase).toBe('night');
   });
 
   it('AI끼리 수백 판: 모두 끝나고, 어느 쪽도 일방적으로 이기지 않는다', () => {
@@ -94,6 +117,12 @@ describe('마피아 추리', () => {
       { day: 1, by: 3, t: 1 },
       { day: 1, by: 2, t: 4 },
     ]);
+    toVerdict(g);
+    resolveVerdict(g, [
+      { by: 0, yes: true },
+      { by: 3, yes: true },
+      { by: 2, yes: false },
+    ]);
     const s = suspicion(g, 0);
     expect(s[1]).toBe(1);
     expect(s[2]).toBeGreaterThan(s[5] ?? 1);
@@ -134,6 +163,10 @@ describe('마피아 대사', () => {
       { k: 'last', role: 'police' },
       { k: 'last', role: 'mafia' },
       { k: 'chat', to: 0 },
+      { k: 'plea' },
+      { k: 'plea', t: 2 },
+      { k: 'verdict', t: 2, yes: true },
+      { k: 'verdict', t: 2, yes: false },
       { k: 'idle' },
     ];
     for (const lang of ['ko', 'en'] as const)
