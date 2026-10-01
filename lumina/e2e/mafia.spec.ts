@@ -122,7 +122,7 @@ test('마피아: AI 친구들과 밤·낮 대화·투표', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('Gemini 키를 연결하면 AI 친구들이 Gemini가 쓴 말로 대꾸한다 (일상 대화는 자유 대화로)', async ({ page }) => {
+test('Gemini 키를 연결하면 AI 친구들이 Gemini가 쓴 말로 대꾸한다 (절약 모드: 내가 말할 때만, 한 친구만)', async ({ page }) => {
   const prompts: string[] = [];
   await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
     const req = route.request();
@@ -140,24 +140,33 @@ test('Gemini 키를 연결하면 AI 친구들이 Gemini가 쓴 말로 대꾸한�
   await page.getByPlaceholder('Gemini API 키 붙여넣기').fill('test-key');
   await page.getByRole('button', { name: '연결', exact: true }).click();
   await expect(page.locator('.mf-gemini')).toContainText('연결됨 · gemini-3.8-flash');
+  // 절약 모드는 기본으로 켜져 있다
+  await expect(page.getByRole('checkbox', { name: /절약 모드/ })).toBeChecked();
+  const probes = prompts.length;
   await page.getByRole('radio', { name: '7명' }).click();
   await page.getByRole('radio', { name: '시민', exact: true }).click();
   await page.getByRole('radio', { name: '끄기' }).click();
   await page.getByRole('button', { name: '시작하기' }).click();
   await expect(page.locator('.mf-claude', { hasText: 'Gemini' })).toBeVisible();
 
+  // 아침 인사는 기본 대사 (Gemini를 부르지 않는다)
   await page.getByRole('button', { name: '잠들기' }).click();
-  await expect(page.locator('.mf-line[data-kind="say"]').first()).toContainText('제미나이가 쓴 말');
-  expect(prompts.some((x) => x.includes('기니피그'))).toBe(true);
+  await expect(page.locator('.mf-line[data-kind="say"]').first()).toBeVisible();
+  await expect(page.locator('.mf-line[data-kind="say"]').first()).not.toContainText('제미나이가 쓴 말');
+  expect(prompts.length).toBe(probes);
   if ((await state(page)).alive) {
     if (await page.locator('.mf-skip').isVisible()) await page.locator('.mf-skip').click();
     const before = await page.locator('.mf-line[data-kind="say"]').count();
     await page.getByPlaceholder('하고 싶은 말').fill('다들 오늘 아침 뭐 먹었어?');
     await page.getByRole('button', { name: '보내기' }).click();
     await expect(page.locator('.mf-line[data-kind="say"]').nth(before)).toContainText('제미나이가 쓴 말');
+    expect(prompts.length).toBe(probes + 1);
     const last = prompts[prompts.length - 1] ?? '';
+    expect(last).toContain('기니피그');
     expect(last).toContain('자유 대화');
     expect(last).toContain('다들 오늘 아침 뭐 먹었어?');
+    // 대답하는 친구 한 명만
+    expect([...last.matchAll(/\{"id":\d+,"name"/g)].length).toBe(1);
   }
   expect(errors).toEqual([]);
 });

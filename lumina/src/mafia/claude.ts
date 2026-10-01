@@ -109,7 +109,11 @@ export function notesFor(g: Game, i: number, lang: Lang): string {
     .join(', ');
 }
 
-export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly string[], history: readonly HistoryLine[], lang: Lang, latest?: HistoryLine): string {
+/**
+ * 대사를 써 달라는 글. brief(절약 모드)면 규칙을 줄이고 최근 대화도 6줄만 —
+ * 한 번에 드는 양을 반쯤으로 줄인다 (부르는 횟수는 store가 줄인다).
+ */
+export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly string[], history: readonly HistoryLine[], lang: Lang, latest?: HistoryLine, brief = false): string {
   const ko = lang === 'ko';
   const nm = (i: number): string => nameOf(g, i, lang);
   const alive = g.players
@@ -126,7 +130,8 @@ export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly str
       .join('\n') || (ko ? '아직 없음' : 'none yet');
   const claims = g.claims.filter((c) => c.role !== 'citizen').map((c) => `${nm(c.by)} → ${roleName(c.role, lang)}`);
   const talk = history
-    .slice(-16)
+    .filter((h, k, all) => !(brief && latest && k === all.length - 1 && h.name === latest.name && h.text === latest.text))
+    .slice(brief ? -6 : -16)
     .map((h) => `${h.name}: ${h.text}`)
     .join('\n');
   const items = said.map((s, id) => {
@@ -142,7 +147,33 @@ export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly str
       draft: drafts[id] ?? '',
     });
   });
-  const lines = ko
+  const rules = brief
+    ? ko
+      ? [
+          '귀여운 기니피그 마피아 게임 대사를 써. 말끝 "~용", 가끔 "꾸잉"·"뀨". 무섭거나 거친 말 금지.',
+          '- 뜻: 초안의 뜻(의심·믿음·역할 주장·조사 결과)은 그대로, 자연스럽게. 자유 대화: to에게 그 캐릭터답게 대답 (일상 얘기도 좋아).',
+          '- 없는 역할·사실 지어내지 마. 1~2문장, 70자 이내, 이모지 없이 대사만.',
+          '- 억울함이면 과장된 맹세로 웃기게 (예: "마피아면 건초 3달치 바칠게용!"). notes의 근거를 들어 똑똑하게.',
+        ]
+      : [
+          'Write lines for cute guinea pigs in a Mafia game. Cute, sometimes "squeak"; never scary or rude.',
+          '- meaning: keep the draft’s meaning (suspect, trust, claim, result), make it natural. free chat: answer "to" in character (small talk is fine).',
+          '- Never invent roles or facts. 1–2 sentences, under 120 characters, no emoji.',
+          '- desperate: swear funny oaths (e.g. "If I’m Mafia, take my hay!"). Use notes as evidence.',
+        ]
+    : null;
+  const lines = rules
+    ? [
+        ...rules,
+        ko ? `[상황] ${g.day}일째. 살아 있음: ${alive}` : `[Situation] Day ${g.day}. Alive: ${alive}`,
+        g.deaths.length ? (ko ? `[밝혀진 사실]\n${facts}` : `[Revealed]\n${facts}`) : '',
+        claims.length ? (ko ? `[역할 주장] ${claims.join(', ')}` : `[Role claims] ${claims.join(', ')}`) : '',
+        talk ? (ko ? `[최근 대화]\n${talk}` : `[Recent talk]\n${talk}`) : '',
+        latest ? (ko ? `[방금 사람이 한 말] ${latest.name}: ${latest.text}` : `[Human just said] ${latest.name}: ${latest.text}`) : '',
+        ko ? `[할 말]\n${items.join('\n')}` : `[To say]\n${items.join('\n')}`,
+        ko ? 'JSON만: {"lines":[{"id":0,"text":"..."}]}' : 'Only JSON: {"lines":[{"id":0,"text":"..."}]}',
+      ]
+    : ko
     ? [
         '너는 마피아 게임에 나오는 귀여운 기니피그 친구들의 대사를 쓰는 작가야.',
         '모두 기니피그라서 말투가 귀여워. 존댓말 친구는 "~용", "~해용", "~이에용" 같은 말끝을 자주 쓰고, 다들 "꾸잉", "뀨", "꾸르르" 같은 기니피그 소리를 가끔 섞어 (예: "꾸잉, 전 의사 맞는데용!"). 무섭거나 거친 말은 쓰지 마.',
@@ -189,8 +220,8 @@ export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly str
 }
 
 /** 대사를 다듬어 받는다 (빠진 줄은 초안 그대로) */
-export async function polish(write: JsonWriter, g: Game, said: readonly Said[], drafts: readonly string[], history: readonly HistoryLine[], lang: Lang, signal: AbortSignal, latest?: HistoryLine): Promise<string[]> {
-  const r = (await write(buildPrompt(g, said, drafts, history, lang, latest), signal)) as { lines?: { id?: unknown; text?: unknown }[] } | null;
+export async function polish(write: JsonWriter, g: Game, said: readonly Said[], drafts: readonly string[], history: readonly HistoryLine[], lang: Lang, signal: AbortSignal, latest?: HistoryLine, brief = false): Promise<string[]> {
+  const r = (await write(buildPrompt(g, said, drafts, history, lang, latest, brief), signal)) as { lines?: { id?: unknown; text?: unknown }[] } | null;
   const out = [...drafts];
   for (const l of Array.isArray(r?.lines) ? r.lines : []) {
     const k = Number(l?.id);
@@ -198,4 +229,14 @@ export async function polish(write: JsonWriter, g: Game, said: readonly Said[], 
     if (Number.isInteger(k) && k >= 0 && k < out.length && text) out[k] = text.slice(0, 160);
   }
   return out;
+}
+
+/**
+ * 이번 차례에 다듬을 대사 (said의 번호).
+ * 절약 모드면 사람이 말을 걸었을 때만, 맨 먼저 대답하는 친구 한 명만 (plan이 바로 대답할 친구를 맨 앞에 둔다).
+ * 아침 인사·더 듣기·변론은 기본 대사 그대로.
+ */
+export function polishPick(count: number, human: boolean, saver: boolean): number[] {
+  if (!saver) return Array.from({ length: count }, (_, k) => k);
+  return human && count > 0 ? [0] : [];
 }

@@ -767,6 +767,8 @@ export const en: Dict = {
     geminiOffBtn: 'Turn Gemini lines off',
     claude: 'Claude writes the lines',
     claudeSub: 'AI friends talk like people, following the conversation. Uses a little of your claude.ai usage.',
+    saver: 'Saver mode',
+    saverSub: 'AI writes only when you talk, and only for the friend who answers. Others use built-in lines (about 1/5 of the usage)',
     howTitle: 'How to play',
     how: [
       'Tap a friend to select them, then use the buttons below for night actions and votes.',

@@ -15,9 +15,9 @@ import { useOnline } from '../net/online';
 import { useGame } from '../store/game';
 import { useSettings } from '../store/settings';
 import { readJSON, writeJSON } from '../store/storage';
-import { FATAL, LIMITED, claudeSample, claudeWriter, polish, type HistoryLine, type JsonWriter } from './claude';
+import { FATAL, LIMITED, claudeSample, claudeWriter, polish, polishPick, type HistoryLine, type JsonWriter } from './claude';
 import { GeminiFail, connectGemini, geminiJson, loadGemini, saveGemini, takeKeyFromUrl } from './gemini';
-import { CAST, MAX_PLAYERS, MIN_PLAYERS, PERSONA, aiNight, aiVote, killChoice, lastAct, living, newGame, plan, record, resolveNight, resolveVerdict, resolveVote, tally, toVerdict, aiVerdict, type Act, type Game, type Role, type Trigger } from './engine';
+import { CAST, MAX_PLAYERS, MIN_PLAYERS, PERSONA, aiNight, aiVote, killChoice, lastAct, living, newGame, plan, record, resolveNight, resolveVerdict, resolveVote, tally, toVerdict, aiVerdict, type Act, type Game, type Role, type Said, type Trigger } from './engine';
 import { humanLine, lineFor, nameOf, narrate, parseHuman, roleName, suggestLine } from './talk';
 import { canSpeak, hush, speak, unlockSpeech } from './voice';
 
@@ -36,6 +36,8 @@ export interface MafiaConfig {
   claude: boolean;
   /** 공개 사이트에서 Gemini(내 키)가 대사 쓰기 */
   gemini: boolean;
+  /** 절약 모드: 내가 말을 걸 때만, 대답하는 친구 한 명만 AI가 쓴다 (나머지는 기본 대사) */
+  saver: boolean;
 }
 
 /** say: AI 대사 · chat: 사람이 한 말 · sys: 진행 · secret: 비밀 · vote: 투표 */
@@ -96,6 +98,7 @@ function loadSetup(): MafiaConfig {
     squeakPitch: Math.max(0.9, Math.min(1.8, Number(raw?.squeakPitch) || 1.25)),
     claude: raw?.claude !== false,
     gemini: raw?.gemini !== false,
+    saver: raw?.saver !== false,
   };
 }
 
@@ -223,14 +226,17 @@ async function writer(): Promise<JsonWriter | null> {
 /** AI들이 한 차례 말한다 (Claude·Gemini를 쓸 수 있으면 초안을 다듬어서) */
 async function talk(s: MafiaSession, tr: Trigger): Promise<void> {
   const g = s.game;
-  const said = g.phase === 'day' ? plan(g, tr) : [];
+  // 변론은 변론 시간에, 나머지는 낮에
+  const said = g.phase === 'day' || (tr.k === 'defense' && g.phase === 'defense') ? plan(g, tr) : [];
   if (!said.length) {
     commit(s);
     return;
   }
   const L = lang();
-  let texts = said.map((x) => lineFor(g, x, L));
-  const write = await writer();
+  const texts = said.map((x) => lineFor(g, x, L));
+  const { saver } = get().cfg;
+  const pick = polishPick(said.length, tr.k === 'human', saver);
+  const write = pick.length ? await writer() : null;
   if (write) {
     // 사람이 한 말은 먼저 올려 두고, 대사를 쓰는 동안 기다린다
     commit(s);
@@ -239,7 +245,8 @@ async function talk(s: MafiaSession, tr: Trigger): Promise<void> {
     const asked = tr.k === 'human' ? [...s.lines].reverse().find((l) => l.kind === 'chat' && l.by === tr.by) : undefined;
     const latest = asked ? { name: nameOf(g, tr.k === 'human' ? tr.by : 0, L) + (L === 'ko' ? '(사람)' : ' (human)'), text: asked.text } : undefined;
     try {
-      texts = await polish(write, g, said, texts, history(s), L, c.signal, latest);
+      const got = await polish(write, g, pick.map((k) => said[k] as Said), pick.map((k) => texts[k] ?? ''), history(s), L, c.signal, latest, saver);
+      pick.forEach((k, j) => (texts[k] = got[j] ?? texts[k] ?? ''));
     } catch (e) {
       if (e instanceof GeminiFail) {
         if (e.code === 'bad-key') useMafia.setState({ note: 'geminiKey', geminiModel: null, geminiState: 'bad-key' });
@@ -418,7 +425,7 @@ async function handle(s: MafiaSession, seat: number, a: MafiaAction): Promise<vo
       add(s, 'chat', seat, a.text);
       const parsed = parseHuman(g, a.text, seat);
       for (const x of parsed.acts) record(g, seat, x);
-      return talk(s, { k: 'human', by: seat, acts: parsed.acts, ask: parsed.ask, why: parsed.why });
+      return talk(s, { k: 'human', by: seat, acts: parsed.acts, ask: parsed.ask, why: parsed.why, mentions: parsed.mentions });
     }
     case 'quick': {
       if (g.phase !== 'day' || !p.alive) return commit(s);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { aiNight, aiVerdict, aiVote, living, newGame, plan, record, resolveNight, resolveVerdict, resolveVote, rolesFor, suspicion, toVerdict, type Act, type Game, type Side } from '../engine';
 import { cutify, fill, josa, lineFor, parseHuman } from '../talk';
 import { GeminiFail, chooseModel, connectGemini, geminiJson, parseLoose, rankModels } from '../gemini';
+import { buildPrompt, polishPick } from '../claude';
 
 /** AI끼리 한 판 — 밤 → 낮 토론 세 번 → 투표 */
 function autoplay(seed: number, count: number): { winner: Side | null; days: number; lines: number } {
@@ -225,6 +226,35 @@ describe('기니피그 말투', () => {
     expect(p.mentions).toEqual([friend?.id]);
     const said = plan(g, { k: 'human', by: 0, acts: [], ask: false, why: null, mentions: p.mentions });
     expect(said[0]).toMatchObject({ by: friend?.id, act: { k: 'chat', to: 0 } });
+  });
+});
+
+describe('절약 모드', () => {
+  it('사람이 말을 걸 때만, 맨 먼저 대답하는 친구 한 명만 다듬는다', () => {
+    expect(polishPick(3, false, false)).toEqual([0, 1, 2]);
+    expect(polishPick(3, true, false)).toEqual([0, 1, 2]);
+    expect(polishPick(3, true, true)).toEqual([0]);
+    expect(polishPick(3, false, true)).toEqual([]);
+    expect(polishPick(0, true, true)).toEqual([]);
+  });
+
+  it('짧은 글: 규칙을 줄이고 최근 대화 6줄만, 방금 한 말은 한 번만', () => {
+    const g = newGame({ count: 7, me: 'moka', seed: 4, myRole: 'citizen' });
+    resolveNight(g, aiNight(g));
+    const said = plan(g, { k: 'human', by: 0, acts: [], ask: false, why: null, mentions: [] });
+    const history = Array.from({ length: 14 }, (_, k) => ({ name: '휘기', text: `옛날 이야기 ${k}` }));
+    const latest = { name: '모카(사람)', text: '다들 오늘 아침 뭐 먹었어?' };
+    history.push(latest);
+    const full = buildPrompt(g, said, ['초안'], history, 'ko', latest);
+    const brief = buildPrompt(g, said.slice(0, 1), ['초안'], history, 'ko', latest, true);
+    expect(brief.length).toBeLessThan(full.length * 0.55);
+    expect(brief).toContain('옛날 이야기 13');
+    expect(brief).toContain('옛날 이야기 8');
+    expect(brief).not.toContain('옛날 이야기 7');
+    expect(brief.split('다들 오늘 아침 뭐 먹었어?').length - 1).toBe(1);
+    expect(brief).toContain('자유 대화');
+    expect([...brief.matchAll(/\{"id":\d+,"name"/g)].length).toBe(1);
+    expect(buildPrompt(g, said.slice(0, 1), ['draft'], history, 'en', latest, true)).toContain('Only JSON');
   });
 });
 

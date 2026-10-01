@@ -74,6 +74,7 @@ export function MafiaSetup() {
   const lang = useLang();
   const cfg = useMafia((s) => s.cfg);
   const claudeOk = useMafia((s) => s.claudeOk);
+  const geminiModel = useMafia((s) => s.geminiModel);
   const { setCfg, start, probe } = useMafia.getState();
   useEffect(() => probe(), [probe]);
   const counts = Array.from({ length: MAX_PLAYERS - MIN_PLAYERS + 1 }, (_, i) => MIN_PLAYERS + i);
@@ -175,6 +176,15 @@ export function MafiaSetup() {
             </>
           ) : (
             <GeminiCard />
+          )}
+          {(claudeOk || geminiModel) && (
+            <label className="toggle-row">
+              <span>
+                {t('mafia.saver')}
+                <small className="toggle-sub">{t('mafia.saverSub')}</small>
+              </span>
+              <input type="checkbox" className="switch" checked={cfg.saver} onChange={(e) => setCfg({ saver: e.target.checked })} />
+            </label>
           )}
         </section>
         <section className="card">

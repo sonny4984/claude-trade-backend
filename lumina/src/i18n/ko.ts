@@ -765,6 +765,8 @@ export const ko = {
     geminiOffBtn: 'Gemini 대사 끄기',
     claude: 'Claude가 대사 쓰기',
     claudeSub: 'AI 친구들이 대화 흐름에 맞춰 사람처럼 말해요. claude.ai 사용량을 조금 써요.',
+    saver: '절약 모드',
+    saverSub: '내가 말을 걸 때만, 대답하는 친구 한 명만 AI가 써요. 나머지는 기본 대사 (사용량 약 1/5)',
     howTitle: '이렇게 해요',
     how: [
       '친구를 눌러 고른 뒤 아래 단추로 밤 행동과 투표를 해요.',
