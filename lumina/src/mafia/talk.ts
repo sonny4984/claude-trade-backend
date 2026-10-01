@@ -211,7 +211,7 @@ const NARRATE: Record<string, { ko: string; en: string }> = {
   youDied: { ko: '당신은 쓰러졌어요. 이제 지켜보기만 할 수 있어요.', en: 'You’re out. You can only watch now.' },
 };
 
-export const nameOf = (g: Game, i: number, lang: Lang): string => translate(lang, `character.${g.players[i]?.character ?? 'hwigi'}`);
+export const nameOf = (g: Game, i: number, lang: Lang): string => g.players[i]?.name || translate(lang, `character.${g.players[i]?.character ?? 'hwigi'}`);
 export const roleName = (role: Role, lang: Lang): string => translate(lang, `mafia.roles.${role}`);
 
 export function narrate(key: string, v: Vars, lang: Lang): string {
@@ -343,13 +343,15 @@ function tone(s: string): 'bad' | 'good' | null {
   return null;
 }
 
-export function parseHuman(g: Game, text: string): Parsed {
+/** by: 말한 사람 자리 (자기 자신은 지목하지 않는다) */
+export function parseHuman(g: Game, text: string, by: number): Parsed {
   const low = text.toLowerCase().replace(/’/g, "'");
   const hits: { id: number; at: number }[] = [];
   for (const p of g.players) {
-    if (p.human) continue;
-    for (const lang of ['ko', 'en'] as const) {
-      const at = low.indexOf(translate(lang, `character.${p.character}`).toLowerCase());
+    if (p.id === by) continue;
+    for (const nm of [p.name, translate('ko', `character.${p.character}`), translate('en', `character.${p.character}`)]) {
+      // 한 글자 이름("나" 같은)은 다른 말에 섞여 있어서 찾지 않는다
+      const at = nm && nm.length >= 2 ? low.indexOf(nm.toLowerCase()) : -1;
       if (at >= 0) {
         hits.push({ id: p.id, at });
         break;

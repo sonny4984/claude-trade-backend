@@ -1,26 +1,31 @@
 /**
  * 마피아 판 — 친구들 자리(초상화), 지금 말하는 친구의 말풍선, 대화 기록, 아래 단추(밤 행동·말하기·투표).
- * 친구를 눌러 고른 뒤 밤 행동·투표·"수상해/믿어"에 쓴다.
+ * 친구를 눌러 고른 뒤 밤 행동·투표·"수상해/믿어"에 쓴다. 온라인이면 방 코드 칩과 누구를 기다리는지 보여 준다.
  */
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { usePortrait } from '../../characters/portrait3d';
 import type { Expression } from '../../characters/draw2d';
 import { CHARACTERS } from '../../characters/roster';
 import { Icon } from '../../ui/components/Icon';
+import { OnlineChip, OnlineNotice } from '../../ui/online/OnlineNotice';
 import { useLang, useT } from '../../i18n';
 import { quietNight, type Game, type Player } from '../engine';
-import { useMafia } from '../store';
+import { deciders, mySeatOf, useMafia, visible, type MafiaSession } from '../store';
 import { nameOf } from '../talk';
 import { canListen, canSpeak, listen } from '../voice';
 
 type T = ReturnType<typeof useT>;
 
-const meOf = (g: Game): Player => g.players.find((p) => p.human) ?? (g.players[0] as Player);
+interface View {
+  s: MafiaSession;
+  g: Game;
+  seat: number;
+  me: Player;
+}
 
 /** 지금 고를 수 있는 친구인지 (밤에는 역할마다, 투표는 나 말고 살아 있는 친구) */
-function pickable(g: Game, p: Player): boolean {
-  const me = meOf(g);
-  if (!p.alive || !me.alive) return false;
+function pickable({ s, g, me }: View, p: Player): boolean {
+  if (!p.alive || !me.alive || s.done.includes(me.id)) return false;
   if (g.phase === 'night') {
     if (me.role === 'doctor') return true;
     if (me.role === 'police') return p.id !== me.id && !g.checks.some(([t]) => t === p.id);
@@ -31,10 +36,9 @@ function pickable(g: Game, p: Player): boolean {
 }
 
 /** 내가 아는 그 친구의 정체 */
-function knownTag(g: Game, p: Player, t: T): { kind: string; text: string } | null {
-  const me = meOf(g);
+function knownTag({ g, me }: View, p: Player, t: T): { kind: string; text: string } | null {
   const role = (kind: string): { kind: string; text: string } => ({ kind, text: t(`mafia.roles.${kind}`) });
-  if (g.phase === 'over' || !p.alive || p.human) return role(p.role);
+  if (g.phase === 'over' || !p.alive || p.id === me.id) return role(p.role);
   if (me.role === 'mafia' && p.role === 'mafia') return role('mafia');
   if (me.role === 'police') {
     const c = g.checks.find(([x]) => x === p.id);
@@ -43,18 +47,19 @@ function knownTag(g: Game, p: Player, t: T): { kind: string; text: string } | nu
   return null;
 }
 
-function Tile({ g, p }: { g: Game; p: Player }) {
+function Tile({ v, p }: { v: View; p: Player }) {
   const t = useT();
   const lang = useLang();
-  const speaking = useMafia((s) => s.speaking === p.id);
-  const picked = useMafia((s) => s.pick === p.id);
-  const count = useMafia((s) => s.counts?.[p.id] ?? 0);
+  const speaking = useMafia((st) => st.speaking === p.id);
+  const picked = useMafia((st) => st.pick === p.id);
+  const { g } = v;
   const won = g.winner !== null && (g.winner === 'mafia') === (p.role === 'mafia');
   const ex: Expression = g.phase === 'over' ? (won ? 'win' : 'lose') : !p.alive ? 'lose' : speaking ? 'happy' : 'idle';
   const src = usePortrait(p.character, ex, 96);
-  const tag = knownTag(g, p, t);
+  const tag = knownTag(v, p, t);
   const claim = [...g.claims].reverse().find((c) => c.by === p.id && c.role !== 'citizen');
-  const can = pickable(g, p);
+  const can = pickable(v, p);
+  const count = v.s.counts?.[p.id] ?? 0;
   const style = { '--mf-accent': CHARACTERS[p.character].accent } as CSSProperties;
   return (
     <li>
@@ -63,7 +68,8 @@ function Tile({ g, p }: { g: Game; p: Player }) {
         className="mf-tile"
         style={style}
         data-dead={!p.alive || undefined}
-        data-me={p.human || undefined}
+        data-me={p.id === v.seat || undefined}
+        data-human={(p.human && p.id !== v.seat) || undefined}
         data-speaking={speaking || undefined}
         aria-pressed={picked}
         aria-disabled={!can}
@@ -72,7 +78,7 @@ function Tile({ g, p }: { g: Game; p: Player }) {
         <img src={src} alt="" width={52} height={52} />
         <span className="mf-name">
           {nameOf(g, p.id, lang)}
-          {p.human && <em>{t('mafia.you')}</em>}
+          {p.id === v.seat && <em>{t('mafia.you')}</em>}
         </span>
         {tag ? (
           <span className="mf-tag" data-kind={tag.kind}>
@@ -89,13 +95,21 @@ function Tile({ g, p }: { g: Game; p: Player }) {
   );
 }
 
-function Now({ g }: { g: Game }) {
+function Now({ v }: { v: View }) {
   const t = useT();
   const lang = useLang();
-  const speaking = useMafia((s) => s.speaking);
-  const thinking = useMafia((s) => s.thinking);
-  const line = useMafia((s) => (s.speaking === null ? null : [...s.lines].reverse().find((l) => l.by === s.speaking)));
-  if (thinking)
+  const speaking = useMafia((st) => st.speaking);
+  const thinking = useMafia((st) => st.thinking);
+  const shownId = useMafia((st) => st.shownId);
+  const pending = v.s.lines.some((l) => l.id > shownId && visible(l, v.seat));
+  const line = speaking === null ? undefined : [...v.s.lines].reverse().find((l) => l.id <= shownId && l.by === speaking && visible(l, v.seat));
+  const skip =
+    pending || thinking ? (
+      <button type="button" className="mf-skip" onClick={() => useMafia.getState().skip()}>
+        {t('mafia.skip')}
+      </button>
+    ) : null;
+  if (thinking && !line)
     return (
       <div className="mf-now" data-thinking="">
         <span className="mf-dots" aria-hidden="true">
@@ -103,21 +117,29 @@ function Now({ g }: { g: Game }) {
           <i />
           <i />
         </span>
-        {t('mafia.thinking')}
+        <span>{t('mafia.thinking')}</span>
+        {skip}
       </div>
     );
-  if (speaking === null || !line) return <div className="mf-now" data-empty="" />;
+  if (speaking === null || !line)
+    return (
+      <div className="mf-now" data-empty={skip ? undefined : ''}>
+        {skip}
+      </div>
+    );
   return (
     <div className="mf-now" aria-live="polite">
-      <b>{nameOf(g, speaking, lang)}</b>
+      <b>{nameOf(v.g, speaking, lang)}</b>
       <span>{line.text}</span>
+      {skip}
     </div>
   );
 }
 
-function Log({ g }: { g: Game }) {
+function Log({ v }: { v: View }) {
   const lang = useLang();
-  const lines = useMafia((s) => s.lines);
+  const shownId = useMafia((st) => st.shownId);
+  const lines = v.s.lines.filter((l) => l.id <= shownId && visible(l, v.seat));
   const ref = useRef<HTMLOListElement>(null);
   useEffect(() => {
     ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: 'smooth' });
@@ -125,8 +147,8 @@ function Log({ g }: { g: Game }) {
   return (
     <ol className="mf-log" ref={ref}>
       {lines.map((l) => (
-        <li key={l.id} className="mf-line" data-kind={l.kind}>
-          {l.by !== null && <b>{nameOf(g, l.by, lang)}</b>}
+        <li key={l.id} className="mf-line" data-kind={l.kind} data-mine={(l.kind === 'chat' && l.by === v.seat) || undefined} data-whisper={(l.kind === 'secret' && l.by !== null) || undefined}>
+          {l.by !== null && <b>{nameOf(v.g, l.by, lang)}</b>}
           <span>{l.text}</span>
         </li>
       ))}
@@ -134,30 +156,15 @@ function Log({ g }: { g: Game }) {
   );
 }
 
-function DayControls({ g }: { g: Game }) {
+/** 글 입력 (낮 대화 · 밤 마피아 귓속말) */
+function TextBox({ placeholder, onSend, mic }: { placeholder: string; onSend: (text: string) => boolean; mic: boolean }) {
   const t = useT();
   const lang = useLang();
+  const waiting = useMafia((st) => st.waiting);
   const [text, setText] = useState('');
   const [hearing, setHearing] = useState<{ stop(): void } | null>(null);
-  const pick = useMafia((s) => s.pick);
-  const s = useMafia.getState();
-  const me = meOf(g);
-  if (!me.alive)
-    return (
-      <div className="mf-foot">
-        <p className="mf-prompt">{t('mafia.watching')}</p>
-        <div className="mf-row">
-          <button type="button" className="btn" onClick={() => s.more()}>
-            {t('mafia.more')}
-          </button>
-          <button type="button" className="btn btn-primary" onClick={() => s.toVote()}>
-            {t('mafia.goVote')}
-          </button>
-        </div>
-      </div>
-    );
   const send = (): void => {
-    if (s.say(text)) setText('');
+    if (onSend(text)) setText('');
   };
   const onKey = (e: KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
@@ -165,7 +172,7 @@ function DayControls({ g }: { g: Game }) {
       send();
     }
   };
-  const mic = (): void => {
+  const listenNow = (): void => {
     if (hearing) {
       hearing.stop();
       return;
@@ -177,147 +184,238 @@ function DayControls({ g }: { g: Game }) {
       if (said) setText((v) => (v ? `${v} ${said}` : said));
     });
   };
+  return (
+    <div className="mf-input">
+      {mic && canListen() && (
+        <button type="button" className="icon-btn" aria-label={hearing ? t('mafia.listening') : t('mafia.mic')} aria-pressed={!!hearing} onClick={listenNow}>
+          <Icon name={hearing ? 'micOff' : 'mic'} />
+        </button>
+      )}
+      <input
+        value={text}
+        maxLength={200}
+        placeholder={hearing ? t('mafia.listening') : placeholder}
+        aria-label={placeholder}
+        enterKeyHint="send"
+        autoComplete="off"
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={onKey}
+      />
+      <button type="button" className="icon-btn mf-send" aria-label={t('mafia.send')} disabled={!text.trim() || waiting} onClick={send}>
+        <Icon name="send" />
+      </button>
+    </div>
+  );
+}
+
+/** "누구누구를 기다리는 중 (2/3)" */
+function Wait({ v, have }: { v: View; have: readonly number[] }) {
+  const t = useT();
+  const lang = useLang();
+  const need = deciders(v.g);
+  const left = need.filter((x) => !have.includes(x));
+  if (!left.length) return null;
+  return <p className="mf-prompt">{t('mafia.waitFor', { names: left.map((x) => nameOf(v.g, x, lang)).join(', '), n: need.length - left.length, m: need.length })}</p>;
+}
+
+function DayControls({ v }: { v: View }) {
+  const t = useT();
+  const lang = useLang();
+  const pick = useMafia((st) => st.pick);
+  const waiting = useMafia((st) => st.waiting);
+  const st = useMafia.getState();
+  const { s, g, me } = v;
+  const need = deciders(g);
+  const ready = s.ready.filter((x) => need.includes(x)).length;
+  const online = !!s.online;
+  if (!me.alive)
+    return (
+      <div className="mf-foot">
+        <p className="mf-prompt">{t('mafia.watching')}</p>
+        {need.length ? (
+          <Wait v={v} have={s.ready} />
+        ) : (
+          <div className="mf-row">
+            <button type="button" className="btn" disabled={waiting} onClick={() => st.more()}>
+              {t('mafia.more')}
+            </button>
+            <button type="button" className="btn btn-primary" disabled={waiting} onClick={() => st.ready()}>
+              {t('mafia.watchVote')}
+            </button>
+          </div>
+        )}
+      </div>
+    );
   const target = pick !== null && pick !== me.id ? nameOf(g, pick, lang) : null;
+  const iAmReady = s.ready.includes(me.id);
   return (
     <div className="mf-foot">
       <div className="mf-chips">
-        <button type="button" disabled={!target} onClick={() => s.quick('accuse')}>
+        <button type="button" disabled={!target || waiting} onClick={() => st.quick('accuse')}>
           {target ? t('mafia.qAccuseN', { name: target }) : t('mafia.qAccuse')}
         </button>
-        <button type="button" disabled={!target} onClick={() => s.quick('trust')}>
+        <button type="button" disabled={!target || waiting} onClick={() => st.quick('trust')}>
           {target ? t('mafia.qTrustN', { name: target }) : t('mafia.qTrust')}
         </button>
-        <button type="button" onClick={() => s.quick('claim')}>
+        <button type="button" disabled={waiting} onClick={() => st.quick('claim')}>
           {me.role === 'mafia' ? t('mafia.qClaimFake') : t('mafia.qClaim')}
         </button>
-        <button type="button" onClick={() => s.quick('ask')}>
+        <button type="button" disabled={waiting} onClick={() => st.quick('ask')}>
           {t('mafia.qAsk')}
         </button>
       </div>
-      <div className="mf-input">
-        {canListen() && (
-          <button type="button" className="icon-btn" aria-label={hearing ? t('mafia.listening') : t('mafia.mic')} aria-pressed={!!hearing} onClick={mic}>
-            <Icon name={hearing ? 'micOff' : 'mic'} />
-          </button>
-        )}
-        <input
-          value={text}
-          maxLength={200}
-          placeholder={hearing ? t('mafia.listening') : t('mafia.placeholder')}
-          aria-label={t('mafia.placeholder')}
-          enterKeyHint="send"
-          autoComplete="off"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKey}
-        />
-        <button type="button" className="icon-btn mf-send" aria-label={t('mafia.send')} disabled={!text.trim()} onClick={send}>
-          <Icon name="send" />
-        </button>
-      </div>
+      <TextBox placeholder={t('mafia.placeholder')} onSend={(text) => st.say(text)} mic />
       <div className="mf-row">
-        <button type="button" className="btn" onClick={() => s.more()}>
+        <button type="button" className="btn" disabled={waiting} onClick={() => st.more()}>
           {t('mafia.more')}
         </button>
-        <button type="button" className="btn btn-primary" onClick={() => s.toVote()}>
-          {t('mafia.goVote')}
+        <button type="button" className="btn btn-primary" disabled={waiting || iAmReady} onClick={() => st.ready()}>
+          {online && need.length > 1 ? t('mafia.goVoteN', { n: ready, m: need.length }) : t('mafia.goVote')}
+        </button>
+      </div>
+      {iAmReady && <Wait v={v} have={s.ready} />}
+    </div>
+  );
+}
+
+function NightControls({ v }: { v: View }) {
+  const t = useT();
+  const lang = useLang();
+  const pick = useMafia((st) => st.pick);
+  const waiting = useMafia((st) => st.waiting);
+  const st = useMafia.getState();
+  const { s, g, me } = v;
+  const done = s.done.includes(me.id);
+  const role = me.alive && !(me.role === 'mafia' && quietNight(g)) ? me.role : 'citizen';
+  // 마피아끼리 귓속말 (동료가 살아 있을 때)
+  const whisper = me.alive && me.role === 'mafia' && g.players.some((p) => p.alive && p.role === 'mafia' && p.id !== me.id);
+  const box = whisper ? <TextBox placeholder={t('mafia.whisperPh')} onSend={(text) => st.whisper(text)} mic={false} /> : null;
+  if (!me.alive)
+    return (
+      <div className="mf-foot">
+        <p className="mf-prompt">{t('mafia.watching')}</p>
+        {deciders(g).length ? (
+          <Wait v={v} have={s.done} />
+        ) : (
+          <button type="button" className="btn btn-primary btn-block" disabled={waiting} onClick={() => st.night(null)}>
+            {t('mafia.watchNight')}
+          </button>
+        )}
+      </div>
+    );
+  if (done)
+    return (
+      <div className="mf-foot">
+        {box}
+        <Wait v={v} have={s.done} />
+      </div>
+    );
+  const acts = role !== 'citizen';
+  return (
+    <div className="mf-foot">
+      {box}
+      <p className="mf-prompt">{t(`mafia.pickNight.${role}`)}</p>
+      {acts ? (
+        <button type="button" className="btn btn-primary btn-block" disabled={pick === null || waiting} onClick={() => st.night(pick)}>
+          {pick === null ? t('mafia.pickFirst') : t(`mafia.nightGo.${role}`, { name: nameOf(g, pick, lang) })}
+        </button>
+      ) : (
+        <button type="button" className="btn btn-primary btn-block" disabled={waiting} onClick={() => st.night(null)}>
+          {t('mafia.sleep')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function VoteControls({ v }: { v: View }) {
+  const t = useT();
+  const lang = useLang();
+  const pick = useMafia((st) => st.pick);
+  const waiting = useMafia((st) => st.waiting);
+  const st = useMafia.getState();
+  const { s, g, me } = v;
+  if (!me.alive || s.done.includes(me.id))
+    return (
+      <div className="mf-foot">
+        {!me.alive && <p className="mf-prompt">{t('mafia.watching')}</p>}
+        {deciders(g).length ? (
+          <Wait v={v} have={s.done} />
+        ) : (
+          <button type="button" className="btn btn-primary btn-block" disabled={waiting} onClick={() => st.vote(null)}>
+            {t('mafia.watchVote')}
+          </button>
+        )}
+      </div>
+    );
+  return (
+    <div className="mf-foot">
+      <p className="mf-prompt">{t('mafia.pickVote')}</p>
+      <div className="mf-row">
+        <button type="button" className="btn btn-primary" disabled={pick === null || waiting} onClick={() => st.vote(pick)}>
+          {pick === null ? t('mafia.pickFirst') : t('mafia.voteFor', { name: nameOf(g, pick, lang) })}
+        </button>
+        <button type="button" className="btn" disabled={waiting} onClick={() => st.vote(null)}>
+          {t('mafia.abstain')}
         </button>
       </div>
     </div>
   );
 }
 
-function Controls({ g }: { g: Game }) {
+function OverControls({ v }: { v: View }) {
   const t = useT();
-  const lang = useLang();
-  const busy = useMafia((s) => s.busy);
-  const pick = useMafia((s) => s.pick);
-  const s = useMafia.getState();
-  const me = meOf(g);
-  const name = pick === null ? '' : nameOf(g, pick, lang);
-  if (busy)
-    return (
-      <div className="mf-foot">
-        <button type="button" className="btn btn-block" onClick={() => s.skip()}>
-          {t('mafia.skip')}
-        </button>
-      </div>
-    );
-  if (g.phase === 'over') {
-    const won = (g.winner === 'mafia') === (me.role === 'mafia');
-    return (
-      <div className="mf-foot">
-        <p className="mf-result" data-win={won || undefined}>
-          {won ? t('mafia.youWin') : t('mafia.youLose')} · {t(g.winner === 'town' ? 'mafia.townWin' : 'mafia.mafiaWin')}
-        </p>
-        <div className="mf-row">
-          <button type="button" className="btn btn-primary" onClick={() => s.start()}>
+  const st = useMafia.getState();
+  const { s, g, me } = v;
+  const won = (g.winner === 'mafia') === (me.role === 'mafia');
+  const host = !s.online || s.online.role === 'host';
+  return (
+    <div className="mf-foot">
+      <p className="mf-result" data-win={won || undefined}>
+        {won ? t('mafia.youWin') : t('mafia.youLose')} · {t(g.winner === 'town' ? 'mafia.townWin' : 'mafia.mafiaWin')}
+      </p>
+      {!host && <p className="mf-prompt">{t('mafia.hostAgain')}</p>}
+      <div className="mf-row">
+        {host && (
+          <button type="button" className="btn btn-primary" onClick={() => st.again()}>
             {t('mafia.again')}
           </button>
-          <button type="button" className="btn" onClick={() => s.quit()}>
-            {t('mafia.exit')}
-          </button>
-        </div>
-      </div>
-    );
-  }
-  if (g.phase === 'night') {
-    const role = me.alive && !(me.role === 'mafia' && quietNight(g)) ? me.role : 'citizen';
-    const acts = role !== 'citizen';
-    return (
-      <div className="mf-foot">
-        <p className="mf-prompt">{me.alive ? t(`mafia.pickNight.${role}`) : t('mafia.watching')}</p>
-        {acts ? (
-          <button type="button" className="btn btn-primary btn-block" disabled={pick === null} onClick={() => s.night(pick)}>
-            {pick === null ? t('mafia.pickFirst') : t(`mafia.nightGo.${role}`, { name })}
-          </button>
-        ) : (
-          <button type="button" className="btn btn-primary btn-block" onClick={() => s.night(null)}>
-            {me.alive ? t('mafia.sleep') : t('mafia.watchNight')}
-          </button>
         )}
+        <button type="button" className="btn" onClick={() => st.quit()}>
+          {t('mafia.exit')}
+        </button>
       </div>
-    );
-  }
-  if (g.phase === 'vote')
-    return (
-      <div className="mf-foot">
-        <p className="mf-prompt">{me.alive ? t('mafia.pickVote') : t('mafia.watching')}</p>
-        {me.alive ? (
-          <div className="mf-row">
-            <button type="button" className="btn btn-primary" disabled={pick === null} onClick={() => s.vote(pick)}>
-              {pick === null ? t('mafia.pickFirst') : t('mafia.voteFor', { name })}
-            </button>
-            <button type="button" className="btn" onClick={() => s.vote(null)}>
-              {t('mafia.abstain')}
-            </button>
-          </div>
-        ) : (
-          <button type="button" className="btn btn-primary btn-block" onClick={() => s.vote(null)}>
-            {t('mafia.watchVote')}
-          </button>
-        )}
-      </div>
-    );
-  return <DayControls g={g} />;
+    </div>
+  );
 }
 
 export function MafiaScreen() {
   const t = useT();
-  const g = useMafia((s) => s.game);
-  useMafia((s) => s.rev);
-  const cfg = useMafia((s) => s.cfg);
-  const claudeOk = useMafia((s) => s.claudeOk);
-  const note = useMafia((s) => s.note);
+  const s = useMafia((st) => st.session);
+  useMafia((st) => st.rev);
+  const cfg = useMafia((st) => st.cfg);
+  const claudeOk = useMafia((st) => st.claudeOk);
+  const note = useMafia((st) => st.note);
   const [armed, setArm] = useState(false);
   useEffect(() => {
     if (!armed) return;
     const id = setTimeout(() => setArm(false), 2500);
     return () => clearTimeout(id);
   }, [armed]);
-  if (!g) return null;
-  const s = useMafia.getState();
+  // 밤·낮·투표가 바뀌면 고른 친구를 놓는다 (다시 누르면 고르기가 풀리지 않게)
+  const phaseKey = s ? `${s.game.phase}${s.game.day}` : '';
+  useEffect(() => {
+    useMafia.setState({ pick: null });
+  }, [phaseKey]);
+  const seat = mySeatOf(s);
+  const me = s?.game.players[seat];
+  if (!s || !me) return null;
+  const v: View = { s, g: s.game, seat, me };
+  const g = s.game;
+  const st = useMafia.getState();
+  const host = !s.online || s.online.role === 'host';
   const back = (): void => {
-    if (g.phase === 'over' || armed) s.quit();
+    if (g.phase === 'over' || armed) st.quit();
     else setArm(true);
   };
   const night = g.phase === 'night';
@@ -332,28 +430,30 @@ export function MafiaScreen() {
           <Icon name={night ? 'moon' : 'sun'} size={18} />
           {title}
         </h1>
+        {s.online && <OnlineChip />}
         {canSpeak() && (
-          <button type="button" className="icon-btn" aria-pressed={cfg.voice} aria-label={cfg.voice ? t('mafia.voiceOff') : t('mafia.voiceOn')} onClick={() => s.setCfg({ voice: !cfg.voice })}>
+          <button type="button" className="icon-btn" aria-pressed={cfg.voice} aria-label={cfg.voice ? t('mafia.voiceOff') : t('mafia.voiceOn')} onClick={() => st.setCfg({ voice: !cfg.voice })}>
             <Icon name={cfg.voice ? 'volume' : 'volumeOff'} />
           </button>
         )}
-        {claudeOk && (
-          <button type="button" className="mf-claude" aria-pressed={cfg.claude} aria-label={cfg.claude ? t('mafia.claudeOffBtn') : t('mafia.claudeOnBtn')} onClick={() => s.setCfg({ claude: !cfg.claude })}>
+        {host && claudeOk && (
+          <button type="button" className="mf-claude" aria-pressed={cfg.claude} aria-label={cfg.claude ? t('mafia.claudeOffBtn') : t('mafia.claudeOnBtn')} onClick={() => st.setCfg({ claude: !cfg.claude })}>
             <Icon name="spark" size={16} />
             Claude
           </button>
         )}
       </header>
-      {armed && <p className="mf-note">{t('mafia.quitAgain')}</p>}
+      {s.online && <OnlineNotice />}
+      {armed && <p className="mf-note">{t(s.online ? 'mafia.quitOnline' : 'mafia.quitAgain')}</p>}
       {note && <p className="mf-note">{t(`mafia.note.${note}`)}</p>}
       <ul className="mf-ring" data-n={g.players.length}>
         {g.players.map((p) => (
-          <Tile key={p.id} g={g} p={p} />
+          <Tile key={p.id} v={v} p={p} />
         ))}
       </ul>
-      <Now g={g} />
-      <Log g={g} />
-      <Controls g={g} />
+      <Now v={v} />
+      <Log v={v} />
+      {g.phase === 'over' ? <OverControls v={v} /> : night ? <NightControls v={v} /> : g.phase === 'vote' ? <VoteControls v={v} /> : <DayControls v={v} />}
     </div>
   );
 }

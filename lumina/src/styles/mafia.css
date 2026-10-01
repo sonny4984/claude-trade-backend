@@ -113,7 +113,13 @@
 .mf-tile[data-speaking] {
   border-color: var(--mf-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--mf-accent) 45%, transparent);
+}
+/* 말하는 친구는 얼굴만 들썩인다 (단추는 그대로라 누르기 쉽다) */
+.mf-tile[data-speaking] img {
   animation: mf-bob 0.9s var(--ease-in-out) infinite alternate;
+}
+.mf-tile[data-human] img {
+  box-shadow: 0 0 0 2px var(--accent);
 }
 .mf-tile[data-dead] img {
   filter: grayscale(1);
@@ -209,6 +215,24 @@
 .mf-now[data-empty] {
   visibility: hidden;
 }
+.mf-now > span {
+  flex: 1;
+  min-width: 0;
+}
+.mf-skip {
+  flex: none;
+  margin-left: auto;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--panel-line);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
 .mf-now[data-thinking] {
   color: var(--text-dim);
   font-size: 14px;
@@ -264,13 +288,16 @@
   color: var(--text-dim);
   font-size: 11.5px;
 }
-.mf-line[data-kind='me'] {
+.mf-line[data-mine] {
   align-self: flex-end;
   border-radius: 12px 12px 4px 12px;
   background: var(--accent-soft);
 }
-.mf-line[data-kind='me'] b {
+.mf-line[data-mine] b {
   display: none;
+}
+.mf-line[data-kind='chat']:not([data-mine]) {
+  background: color-mix(in srgb, var(--accent-soft) 45%, var(--panel));
 }
 .mf-line[data-kind='sys'] {
   align-self: center;
@@ -403,7 +430,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mf-tile[data-speaking],
+  .mf-tile[data-speaking] img,
   .mf-dots i {
     animation: none;
   }

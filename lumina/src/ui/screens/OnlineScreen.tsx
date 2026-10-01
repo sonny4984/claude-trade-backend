@@ -18,7 +18,7 @@ import { CommsButton } from '../online/Comms';
 import { sfx } from '../../audio/sfx';
 
 const LEVELS: AiLevel[] = ['beginner', 'casual', 'advanced', 'expert'];
-const GAMES: OnlineGame[] = ['lumina', 'coda', 'gomoku', 'fireice'];
+const GAMES: OnlineGame[] = ['lumina', 'coda', 'gomoku', 'fireice', 'mafia'];
 
 function Face({ id, ex = 'idle', size = 56 }: { id: CharacterId; ex?: Expression; size?: number }) {
   const src = usePortrait(id, ex, 128);
@@ -189,6 +189,7 @@ function SeatRow({ seat, i, host, me }: { seat: TableSeat; i: number; host: bool
   const t = useT();
   const hostPeer = useOnline((s) => s.table?.hostPeer);
   const store = useOnline.getState();
+  const game = useOnline((s) => s.table?.game);
   const isHostSeat = seat.peer !== null && seat.peer === hostPeer;
   const role = seat.kind === 'ai' ? t(`ai.${seat.level ?? 'casual'}`) : isHostSeat ? t('online.host') : t('online.guest');
   return (
@@ -201,7 +202,7 @@ function SeatRow({ seat, i, host, me }: { seat: TableSeat; i: number; host: bool
         </b>
         <span className="ol-role">{seat.away ? t('online.awayShort') : role}</span>
       </div>
-      {host && seat.kind === 'ai' && (
+      {host && seat.kind === 'ai' && game !== 'mafia' && (
         <select className="ol-level" value={seat.level ?? 'casual'} aria-label={t('ai.level')} onChange={(e) => store.setLevel(i, e.target.value as AiLevel)}>
           {LEVELS.map((l) => (
             <option key={l} value={l}>
@@ -319,6 +320,11 @@ function Lobby() {
           </button>
         )}
       </section>
+      {status === 'lobby' && table.game === 'mafia' && (
+        <section className="card">
+          <p className="ol-note">{t('online.mafiaFill')}</p>
+        </section>
+      )}
       {host && status === 'lobby' && table.game === 'coda' && (
         <section className="card">
           <label className="toggle-row">
@@ -343,7 +349,7 @@ function Lobby() {
 }
 
 /** 지금 온라인 판이 도는 게임 화면 */
-function screenOf(game: OnlineGame): 'game' | 'coda' | 'gomoku' | 'fireice' {
+function screenOf(game: OnlineGame): 'game' | 'coda' | 'gomoku' | 'fireice' | 'mafia' {
   return game === 'lumina' ? 'game' : game;
 }
 

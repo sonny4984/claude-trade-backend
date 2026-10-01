@@ -68,20 +68,6 @@ async function joinRoom(guest: Page, code: string): Promise<void> {
   await guest.locator('.ol-join button[type=submit]').click();
 }
 
-async function applyHint(page: Page): Promise<boolean> {
-  const hint = page.locator('.tool').nth(3);
-  for (let i = 0; i < 3; i++) {
-    if (await page.locator('.sheet .btn-primary').count()) break;
-    if (!(await hint.isEnabled())) return false;
-    await hint.click();
-    await page.waitForTimeout(200);
-  }
-  const apply = page.locator('.sheet .btn-primary');
-  if (!(await apply.count())) return false;
-  await apply.click();
-  return true;
-}
-
 test('온라인 루미큐브: 방 만들기 → 코드로 참가 → 친구의 첫 등록이 방장 판에 그대로', async ({ browser }) => {
   // 시드 2: 방장·친구·AI 셋이면 친구(1번 자리)가 먼저 두고 첫 차례에 등록할 수 있다 (scripts/online-check.ts)
   const host = await device(browser, '/?seed=2');
@@ -118,7 +104,8 @@ test('온라인 루미큐브: 방 만들기 → 코드로 참가 → 친구의 �
   // 친구 차례: 방장은 못 두고, 친구는 힌트로 첫 등록을 만들어 낸다
   await expect(guest.page.locator('.draw-btn')).toBeEnabled();
   await expect(host.page.locator('.draw-btn')).toBeDisabled();
-  expect(await applyHint(guest.page)).toBe(true);
+  // 온라인 판에는 힌트 단추가 없다 — 시험용 손잡이로 힌트 풀이를 그대로 놓는다
+  expect(await guest.page.evaluate(() => (window as unknown as { __lumina: { proposeHint: () => boolean } }).__lumina.proposeHint())).toBe(true);
   const placed = await guest.page.locator('.felt .tile').count();
   expect(placed).toBeGreaterThan(0);
   await guest.page.locator('.commit-btn').click();

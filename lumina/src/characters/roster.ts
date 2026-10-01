@@ -35,6 +35,8 @@ export const CHARACTERS: Readonly<Record<CharacterId, CharacterSpec>> = {
 };
 
 export const CHARACTER_ORDER: readonly CharacterId[] = ['hwigi', 'ginini', 'pponi', 'moka'];
+/** 마피아처럼 자리가 많은 게임에서 AI 자리를 채울 때 (앞의 넷 다음에 마피아 전용 친구들) */
+export const ALL_CHARACTERS: readonly CharacterId[] = [...CHARACTER_ORDER, 'dubu', 'kongi', 'bori', 'nuri'];
 
 export function isCharacterId(x: unknown): x is CharacterId {
   return typeof x === 'string' && (CHARACTER_ORDER as readonly string[]).includes(x);

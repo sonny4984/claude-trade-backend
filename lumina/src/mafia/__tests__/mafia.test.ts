@@ -149,13 +149,13 @@ describe('마피아 대사', () => {
     const hwigi = id('hwigi');
     const ginini = id('ginini');
     const pponi = id('pponi');
-    expect(parseHuman(g, '휘기가 마피아 같아').acts).toEqual([{ k: 'accuse', t: hwigi, why: 'gut' }]);
-    expect(parseHuman(g, '기니니는 마피아 아닌 것 같아').acts).toEqual([{ k: 'trust', t: ginini, why: 'gut' }]);
-    expect(parseHuman(g, '휘기 말고 기니니가 수상해').acts).toEqual([{ k: 'accuse', t: ginini, why: 'gut' }]);
-    expect(parseHuman(g, '나 경찰인데 뽀니 조사했더니 마피아였어').acts).toEqual([{ k: 'claim', role: 'police', res: [[pponi, true]] }]);
-    expect(parseHuman(g, 'Hwigi is sus').acts).toEqual([{ k: 'accuse', t: hwigi, why: 'gut' }]);
-    expect(parseHuman(g, '휘기 왜 그렇게 생각해?')).toMatchObject({ acts: [], why: hwigi });
-    expect(parseHuman(g, '다들 누가 수상해?')).toMatchObject({ acts: [], ask: true });
+    expect(parseHuman(g, '휘기가 마피아 같아', 0).acts).toEqual([{ k: 'accuse', t: hwigi, why: 'gut' }]);
+    expect(parseHuman(g, '기니니는 마피아 아닌 것 같아', 0).acts).toEqual([{ k: 'trust', t: ginini, why: 'gut' }]);
+    expect(parseHuman(g, '휘기 말고 기니니가 수상해', 0).acts).toEqual([{ k: 'accuse', t: ginini, why: 'gut' }]);
+    expect(parseHuman(g, '나 경찰인데 뽀니 조사했더니 마피아였어', 0).acts).toEqual([{ k: 'claim', role: 'police', res: [[pponi, true]] }]);
+    expect(parseHuman(g, 'Hwigi is sus', 0).acts).toEqual([{ k: 'accuse', t: hwigi, why: 'gut' }]);
+    expect(parseHuman(g, '휘기 왜 그렇게 생각해?', 0)).toMatchObject({ acts: [], why: hwigi });
+    expect(parseHuman(g, '다들 누가 수상해?', 0)).toMatchObject({ acts: [], ask: true });
   });
 
   it('사람이 누구를 의심하면 그 친구가 해명하고 다른 친구가 거든다', () => {
@@ -164,7 +164,7 @@ describe('마피아 대사', () => {
     const t = living(g).find((p) => !p.human)?.id ?? 1;
     const act: Act = { k: 'accuse', t, why: 'gut' };
     record(g, 0, act);
-    const said = plan(g, { k: 'human', acts: [act], ask: false, why: null });
+    const said = plan(g, { k: 'human', by: 0, acts: [act], ask: false, why: null });
     expect(said[0]?.by).toBe(t);
     expect(said.length).toBeGreaterThanOrEqual(2);
     expect(['agree', 'doubt']).toContain(said[1]?.act.k);

@@ -3,6 +3,7 @@
  */
 import { useEffect } from 'react';
 import { useGame } from '../../store/game';
+import { useOnline } from '../../net/online';
 import { usePortrait } from '../../characters/portrait3d';
 import type { CharacterId } from '../../characters/roster';
 import { Icon } from '../../ui/components/Icon';
@@ -115,6 +116,16 @@ export function MafiaSetup() {
       <footer className="screen-foot">
         <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => start()}>
           {t('mafia.start')}
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-block"
+          onClick={() => {
+            useOnline.getState().setGame('mafia');
+            useGame.getState().go('online');
+          }}
+        >
+          {t('mafia.online')}
         </button>
       </footer>
     </div>

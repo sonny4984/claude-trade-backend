@@ -1165,3 +1165,14 @@ export function tileText(id: TileId): string {
 }
 
 export { tile };
+
+// 시험용 손잡이 — 내 컴퓨터(localhost)에서 열었을 때만: 온라인 판에는 힌트가 없어서, e2e가 힌트 풀이로 첫 등록을 놓는다
+if (typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) {
+  (window as unknown as { __lumina?: unknown }).__lumina = {
+    proposeHint: (): boolean => {
+      const s = useGame.getState().session;
+      const data = s ? computeHint(s.match.game) : null;
+      return !!data?.proposal.length && useGame.getState().act({ type: 'propose', sets: data.proposal.map((x) => x.slice()) });
+    },
+  };
+}

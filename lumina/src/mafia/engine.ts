@@ -42,6 +42,8 @@ export const PERSONA: Readonly<Record<CharacterId, Persona>> = {
 export interface Player {
   id: number;
   character: CharacterId;
+  /** 사람 자리면 방에서 쓴 이름 (없으면 캐릭터 이름) */
+  name?: string;
   human: boolean;
   role: Role;
   alive: boolean;
@@ -159,14 +161,20 @@ export interface NewGame {
   seed?: number;
   /** 시험용: 0번 자리도 AI */
   allAi?: boolean;
+  /** 온라인: 방의 자리 그대로 (역할은 무작위) */
+  seats?: readonly { character: CharacterId; human: boolean; name?: string }[];
 }
 
 export function newGame(o: NewGame): Game {
-  const count = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, o.count));
+  const count = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, o.seats?.length ?? o.count));
   const g: Game = { seed: o.seed ?? (Math.random() * 2 ** 31) | 0, players: [], mafia: mafiaCount(count), day: 1, phase: 'night', said: [], votes: [], deaths: [], claims: [], checks: [], saved: null, winner: null };
   const roles = shuffle(g, rolesFor(count));
   const k = o.myRole ? roles.indexOf(o.myRole) : -1;
   if (k > 0) [roles[0], roles[k]] = [roles[k] as Role, roles[0] as Role];
+  if (o.seats) {
+    g.players = o.seats.slice(0, count).map((x, id) => ({ id, character: x.character, ...(x.name ? { name: x.name } : {}), human: x.human, role: roles[id] as Role, alive: true, gut: o.seats!.map(() => rand(g) * 2 - 1) }));
+    return g;
+  }
   const cast = [o.me, ...shuffle(g, CAST.filter((c) => c !== o.me))].slice(0, count);
   g.players = cast.map((character, id) => ({ id, character, human: id === 0 && !o.allAi, role: roles[id] as Role, alive: true, gut: cast.map(() => rand(g) * 2 - 1) }));
   return g;
@@ -393,7 +401,7 @@ export function trustWhy(g: Game, viewer: number | null, t: number): { why: Why;
 
 // ── 낮: 누가 무슨 뜻으로 말할지 ──────────────────────────
 
-export type Trigger = { k: 'open' } | { k: 'more' } | { k: 'human'; acts: Act[]; ask: boolean; why: number | null };
+export type Trigger = { k: 'open' } | { k: 'more' } | { k: 'human'; by: number; acts: Act[]; ask: boolean; why: number | null };
 
 /** 한 번에 이어지는 AI 대사 수 */
 const ROUND = 4;
@@ -524,7 +532,7 @@ export function plan(g: Game, tr: Trigger): Said[] {
       living(g).filter((p) => !p.human && !used.has(p.id)),
       (p) => score(p) + rand(g),
     );
-  const h = g.players.find((p) => p.human);
+  const h = tr.k === 'human' ? g.players[tr.by] : undefined;
   if (tr.k === 'human' && h) {
     for (const act of tr.acts) {
       if (act.k === 'accuse' && g.players[act.t]?.alive && !g.players[act.t]?.human) {
@@ -702,14 +710,14 @@ function checkChoice(g: Game, c: number): number | null {
   );
 }
 
-/** AI들의 밤 행동 (사람이 맡은 자리는 비워 둔다 — 사람이 마피아면 사람이 고른다) */
+/** AI들의 밤 행동 (사람이 맡은 자리는 비워 둔다 — 살아 있는 사람 마피아가 있으면 사람이 고른다) */
 export function aiNight(g: Game): NightPlan {
   const ais = living(g).filter((p) => !p.human);
-  const me = living(g).find((p) => p.human);
+  const humanMafia = living(g).some((p) => p.human && p.role === 'mafia');
   const doc = ais.find((p) => p.role === 'doctor');
   const cop = ais.find((p) => p.role === 'police');
   return {
-    kill: ais.some((p) => p.role === 'mafia') && me?.role !== 'mafia' ? killChoice(g) : null,
+    kill: ais.some((p) => p.role === 'mafia') && !humanMafia ? killChoice(g) : null,
     save: doc ? saveChoice(g, doc.id) : null,
     check: cop ? checkChoice(g, cop.id) : null,
   };

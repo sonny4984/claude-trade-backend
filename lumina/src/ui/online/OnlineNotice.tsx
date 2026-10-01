@@ -8,6 +8,7 @@ import { useGame } from '../../store/game';
 import { useCoda } from '../../coda/store';
 import { useGomoku } from '../../gomoku/store';
 import { useFireIce } from '../../fireice/store';
+import { useMafia } from '../../mafia/store';
 import { useT } from '../../i18n';
 import { CommsButton } from './Comms';
 
@@ -17,6 +18,7 @@ function leaveGame(): void {
   else if (useGame.getState().session?.online) useGame.getState().quit();
   else if (useGomoku.getState().session?.online) useGomoku.getState().quit();
   else if (useFireIce.getState().session?.online) useFireIce.getState().quit();
+  else if (useMafia.getState().session?.online) useMafia.getState().quit();
   else void useOnline.getState().leave();
 }
 

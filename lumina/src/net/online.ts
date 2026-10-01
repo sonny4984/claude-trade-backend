@@ -12,7 +12,7 @@
  *  · 한계: 방 코드를 아는 사람은 판 전체를 풀어 볼 수 있다 (친구끼리 전제).
  */
 import { create } from 'zustand';
-import { CHARACTER_ORDER, isCharacterId, type CharacterId } from '../characters/roster';
+import { ALL_CHARACTERS, CHARACTER_ORDER, isCharacterId, type CharacterId } from '../characters/roster';
 import type { AiLevel } from '../game/types';
 import { readJSON, removeKey, writeJSON } from '../store/storage';
 import { useGame } from '../store/game';
@@ -737,7 +737,7 @@ export const useOnline = create<OnlineStore>((set, get) => {
       const t = get().table;
       if (!t || get().role !== 'host' || t.status !== 'lobby' || !GAME_SEATS[t.game].ai || t.seats.length >= GAME_SEATS[t.game].max) return;
       const used = new Set(t.seats.map((s) => s.character));
-      const character = CHARACTER_ORDER.find((c) => !used.has(c)) ?? 'hwigi';
+      const character = ALL_CHARACTERS.find((c) => !used.has(c)) ?? 'hwigi';
       const nt: TableDoc = { ...t, seats: [...t.seats, { kind: 'ai', peer: null, name: tr(`character.${character}`), character, level }], at: Date.now() };
       set({ table: nt });
       write(nt);

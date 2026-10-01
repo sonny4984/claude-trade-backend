@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { startBroker, type TestBroker } from './broker';
 
 /**
  * 마피아 — AI 친구들과 한 판: 밤 → 낮 대화(내 말에 지목된 친구가 해명) → 투표 → 다음 밤.
@@ -6,10 +7,10 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 interface Hook {
-  store: { getState: () => { busy: boolean; game: { phase: string; players: { alive: boolean; human: boolean }[] } | null } };
+  store: { getState: () => { session: { game: { phase: string; players: { alive: boolean }[] }; online: { mySeat: number } | null } | null } };
 }
 
-async function open(page: Page): Promise<string[]> {
+async function open(page: Page, path = '/', home = true): Promise<string[]> {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
@@ -22,30 +23,30 @@ async function open(page: Page): Promise<string[]> {
       sessionStorage.setItem('e2e-init', '1');
       localStorage.clear();
       localStorage.setItem('lumina.settings.v1', JSON.stringify({ show3d: false }));
+      localStorage.setItem('lumina.mafia.setup.v1', JSON.stringify({ count: 7, me: 'moka', role: 'random', voice: false, claude: false }));
     } catch {
       /* 저장소가 막힌 환경 */
     }
   });
-  await page.goto('/');
-  await expect(page.locator('.wordmark')).toHaveText('LUMINA');
+  await page.goto(path);
+  if (home) await expect(page.locator('.wordmark')).toHaveText('LUMINA');
   return errors;
 }
 
 const state = (page: Page) =>
   page.evaluate(() => {
-    const s = (window as unknown as { __mafia: Hook }).__mafia.store.getState();
-    return { busy: s.busy, phase: s.game?.phase ?? '', alive: s.game?.players.find((p) => p.human)?.alive ?? false };
+    const s = (window as unknown as { __mafia: Hook }).__mafia.store.getState().session;
+    const seat = s?.online?.mySeat ?? 0;
+    return { phase: s?.game.phase ?? '', alive: s?.game.players[seat]?.alive ?? false };
   });
 
-/** AI 차례가 끝날 때까지 (건너뛰기로 재촉) */
-async function settle(page: Page): Promise<void> {
-  for (let i = 0; i < 60; i++) {
-    if (!(await state(page)).busy) return;
-    const skip = page.getByRole('button', { name: '건너뛰기' });
-    if (await skip.isVisible().catch(() => false)) await skip.click().catch(() => undefined);
-    await page.waitForTimeout(250);
-  }
-  throw new Error('AI 차례가 끝나지 않음');
+/** 밤: 고를 게 있으면 첫 친구를 골라 정하고, 아니면 잠든다 */
+async function actNight(page: Page): Promise<void> {
+  if (!(await state(page)).alive) return;
+  const sleep = page.getByRole('button', { name: '잠들기' });
+  if (await sleep.isVisible()) return sleep.click();
+  await page.locator('.mf-tile[aria-disabled="false"]').first().click();
+  await page.getByRole('button', { name: /(노리기|조사하기|지키기)$/ }).click();
 }
 
 test('마피아: AI 친구들과 밤·낮 대화·투표', async ({ page }) => {
@@ -54,8 +55,6 @@ test('마피아: AI 친구들과 밤·낮 대화·투표', async ({ page }) => {
   await expect(page.locator('.mafia-setup')).toBeVisible();
   await page.getByRole('radio', { name: '7명' }).click();
   await page.getByRole('radio', { name: '시민', exact: true }).click();
-  const voice = page.locator('.toggle-row', { hasText: '목소리로 읽어 주기' }).locator('input');
-  if (await voice.count()) await voice.uncheck();
   await expect(page.locator('.mafia-setup')).toContainText('Claude 대사는 claude.ai에서 열었을 때만 돼요');
   await page.getByRole('button', { name: '시작하기' }).click();
 
@@ -67,36 +66,110 @@ test('마피아: AI 친구들과 밤·낮 대화·투표', async ({ page }) => {
   await page.getByRole('button', { name: '잠들기' }).click();
   await expect(page.locator('.mf-line[data-kind="sys"]', { hasText: '아침이 밝았어요' })).toBeVisible();
   await expect(page.locator('.mf-line[data-kind="say"]').first()).toBeVisible();
-  await settle(page);
 
   if ((await state(page)).alive) {
     // 살아 있는 AI 친구 하나를 의심하면 그 친구가 해명한다
+    if (await page.locator('.mf-skip').isVisible()) await page.locator('.mf-skip').click();
     const tile = page.locator('.mf-tile:not([data-me]):not([data-dead])').first();
     const name = (await tile.locator('.mf-name').innerText()).trim();
     const before = await page.locator('.mf-line[data-kind="say"]').count();
     await page.getByPlaceholder('하고 싶은 말').fill(`${name} 수상해`);
     await page.getByRole('button', { name: '보내기' }).click();
-    await expect(page.locator('.mf-line[data-kind="me"]').last()).toContainText(`${name} 수상해`);
+    await expect(page.locator('.mf-line[data-mine]').last()).toContainText(`${name} 수상해`);
     await expect(page.locator('.mf-line[data-kind="say"]').nth(before)).toContainText(name);
-    await settle(page);
 
     // 빠른 말: 친구를 고르고 "믿어"
     await tile.click();
     await page.getByRole('button', { name: `${name} 믿어` }).click();
-    await settle(page);
-  }
-
-  // 투표
-  await page.getByRole('button', { name: '투표하러 가기' }).click();
-  await expect(page.locator('.mf-line[data-kind="sys"]').last()).toContainText('투표 시간');
-  if ((await state(page)).alive) {
+    await expect(page.locator('.mf-line[data-mine]').last()).toContainText(`${name}`);
+    await page.getByRole('button', { name: '투표하러 가기' }).click();
+    await expect(page.locator('.mf-head h1')).toContainText('투표');
     await page.locator('.mf-tile:not([data-me]):not([data-dead])').first().click();
     await page.getByRole('button', { name: /에게 투표$/ }).click();
-  } else await page.getByRole('button', { name: '투표 보기' }).click();
-  await settle(page);
+  } else {
+    await page.getByRole('button', { name: '투표 보기' }).click();
+    await page.getByRole('button', { name: '투표 보기' }).click();
+  }
   await expect(page.locator('.mf-line[data-kind="vote"]').first()).toBeVisible();
   const after = await state(page);
   expect(['night', 'over']).toContain(after.phase);
   if (after.phase === 'night') await expect(page.locator('.mf-head h1')).toContainText('2일째 밤');
   expect(errors).toEqual([]);
+});
+
+test.describe('온라인', () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, '두 기기 시험은 한 번만');
+  let broker: TestBroker;
+  test.beforeAll(async () => {
+    broker = await startBroker();
+  });
+  test.afterAll(async () => {
+    await broker.close();
+  });
+
+  test('방장과 친구 둘이 AI 둘과 한 판: 각자 역할, 셋 다 정해야 아침, 서로의 말, 모두 모여야 투표', async ({ browser }) => {
+    const withBroker = (p: string): string => `${p}${p.includes('?') ? '&' : '?'}broker=${encodeURIComponent(broker.url)}`;
+    const hostCtx = await browser.newContext({ viewport: { width: 900, height: 900 } });
+    const host = await hostCtx.newPage();
+    const errors = [await open(host, withBroker('/'))];
+    await host.locator('.plate-online').click();
+    await host.locator('.ol-name').fill('방장');
+    await host.locator('.ol-game[data-game="mafia"]').click();
+    await host.locator('.ol-create').click();
+    const link = await host.locator('.ol-link').inputValue();
+    const path = link.replace(/^https?:\/\/[^/]+/, '');
+    const guests: Page[] = [];
+    const contexts = [hostCtx];
+    for (const name of ['여자친구', '동생']) {
+      const ctx = await browser.newContext({ viewport: { width: 900, height: 900 } });
+      contexts.push(ctx);
+      const g = await ctx.newPage();
+      errors.push(await open(g, path.includes('broker=') ? path : withBroker(path), false));
+      await g.locator('.ol-name').fill(name);
+      await g.locator('.ol-enter').click();
+      guests.push(g);
+      await expect(host.locator('.ol-seat:not(.ol-seat-empty)')).toHaveCount(guests.length + 1);
+    }
+    await expect(host.locator('.ol-note', { hasText: 'AI 친구가 채워요' })).toBeVisible();
+    await host.getByRole('button', { name: '시작하기' }).click();
+    const all = [host, ...guests];
+
+    // 모두 같은 판 (사람 셋 + AI 둘), 각자 자기 역할만 안다
+    for (const p of all) {
+      await expect(p.locator('.mafia-screen')).toBeVisible();
+      await expect(p.locator('.mf-tile')).toHaveCount(5);
+      await expect(p.locator('.mf-line[data-kind="secret"]').first()).toContainText('당신은');
+      await expect(p.locator('.mf-tile[data-human]')).toHaveCount(2);
+    }
+
+    // 밤: 셋 다 정해야 아침이 온다 (둘만 정하면 아직 밤)
+    await actNight(host);
+    await actNight(guests[0] as Page);
+    await expect(host.locator('.mf-head h1')).toContainText('밤');
+    await actNight(guests[1] as Page);
+    for (const p of all) await expect(p.locator('.mf-line[data-kind="sys"]', { hasText: '아침이 밝았어요' })).toBeVisible();
+
+    const st = await Promise.all(all.map((p) => state(p)));
+    if (st[0]?.phase === 'day') {
+      const alive = all.filter((_, i) => st[i]?.alive);
+      // 서로의 말이 보인다
+      const speaker = alive[alive.length - 1];
+      if (speaker) {
+        await speaker.getByPlaceholder('하고 싶은 말').fill('다들 누가 수상해?');
+        await speaker.getByRole('button', { name: '보내기' }).click();
+        for (const p of all) await expect(p.locator('.mf-line[data-kind="chat"]', { hasText: '다들 누가 수상해?' })).toBeVisible();
+      }
+      // 투표: 살아 있는 사람이 모두 "투표하러 가기"를 눌러야 넘어간다
+      for (const p of alive) await p.getByRole('button', { name: /^투표하러 가기/ }).click();
+      for (const p of all) await expect(p.locator('.mf-head h1')).toContainText('투표');
+      for (const p of alive) {
+        await p.locator('.mf-tile[aria-disabled="false"]').first().click();
+        await p.getByRole('button', { name: /에게 투표$/ }).click();
+      }
+      for (const p of all) await expect(p.locator('.mf-line[data-kind="vote"]').first()).toBeVisible();
+      for (const p of all) expect(['night', 'over']).toContain((await state(p)).phase);
+    }
+    for (const e of errors) expect(e).toEqual([]);
+    for (const c of contexts) await c.close();
+  });
 });
