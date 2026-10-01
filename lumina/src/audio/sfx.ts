@@ -267,8 +267,9 @@ export function squeakTalk(text: string, pitch = 1, mood: TalkMood = 'calm'): nu
   const ask = /[?？]\s*$/.test(text);
   const shout = /!\s*$/.test(text) || mood === 'excited';
   const sad = mood === 'sad';
-  const base = 1350 * pitch * (shout ? 1.12 : sad ? 0.88 : 1);
-  const step = shout ? 0.058 : sad ? 0.085 : 0.068;
+  // 사람 말보다 훨씬 높은 아기 기니피그 목소리 (보통 2kHz 안팎)
+  const base = 1650 * pitch * (shout ? 1.1 : sad ? 0.9 : 1);
+  const step = shout ? 0.05 : sad ? 0.075 : 0.058;
   let t = c.currentTime + 0.02;
   let color = 1500;
   let said = 0;
@@ -276,55 +277,68 @@ export function squeakTalk(text: string, pitch = 1, mood: TalkMood = 'calm'): nu
   for (const ch of chars) {
     if (said >= total) break;
     if (/\s/.test(ch)) {
-      t += 0.045;
+      t += 0.04;
       continue;
     }
     color = colorOf(ch, color);
     const last = said === total - 1;
-    // 문장이 갈수록 살짝 내려가는 억양, 글자마다 조금씩 다르게
-    const drift = 1 - (said / Math.max(1, total)) * (sad ? 0.25 : 0.08);
-    const f = base * drift * (0.9 + Math.random() * 0.22);
-    const d = step * (0.85 + Math.random() * 0.3) * (last ? 1.6 : 1);
-    const end = last ? (ask ? 1.45 : sad ? 0.72 : shout ? 1.3 : 0.92) : 1.12;
-    squeakSyllable(c, out, t, f, f * end, d, color);
-    t += d + 0.018;
+    // 통통 튀는 억양: 글자마다 위아래로 살짝 오르내리고, 문장은 거의 내려가지 않는다 (슬플 때만 처진다)
+    const bounce = 1 + 0.08 * Math.sin(said * 1.9 + 0.6);
+    const drift = 1 - (said / Math.max(1, total)) * (sad ? 0.22 : 0.03);
+    const f = base * drift * bounce * (0.95 + Math.random() * 0.1);
+    const d = step * (0.85 + Math.random() * 0.3) * (last ? 1.7 : 1);
+    // 끝은 귀엽게 올려 "뀨?" — 묻는 말은 더 올리고, 슬픈 말만 내린다
+    const end = last ? (ask ? 1.55 : sad ? 0.75 : 1.28) : 1.18;
+    squeakSyllable(c, out, t, f, f * end, d, color * 1.3);
+    t += d + 0.016;
     said++;
   }
   // 외치는 말 끝에는 "위익!" 하고 한 번 더
-  if (shout && !sad) squeal(c, out, t + 0.02, [[0, base * 0.85], [0.12, base * 1.9], [0.2, base * 1.6]], 0.22, 0.09, 22, 60);
-  return Math.round((t - c.currentTime) * 1000) + (shout ? 240 : 0);
+  if (shout && !sad) squeal(c, out, t + 0.02, [[0, base * 0.9], [0.1, base * 2], [0.18, base * 1.7]], 0.2, 0.08, 24, 70);
+  return Math.round((t - c.currentTime) * 1000) + (shout ? 220 : 0);
 }
 
-/** 짧은 뀨 하나: 세모파가 f0에서 f1로 미끄러지고, 모음 색 거르개와 아주 작은 떨림 */
+/** 짧은 뀨 하나: 아래에서 톡 튀어 올라 미끄러지는 맑은 휘파람(사인파)에, 모음 색을 낸 세모파를 살짝 섞는다 */
 function squeakSyllable(c: AudioContext, out: AudioNode, t: number, f0: number, f1: number, dur: number, color: number): void {
-  const o = c.createOscillator();
-  o.type = 'triangle';
-  o.frequency.setValueAtTime(f0 * 0.92, t);
-  o.frequency.exponentialRampToValueAtTime(f0, t + dur * 0.25);
-  o.frequency.exponentialRampToValueAtTime(f1, t + dur);
-  const lfo = c.createOscillator();
-  lfo.frequency.value = 28;
-  const lg = c.createGain();
-  lg.gain.value = 18;
-  lfo.connect(lg).connect(o.frequency);
-  const bp = c.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.frequency.value = color;
-  bp.Q.value = 1.4;
-  // 거르개를 지나지 않은 맑은 소리도 조금 섞어 휘파람 같은 기니피그 소리를 살린다
-  const dry = c.createGain();
-  dry.gain.value = 0.35;
   const g = c.createGain();
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.13, t + 0.008);
-  g.gain.setValueAtTime(0.13, t + dur * 0.55);
+  g.gain.exponentialRampToValueAtTime(0.12, t + 0.01);
+  g.gain.setValueAtTime(0.12, t + dur * 0.6);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(bp).connect(g);
-  o.connect(dry).connect(g);
-  g.connect(out);
-  o.start(t);
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 7000;
+  g.connect(lp).connect(out);
+  // 아주 빠르고 얕은 떨림 — 작은 동물 소리처럼
+  const lfo = c.createOscillator();
+  lfo.frequency.value = 34;
+  const lg = c.createGain();
+  lg.gain.value = f0 * 0.012;
+  lfo.connect(lg);
+  for (const [type, level, filtered] of [
+    ['sine', 0.8, false],
+    ['triangle', 0.45, true],
+  ] as const) {
+    const o = c.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f0 * 0.8, t);
+    o.frequency.exponentialRampToValueAtTime(f0 * 1.05, t + dur * 0.28);
+    o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    lg.connect(o.frequency);
+    const lv = c.createGain();
+    lv.gain.value = level;
+    if (filtered) {
+      const bp = c.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = color;
+      bp.Q.value = 1.6;
+      o.connect(bp).connect(lv);
+    } else o.connect(lv);
+    lv.connect(g);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
   lfo.start(t);
-  o.stop(t + dur + 0.02);
   lfo.stop(t + dur + 0.02);
 }
 

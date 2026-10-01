@@ -490,3 +490,28 @@
   background: color-mix(in srgb, var(--valid) 18%, var(--panel));
   border-color: var(--valid);
 }
+
+/* 기니피그 목소리 높이·들어 보기 */
+.mf-voice-tune {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mf-slider {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.mf-slider input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.mf-voice-tune .btn {
+  flex: none;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 14px;
+}

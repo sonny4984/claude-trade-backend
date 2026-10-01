@@ -8,7 +8,8 @@ import { usePortrait } from '../../characters/portrait3d';
 import type { CharacterId } from '../../characters/roster';
 import { Icon } from '../../ui/components/Icon';
 import { translateList, useLang, useT } from '../../i18n';
-import { CAST, MAX_PLAYERS, MIN_PLAYERS, rolesFor, type Role } from '../engine';
+import { CAST, MAX_PLAYERS, MIN_PLAYERS, PERSONA, rolesFor, type Role } from '../engine';
+import { squeakTalk, unlockAudio } from '../../audio/sfx';
 import { useMafia, type VoiceMode } from '../store';
 import { GEMINI_KEY_URL } from '../gemini';
 import { canSpeak } from '../voice';
@@ -140,6 +141,24 @@ export function MafiaSetup() {
             ))}
           </div>
           <p className="mf-sub">{t(`mafia.voiceModeSub.${cfg.voice}`)}</p>
+          {cfg.voice === 'squeak' && (
+            <div className="mf-voice-tune">
+              <label className="mf-slider">
+                <span>{t('mafia.pitch')}</span>
+                <input type="range" min={0.9} max={1.8} step={0.05} value={cfg.squeakPitch} aria-label={t('mafia.pitch')} onChange={(e) => setCfg({ squeakPitch: Number(e.target.value) })} />
+              </label>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  unlockAudio();
+                  squeakTalk(t('mafia.previewLine'), PERSONA[cfg.me].squeak * cfg.squeakPitch, 'excited');
+                }}
+              >
+                {t('mafia.preview')}
+              </button>
+            </div>
+          )}
         </section>
         <section className="card" id="mf-ai-talk">
           <h2 className="card-title">{t(claudeOk ? 'mafia.claude' : 'mafia.gemini')}</h2>

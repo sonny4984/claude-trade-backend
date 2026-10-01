@@ -30,6 +30,8 @@ export interface MafiaConfig {
   role: Role | 'random';
   /** 대사 소리: 기니피그 목소리(뀨뀨 동물 소리) · 사람 목소리로 읽기 · 끄기 */
   voice: VoiceMode;
+  /** 기니피그 목소리 전체 높이 (0.9~1.8, 높을수록 아기 같은 소리) */
+  squeakPitch: number;
   /** claude.ai에서 Claude가 대사 다듬기 */
   claude: boolean;
   /** 공개 사이트에서 Gemini(내 키)가 대사 쓰기 */
@@ -91,6 +93,7 @@ function loadSetup(): MafiaConfig {
     role: ROLE_CHOICES.includes(raw?.role as Role) ? (raw?.role as Role | 'random') : 'random',
     // 예전 값(켜기/끄기, 'speak'·'babble')은 기니피그 목소리로 — 사람 목소리가 무섭다는 말을 듣고 바꿨다
     voice: VOICE_MODES.includes(raw?.voice as VoiceMode) ? (raw?.voice as VoiceMode) : (raw?.voice as unknown) === false || (raw?.voice as unknown) === 'off' ? 'off' : 'squeak',
+    squeakPitch: Math.max(0.9, Math.min(1.8, Number(raw?.squeakPitch) || 1.25)),
     claude: raw?.claude !== false,
     gemini: raw?.gemini !== false,
   };
@@ -567,7 +570,7 @@ async function present(l: Line, s: MafiaSession, my: number): Promise<void> {
   if (l.kind === 'say' && p) {
     const per = PERSONA[p.character];
     if (cfg.voice === 'squeak') {
-      const ms = squeakTalk(l.text, per.pitch / 1.6, moodOf(l.text));
+      const ms = squeakTalk(l.text, per.squeak * cfg.squeakPitch, moodOf(l.text));
       // 말풍선을 읽을 시간도 준다
       await pause(Math.min(3600, Math.max(ms + 250, 700 + l.text.length * 38)), my);
       return;

@@ -22,23 +22,28 @@ export interface Persona {
   /** 남의 의견을 따라가는 정도 */
   follow: number;
   style: Style;
-  /** 읽어 주기 목소리 높이·빠르기 */
+  /** 기니피그 목소리 높이 */
+  squeak: number;
+  /** 사람 목소리로 읽을 때 높이·빠르기 */
   pitch: number;
   rate: number;
 }
 
 export const CAST: readonly CharacterId[] = ['hwigi', 'ginini', 'pponi', 'moka', 'dubu', 'kongi', 'bori', 'nuri'];
 
-/** 목소리는 모두 높고 조금 빠르게 — 기니피그처럼 귀엽게 (낮은 목소리는 무섭다는 말을 듣고 올렸다) */
+/**
+ * squeak: 기니피그 목소리 높이 (1 = 보통, 높을수록 아기 같은 소리) · pitch·rate: 사람 목소리로 읽을 때 (모두 높게)
+ * 낮은 목소리는 무섭다는 말을 듣고 모두 올렸다.
+ */
 export const PERSONA: Readonly<Record<CharacterId, Persona>> = {
-  hwigi: { bold: 0.85, logic: 0.5, follow: 0.3, style: 'casual', pitch: 1.7, rate: 1.15 },
-  ginini: { bold: 0.45, logic: 0.85, follow: 0.2, style: 'polite', pitch: 1.5, rate: 1.05 },
-  pponi: { bold: 0.5, logic: 0.45, follow: 0.6, style: 'cute', pitch: 2, rate: 1.1 },
-  moka: { bold: 0.55, logic: 0.9, follow: 0.25, style: 'polite', pitch: 1.6, rate: 1.08 },
-  dubu: { bold: 0.3, logic: 0.4, follow: 0.75, style: 'cute', pitch: 1.9, rate: 1.05 },
-  kongi: { bold: 0.8, logic: 0.55, follow: 0.4, style: 'casual', pitch: 1.75, rate: 1.18 },
-  bori: { bold: 0.4, logic: 0.7, follow: 0.35, style: 'cool', pitch: 1.45, rate: 1.08 },
-  nuri: { bold: 0.6, logic: 0.75, follow: 0.3, style: 'polite', pitch: 1.65, rate: 1.1 },
+  hwigi: { bold: 0.85, logic: 0.5, follow: 0.3, style: 'casual', squeak: 1.1, pitch: 1.9, rate: 1.15 },
+  ginini: { bold: 0.45, logic: 0.85, follow: 0.2, style: 'polite', squeak: 1, pitch: 1.85, rate: 1.08 },
+  pponi: { bold: 0.5, logic: 0.45, follow: 0.6, style: 'cute', squeak: 1.3, pitch: 2, rate: 1.12 },
+  moka: { bold: 0.55, logic: 0.9, follow: 0.25, style: 'polite', squeak: 1.05, pitch: 1.9, rate: 1.1 },
+  dubu: { bold: 0.3, logic: 0.4, follow: 0.75, style: 'cute', squeak: 1.22, pitch: 2, rate: 1.08 },
+  kongi: { bold: 0.8, logic: 0.55, follow: 0.4, style: 'casual', squeak: 1.15, pitch: 1.95, rate: 1.18 },
+  bori: { bold: 0.4, logic: 0.7, follow: 0.35, style: 'cool', squeak: 0.95, pitch: 1.85, rate: 1.1 },
+  nuri: { bold: 0.6, logic: 0.75, follow: 0.3, style: 'polite', squeak: 1.08, pitch: 1.95, rate: 1.12 },
 };
 
 export interface Player {
