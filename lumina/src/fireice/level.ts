@@ -20,7 +20,7 @@
  *   k  쿠키 열쇠 — 누구든 주우면 함께 쓰는 열쇠 하나
  *   K  자물쇠 문 — 열쇠를 가진 채 옆에서 밀면 열린다 (열쇠 하나 씀)
  *   m M g  셋이서 하는 단계: 말차 시작 자리, 말차의 문, 초록 사탕 (말차는 말차 늪이 안전, 잼·물은 위험)
- *   @ %  순간이동 구멍 — 같은 글자 두 칸이 한 쌍, 걸어 들어가면 짝 칸으로
+ *   @ % &  순간이동 구멍 (세 쌍까지) — 같은 글자 두 칸이 한 쌍, 걸어 들어가면 짝 칸으로
  * 발판(움직이는 판)은 맵 대신 platforms 목록에 적는다: 쉴 때 위치(x, y, 너비, 높이)와 켜졌을 때 옮겨 갈 칸 수.
  */
 
@@ -115,7 +115,7 @@ export function parseLevel(def: LevelDef): ParsedLevel {
       gate.push(ch >= '5' && ch <= '8' ? Number(ch) - 4 : ch === 'x' ? -3 : ch === 'y' ? -4 : 0);
       if (ch === 'k') keys.push({ id: keys.length, x, y });
       else if (ch === 'K') locks.push({ id: locks.length, x, y });
-      else if (ch === '@' || ch === '%') (pairs[ch] ??= []).push({ x, y });
+      else if (ch === '@' || ch === '%' || ch === '&') (pairs[ch] ??= []).push({ x, y });
       pool.push(isPool ? (ch as Pool) : null);
       if (ch === 'f') spawn.fire = { x, y };
       else if (ch === 'i') spawn.ice = { x, y };
