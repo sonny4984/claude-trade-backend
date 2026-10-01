@@ -10,11 +10,18 @@ import { Icon } from '../../ui/components/Icon';
 import { OnlineChip, OnlineNotice } from '../../ui/online/OnlineNotice';
 import { useLang, useT } from '../../i18n';
 import { quietNight, type Game, type Player } from '../engine';
-import { deciders, mySeatOf, useMafia, visible, type MafiaSession } from '../store';
+import { deciders, mySeatOf, useMafia, visible, type MafiaSession, type VoiceMode } from '../store';
 import { nameOf } from '../talk';
 import { canListen, canSpeak, listen } from '../voice';
 
 type T = ReturnType<typeof useT>;
+
+/** 위쪽 소리 단추: 목소리 → 꾸잉꾸잉 → 끄기 → 목소리 (읽어 주기가 안 되는 기기는 건너뛴다) */
+function nextVoice(v: VoiceMode): VoiceMode {
+  if (v === 'speak') return 'babble';
+  if (v === 'babble') return 'off';
+  return canSpeak() ? 'speak' : 'babble';
+}
 
 interface View {
   s: MafiaSession;
@@ -395,6 +402,7 @@ export function MafiaScreen() {
   useMafia((st) => st.rev);
   const cfg = useMafia((st) => st.cfg);
   const claudeOk = useMafia((st) => st.claudeOk);
+  const geminiModel = useMafia((st) => st.geminiModel);
   const note = useMafia((st) => st.note);
   const [armed, setArm] = useState(false);
   useEffect(() => {
@@ -431,17 +439,20 @@ export function MafiaScreen() {
           {title}
         </h1>
         {s.online && <OnlineChip />}
-        {canSpeak() && (
-          <button type="button" className="icon-btn" aria-pressed={cfg.voice} aria-label={cfg.voice ? t('mafia.voiceOff') : t('mafia.voiceOn')} onClick={() => st.setCfg({ voice: !cfg.voice })}>
-            <Icon name={cfg.voice ? 'volume' : 'volumeOff'} />
-          </button>
-        )}
-        {host && claudeOk && (
+        <button type="button" className="icon-btn" data-voice={cfg.voice} aria-label={t(`mafia.voiceNext.${cfg.voice}`)} title={t(`mafia.voiceNext.${cfg.voice}`)} onClick={() => st.setCfg({ voice: nextVoice(cfg.voice) })}>
+          <Icon name={cfg.voice === 'off' ? 'volumeOff' : cfg.voice === 'babble' ? 'chat' : 'volume'} />
+        </button>
+        {host && claudeOk ? (
           <button type="button" className="mf-claude" aria-pressed={cfg.claude} aria-label={cfg.claude ? t('mafia.claudeOffBtn') : t('mafia.claudeOnBtn')} onClick={() => st.setCfg({ claude: !cfg.claude })}>
             <Icon name="spark" size={16} />
             Claude
           </button>
-        )}
+        ) : host && geminiModel ? (
+          <button type="button" className="mf-claude" aria-pressed={cfg.gemini} aria-label={cfg.gemini ? t('mafia.geminiOffBtn') : t('mafia.geminiOnBtn')} onClick={() => st.setCfg({ gemini: !cfg.gemini })}>
+            <Icon name="spark" size={16} />
+            Gemini
+          </button>
+        ) : null}
       </header>
       {s.online && <OnlineNotice />}
       {armed && <p className="mf-note">{t(s.online ? 'mafia.quitOnline' : 'mafia.quitAgain')}</p>}

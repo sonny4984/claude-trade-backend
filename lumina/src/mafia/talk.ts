@@ -3,6 +3,7 @@
  * Claude를 못 쓸 때는 이 문장을 그대로 쓰고, 쓸 때는 이 문장이 '초안'이 된다.
  * 사람이 친 말에서 누구를 의심하고 누구를 믿는지 읽어 내는 것도 여기서 한다.
  */
+import type { CharacterId } from '../characters/roster';
 import { translate, type Lang } from '../i18n';
 import { PERSONA, type Act, type Game, type Player, type Role, type Said } from './engine';
 
@@ -137,6 +138,10 @@ const KO: Record<string, KoSet> = {
   'last.townT': { p: ['저 정말 {r|였}어요… {t|를} 꼭 살펴봐 줘요.'], c: ['나 진짜 {r|였}는데… {t|를} 조심해.'] },
   'last.mafia': { p: ['들켰네요… 하지만 아직 끝난 게 아니에요.'], c: ['흥, 들켰네. 그래도 아직 안 끝났어.'] },
   idle: { p: ['음… 아직 잘 모르겠어요.', '다들 수상해 보여요.'], c: ['음… 아직 모르겠어.', '다들 수상해.'] },
+  chat: {
+    p: ['헤헤, 그렇구나요!', '{to}, 그 말 좋아요.', '음… 그건 잘 모르겠어요.', '{to} 말 들으니까 기분 좋아요.'],
+    c: ['헤헤, 그렇구나!', '{to}, 그거 좋다!', '음… 잘 모르겠어.', '{to}, 재밌는 얘기네.'],
+  },
   suggest: { p: ['오늘 밤엔 {t} 어때요?'], c: ['오늘 밤엔 {t} 어때?'] },
   'suggest.cop': { p: ['경찰이라고 했잖아요.'], c: ['경찰이라고 했잖아.'] },
   'suggest.threat': { p: ['우리를 의심하고 있어요.'], c: ['우리를 의심하고 있어.'] },
@@ -183,6 +188,7 @@ const EN: Record<string, readonly string[]> = {
   'last.townT': ['I really was the {r}… watch {t}!'],
   'last.mafia': ['You got me… but it’s not over.'],
   idle: ['Hmm… not sure yet.', 'Everyone looks suspicious.'],
+  chat: ['Hehe, I see!', 'Nice one, {to}.', 'Hmm, not sure about that.'],
   suggest: ['How about {t} tonight?'],
   'suggest.cop': ['They said they’re the police.'],
   'suggest.threat': ['They’re onto us.'],
@@ -289,11 +295,13 @@ export function lineFor(g: Game, s: Said, lang: Lang, rnd: () => number = Math.r
     case 'last':
       text = a.role === 'mafia' ? say('last.mafia') : say(a.t === undefined ? 'last.town' : 'last.townT', { r: roleName(a.role, lang), t: nm(a.t) });
       break;
+    case 'chat':
+      text = say('chat', { to: nm(a.to) });
+      break;
     default:
       text = say('idle');
   }
-  if (style === 'cute' && lang === 'ko' && rnd() < 0.3 && /요[.!]?$/.test(text)) text = text.replace(/[.!]?$/, ' 뀨!');
-  return text;
+  return cutify(text, p.character, lang, rnd);
 }
 
 /** 사람이 빠른 버튼으로 한 말 */
@@ -313,10 +321,32 @@ export function suggestLine(g: Game, by: number, t: number, lang: Lang): string 
   const say = (key: string, v: Vars = {}): string => choose(key, v, casual, false, lang, Math.random);
   const cop = g.claims.some((c) => c.by === t && c.role === 'police');
   const threat = g.said.some((s) => s.by === t && (s.act.k === 'accuse' || s.act.k === 'agree') && g.players[s.act.t]?.role === 'mafia');
-  return [say('suggest', { t: nameOf(g, t, lang) }), cop ? say('suggest.cop') : threat ? say('suggest.threat') : ''].filter(Boolean).join(' ');
+  const text = [say('suggest', { t: nameOf(g, t, lang) }), cop ? say('suggest.cop') : threat ? say('suggest.threat') : ''].filter(Boolean).join(' ');
+  return cutify(text, (g.players[by] as Player).character, lang);
 }
 
 // ── 사람이 친 말 읽기 ─────────────────────────────────────
+
+/** 친구마다 내는 기니피그 소리 */
+const SOUNDS: Readonly<Record<CharacterId, readonly string[]>> = {
+  hwigi: ['꾸잉!', '꾸잉꾸잉!'],
+  ginini: ['흠, 뀨.', '뀨.'],
+  pponi: ['뀨잉~', '뀨우~'],
+  moka: ['꾸르르,', '꾸르릉,'],
+  dubu: ['쀼…', '쀼잉~'],
+  kongi: ['꾸잉꾸잉!', '꾸이잉!'],
+  bori: ['…뀨.', '뀨.'],
+  nuri: ['꾸이잉,', '꾸잉,'],
+};
+
+/** 기니피그 말투로: 말끝 "요"를 가끔 "용"으로, 앞에 꾸잉·뀨 소리 ("꾸잉, 전 의사 맞는데용!") */
+export function cutify(text: string, character: CharacterId, lang: Lang, rnd: () => number = Math.random): string {
+  if (lang !== 'ko') return rnd() < 0.2 ? `*squeak* ${text}` : text;
+  let out = text.replace(/요(?=[.!?~…]|$)/g, (m) => (rnd() < 0.6 ? '용' : m));
+  const sounds = SOUNDS[character];
+  if (rnd() < 0.4) out = `${sounds[Math.floor(rnd() * sounds.length)] ?? '꾸잉!'} ${out}`;
+  return out;
+}
 
 export interface Parsed {
   acts: Act[];
@@ -324,6 +354,8 @@ export interface Parsed {
   ask: boolean;
   /** "휘기 왜?" — 이유를 물어본 친구 */
   why: number | null;
+  /** 말에 나온 친구들 (일상 대화면 이 친구들이 대꾸한다) */
+  mentions: number[];
 }
 
 const BAD = /(마피아|범인|수상|의심|이상해|거짓|찍|투표|내보내|쫓아|죽이|mafia|sus|liar|lying|vote)/;
@@ -378,5 +410,5 @@ export function parseHuman(g: Game, text: string, by: number): Parsed {
       });
   }
   const ask = !acts.length && why === null && /(누가|누구|어떻게 생각|who|what do you think|thoughts)/.test(low);
-  return { acts, ask, why };
+  return { acts, ask, why, mentions: hits.map((h) => h.id) };
 }

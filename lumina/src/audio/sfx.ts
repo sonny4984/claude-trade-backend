@@ -231,6 +231,33 @@ export function sfx(name: SfxName, opts: { delay?: number; pitch?: number } = {}
   }
 }
 
+/**
+ * 기니피그 수다: 글자마다 짧은 꾸잉을 높낮이를 바꿔 가며 (말 대신 — 동물의 숲처럼).
+ * 묻는 말(?)은 끝을 올리고, 외치는 말(!)은 높게. 걸리는 시간(ms)을 돌려준다.
+ */
+export function chatter(text: string, pitch = 1): number {
+  const vol = volume('squeak');
+  const c = audio();
+  if (!c || c.state !== 'running' || vol <= 0.001) return 0;
+  const letters = [...text.replace(/[^\p{L}\p{N}]/gu, '')].slice(0, 26);
+  if (!letters.length) return 0;
+  const out = c.createGain();
+  out.gain.value = vol;
+  out.connect(c.destination);
+  const ask = /[?？]\s*$/.test(text);
+  const shout = /!\s*$/.test(text);
+  const base = 1250 * pitch * (shout ? 1.12 : 1);
+  let t = c.currentTime + 0.02;
+  letters.forEach((_, i) => {
+    const last = i === letters.length - 1;
+    const d = 0.055 + Math.random() * 0.03;
+    const f = base * (0.85 + Math.random() * 0.35) * (ask && last ? 1.3 : 1);
+    squeal(c, out, t, [[0, f * 0.82], [d * 0.45, f * 1.12], [d, ask && last ? f * 1.35 : f * 0.95]], d, 0.11, 30, 35);
+    t += d + 0.02 + (i % 4 === 3 ? 0.035 : 0);
+  });
+  return Math.round((t - c.currentTime) * 1000);
+}
+
 export function resetSfxThrottle(): void {
   lastAt = {};
 }

@@ -1,7 +1,7 @@
 /**
  * 마피아 준비 — 몇 명이서, 내 캐릭터, 내 역할, 말하기(읽어 주기·Claude 대사).
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useGame } from '../../store/game';
 import { useOnline } from '../../net/online';
 import { usePortrait } from '../../characters/portrait3d';
@@ -9,7 +9,8 @@ import type { CharacterId } from '../../characters/roster';
 import { Icon } from '../../ui/components/Icon';
 import { translateList, useLang, useT } from '../../i18n';
 import { CAST, MAX_PLAYERS, MIN_PLAYERS, rolesFor, type Role } from '../engine';
-import { useMafia } from '../store';
+import { useMafia, type VoiceMode } from '../store';
+import { GEMINI_KEY_URL } from '../gemini';
 import { canSpeak } from '../voice';
 
 function Avatar({ id }: { id: CharacterId }) {
@@ -18,6 +19,57 @@ function Avatar({ id }: { id: CharacterId }) {
 }
 
 const ROLE_ORDER: readonly (Role | 'random')[] = ['random', 'citizen', 'police', 'doctor', 'mafia'];
+const VOICES: readonly VoiceMode[] = ['speak', 'babble', 'off'];
+
+/** Gemini 연결: 키 넣기 → 확인 → 켜고 끄기 (키는 이 기기에만) */
+function GeminiCard() {
+  const t = useT();
+  const cfg = useMafia((s) => s.cfg);
+  const model = useMafia((s) => s.geminiModel);
+  const state = useMafia((s) => s.geminiState);
+  const [key, setKey] = useState('');
+  const store = useMafia.getState();
+  if (model)
+    return (
+      <div className="mf-gemini">
+        <label className="toggle-row">
+          <span>
+            {t('mafia.gemini')}
+            <small className="toggle-sub">{t('mafia.geminiOn', { model })}</small>
+          </span>
+          <input type="checkbox" className="switch" checked={cfg.gemini} onChange={(e) => store.setCfg({ gemini: e.target.checked })} />
+        </label>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => store.forgetGemini()}>
+          {t('mafia.geminiForget')}
+        </button>
+      </div>
+    );
+  return (
+    <div className="mf-gemini">
+      <p className="mf-gemini-title">
+        <b>{t('mafia.gemini')}</b>
+        <small className="toggle-sub">{t('mafia.geminiSub')}</small>
+      </p>
+      <form
+        className="mf-input"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void store.connectGemini(key).then((ok) => ok && setKey(''));
+        }}
+      >
+        <input type="password" value={key} autoComplete="off" spellCheck={false} placeholder={t('mafia.geminiKeyPh')} aria-label={t('mafia.geminiKeyPh')} onChange={(e) => setKey(e.target.value)} />
+        <button type="submit" className="btn btn-primary btn-sm" disabled={!key.trim() || state === 'checking'}>
+          {state === 'checking' ? t('mafia.geminiChecking') : t('mafia.geminiConnect')}
+        </button>
+      </form>
+      {state !== 'idle' && state !== 'checking' && <p className="mf-gemini-err">{t(`mafia.geminiErr.${state}`)}</p>}
+      <a className="mf-gemini-link" href={GEMINI_KEY_URL} target="_blank" rel="noopener noreferrer">
+        {t('mafia.geminiGet')}
+      </a>
+      <p className="mf-sub">{t('mafia.geminiNote')}</p>
+    </div>
+  );
+}
 
 export function MafiaSetup() {
   const t = useT();
@@ -83,15 +135,14 @@ export function MafiaSetup() {
         </section>
         <section className="card">
           <h2 className="card-title">{t('mafia.talk')}</h2>
-          {canSpeak() && (
-            <label className="toggle-row">
-              <span>
-                {t('mafia.voice')}
-                <small className="toggle-sub">{t('mafia.voiceSub')}</small>
-              </span>
-              <input type="checkbox" className="switch" checked={cfg.voice} onChange={(e) => setCfg({ voice: e.target.checked })} />
-            </label>
-          )}
+          <div className="seg" role="radiogroup" aria-label={t('mafia.voiceMode')}>
+            {VOICES.filter((m) => m !== 'speak' || canSpeak()).map((m) => (
+              <button key={m} type="button" role="radio" aria-checked={cfg.voice === m} onClick={() => setCfg({ voice: m })}>
+                {t(`mafia.voiceModes.${m}`)}
+              </button>
+            ))}
+          </div>
+          <p className="mf-sub">{t(`mafia.voiceModeSub.${cfg.voice}`)}</p>
           {claudeOk ? (
             <label className="toggle-row">
               <span>
@@ -101,7 +152,7 @@ export function MafiaSetup() {
               <input type="checkbox" className="switch" checked={cfg.claude} onChange={(e) => setCfg({ claude: e.target.checked })} />
             </label>
           ) : (
-            <p className="mf-sub">{t('mafia.claudeNa')}</p>
+            <GeminiCard />
           )}
         </section>
         <section className="card">

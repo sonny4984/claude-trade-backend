@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../../store/game';
 import { useCoda } from '../../coda/store';
+import { useMafia } from '../../mafia/store';
 import { useOnline, savedRoom, normalizeCode, CODE_LENGTH } from '../../net/online';
 import { GAME_SEATS, gameApis, type OnlineGame, type TableSeat } from '../../net/bridge';
 import { canNativeShare, elsewhere, inviteUrl, shareInvite, siteUrl } from '../../net/site';
@@ -289,6 +290,7 @@ function Lobby() {
     );
   }
   const gameName = t(`online.${table.game}`);
+  const mafiaGemini = !!useMafia.getState().geminiModel && useMafia.getState().cfg.gemini;
   return (
     <>
       <section className="card ol-room">
@@ -323,6 +325,7 @@ function Lobby() {
       {status === 'lobby' && table.game === 'mafia' && (
         <section className="card">
           <p className="ol-note">{t('online.mafiaFill')}</p>
+          {host && <p className="ol-note">{t(mafiaGemini ? 'online.mafiaGemini' : 'online.mafiaNoGemini')}</p>}
         </section>
       )}
       {host && status === 'lobby' && table.game === 'coda' && (

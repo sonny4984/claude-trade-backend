@@ -438,3 +438,37 @@
 .mafia-screen[data-phase='night'] .mf-head .icon-btn {
   color: #f3f0ff;
 }
+
+/* Gemini 연결 */
+.mf-gemini {
+  display: grid;
+  gap: 8px;
+}
+.mf-gemini-title {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+.mf-gemini .btn {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+.mf-gemini > .btn-ghost {
+  justify-self: start;
+}
+.mf-gemini .mf-input input {
+  font-size: 15px;
+}
+.mf-gemini-err {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+.mf-gemini-link {
+  justify-self: start;
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 700;
+}

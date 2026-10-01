@@ -28,15 +28,16 @@ export interface Persona {
 
 export const CAST: readonly CharacterId[] = ['hwigi', 'ginini', 'pponi', 'moka', 'dubu', 'kongi', 'bori', 'nuri'];
 
+/** 목소리는 모두 높고 조금 빠르게 — 기니피그처럼 귀엽게 (낮은 목소리는 무섭다는 말을 듣고 올렸다) */
 export const PERSONA: Readonly<Record<CharacterId, Persona>> = {
-  hwigi: { bold: 0.85, logic: 0.5, follow: 0.3, style: 'casual', pitch: 1.25, rate: 1.12 },
-  ginini: { bold: 0.45, logic: 0.85, follow: 0.2, style: 'polite', pitch: 0.85, rate: 0.98 },
-  pponi: { bold: 0.5, logic: 0.45, follow: 0.6, style: 'cute', pitch: 1.5, rate: 1.05 },
-  moka: { bold: 0.55, logic: 0.9, follow: 0.25, style: 'polite', pitch: 1.05, rate: 1 },
-  dubu: { bold: 0.3, logic: 0.4, follow: 0.75, style: 'cute', pitch: 1.35, rate: 0.95 },
-  kongi: { bold: 0.8, logic: 0.55, follow: 0.4, style: 'casual', pitch: 1.15, rate: 1.15 },
-  bori: { bold: 0.4, logic: 0.7, follow: 0.35, style: 'cool', pitch: 0.75, rate: 1.02 },
-  nuri: { bold: 0.6, logic: 0.75, follow: 0.3, style: 'polite', pitch: 1, rate: 1.05 },
+  hwigi: { bold: 0.85, logic: 0.5, follow: 0.3, style: 'casual', pitch: 1.7, rate: 1.15 },
+  ginini: { bold: 0.45, logic: 0.85, follow: 0.2, style: 'polite', pitch: 1.5, rate: 1.05 },
+  pponi: { bold: 0.5, logic: 0.45, follow: 0.6, style: 'cute', pitch: 2, rate: 1.1 },
+  moka: { bold: 0.55, logic: 0.9, follow: 0.25, style: 'polite', pitch: 1.6, rate: 1.08 },
+  dubu: { bold: 0.3, logic: 0.4, follow: 0.75, style: 'cute', pitch: 1.9, rate: 1.05 },
+  kongi: { bold: 0.8, logic: 0.55, follow: 0.4, style: 'casual', pitch: 1.75, rate: 1.18 },
+  bori: { bold: 0.4, logic: 0.7, follow: 0.35, style: 'cool', pitch: 1.45, rate: 1.08 },
+  nuri: { bold: 0.6, logic: 0.75, follow: 0.3, style: 'polite', pitch: 1.65, rate: 1.1 },
 };
 
 export interface Player {
@@ -66,6 +67,8 @@ export type Act =
   | { k: 'react'; ev: 'died' | 'saved' | 'calm'; t?: number }
   | { k: 'vote'; t: number | null }
   | { k: 'last'; role: Role; t?: number }
+  /** 사람의 말에 자유롭게 대꾸 (일상 이야기 — 추리에는 쓰지 않는다) */
+  | { k: 'chat'; to: number }
   | { k: 'idle' };
 
 export interface Said {
@@ -401,7 +404,7 @@ export function trustWhy(g: Game, viewer: number | null, t: number): { why: Why;
 
 // ── 낮: 누가 무슨 뜻으로 말할지 ──────────────────────────
 
-export type Trigger = { k: 'open' } | { k: 'more' } | { k: 'human'; by: number; acts: Act[]; ask: boolean; why: number | null };
+export type Trigger = { k: 'open' } | { k: 'more' } | { k: 'human'; by: number; acts: Act[]; ask: boolean; why: number | null; mentions?: number[] };
 
 /** 한 번에 이어지는 AI 대사 수 */
 const ROUND = 4;
@@ -563,11 +566,15 @@ export function plan(g: Game, tr: Trigger): Said[] {
         const p = someone();
         speak(p, p ? mainAct(g, p.id, true) : null);
       }
-    if (!out.length)
-      for (let k = 0; k < 2; k++) {
+    if (!out.length) {
+      // 게임 얘기가 아니면: 불린 친구(없으면 한 명)가 대꾸하고, 가끔 다른 친구가 게임 얘기로 이어 간다
+      const named = (tr.mentions ?? []).map((i) => g.players[i]).filter((p): p is Player => !!p && p.alive && !p.human);
+      for (const p of named.length ? named.slice(0, 2) : [someone()]) speak(p, { k: 'chat', to: h.id });
+      if (rand(g) < 0.5) {
         const p = someone();
         speak(p, p ? mainAct(g, p.id, false) : null);
       }
+    }
     return out;
   }
   if (tr.k === 'open') {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { aiNight, aiVote, living, newGame, plan, record, resolveNight, resolveVote, rolesFor, suspicion, type Act, type Game, type Side } from '../engine';
-import { fill, josa, lineFor, parseHuman } from '../talk';
+import { cutify, fill, josa, lineFor, parseHuman } from '../talk';
+import { GeminiFail, chooseModel, geminiJson, parseLoose } from '../gemini';
 
 /** AI끼리 한 판 — 밤 → 낮 토론 세 번 → 투표 */
 function autoplay(seed: number, count: number): { winner: Side | null; days: number; lines: number } {
@@ -132,6 +133,7 @@ describe('마피아 대사', () => {
       { k: 'last', role: 'citizen', t: 2 },
       { k: 'last', role: 'police' },
       { k: 'last', role: 'mafia' },
+      { k: 'chat', to: 0 },
       { k: 'idle' },
     ];
     for (const lang of ['ko', 'en'] as const)
@@ -168,5 +170,67 @@ describe('마피아 대사', () => {
     expect(said[0]?.by).toBe(t);
     expect(said.length).toBeGreaterThanOrEqual(2);
     expect(['agree', 'doubt']).toContain(said[1]?.act.k);
+  });
+});
+
+describe('기니피그 말투', () => {
+  it('말끝 "요"가 "용"이 되고 앞에 꾸잉 소리가 붙는다', () => {
+    expect(cutify('저 의사 맞는데요!', 'hwigi', 'ko', () => 0)).toMatch(/^꾸잉(꾸잉)?! 저 의사 맞는데용!$/);
+    // 소리도 안 붙이고 "요"도 그대로 두는 경우
+    expect(cutify('저 아니에요.', 'pponi', 'ko', () => 0.99)).toBe('저 아니에요.');
+    // 말 중간의 "요"는 건드리지 않는다
+    expect(cutify('요즘 수상해요', 'moka', 'ko', () => 0.5)).toBe('요즘 수상해용');
+  });
+
+  it('사람이 게임 얘기가 아닌 말을 하면 불린 친구가 자유롭게 대꾸한다', () => {
+    const g = newGame({ count: 7, me: 'moka', seed: 4, myRole: 'citizen' });
+    resolveNight(g, aiNight(g));
+    const friend = living(g).find((p) => !p.human);
+    const nm = { hwigi: '휘기', ginini: '기니니', pponi: '뽀니', moka: '모카', dubu: '두부', kongi: '콩이', bori: '보리', nuri: '누리' }[friend?.character ?? 'hwigi'];
+    const p = parseHuman(g, `${nm}야 오늘 뭐 먹었어?`, 0);
+    expect(p.acts).toEqual([]);
+    expect(p.mentions).toEqual([friend?.id]);
+    const said = plan(g, { k: 'human', by: 0, acts: [], ask: false, why: null, mentions: p.mentions });
+    expect(said[0]).toMatchObject({ by: friend?.id, act: { k: 'chat', to: 0 } });
+  });
+});
+
+describe('Gemini', () => {
+  it('가장 새 정식 Flash를 고른다 (미리보기·이미지 빼고, 같은 판이면 Lite보다 일반)', () => {
+    expect(chooseModel(['models/gemini-3.5-flash', 'models/gemini-3.8-flash', 'models/gemini-3.8-flash-lite', 'models/gemini-3-flash-preview', 'models/gemini-3.9-flash-image'])).toBe('gemini-3.8-flash');
+    expect(chooseModel(['models/gemini-3.5-flash-lite'])).toBe('gemini-3.5-flash-lite');
+    expect(chooseModel(['models/text-embedding-004'])).toBeNull();
+  });
+
+  it('답에서 JSON을 꺼낸다', () => {
+    expect(parseLoose('{"lines":[]}')).toEqual({ lines: [] });
+    expect(parseLoose('```json\n{"a":1}\n```')).toEqual({ a: 1 });
+    expect(parseLoose('여기요 {"a":2} 끝')).toEqual({ a: 2 });
+  });
+
+  it('대사를 받고, 생각 설정을 거절하면 빼고 다시 묻고, 실패는 이유별로', async () => {
+    const calls: { url: string; body: string }[] = [];
+    const reply = (status: number, body: unknown): Response => new Response(JSON.stringify(body), { status });
+    const ok = { candidates: [{ content: { parts: [{ text: '{"lines":[{"id":0,"text":"꾸잉 안녕!"}]}' }] } }] };
+    let queue: Response[] = [reply(400, { error: { message: 'Unknown name "thinkingConfig"' } }), reply(200, ok)];
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), body: String(init?.body ?? '') });
+      return queue.shift() ?? reply(500, {});
+    }) as typeof fetch;
+    try {
+      const signal = new AbortController().signal;
+      const setup = { key: 'k', model: 'gemini-3.8-flash' };
+      expect(await geminiJson(setup, '안녕', signal)).toEqual({ lines: [{ id: 0, text: '꾸잉 안녕!' }] });
+      expect(calls[0]?.body).toContain('thinkingConfig');
+      expect(calls[1]?.body).not.toContain('thinkingConfig');
+      expect(calls[1]?.url).toContain('/models/gemini-3.8-flash:generateContent');
+      queue = [reply(429, { error: { message: 'quota' } })];
+      await expect(geminiJson(setup, '안녕', signal)).rejects.toMatchObject({ code: 'rate' });
+      queue = [reply(400, { error: { message: 'API key not valid' } })];
+      await expect(geminiJson(setup, '안녕', signal)).rejects.toBeInstanceOf(GeminiFail);
+    } finally {
+      globalThis.fetch = real;
+    }
   });
 });

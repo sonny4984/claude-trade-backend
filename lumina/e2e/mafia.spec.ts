@@ -55,7 +55,8 @@ test('마피아: AI 친구들과 밤·낮 대화·투표', async ({ page }) => {
   await expect(page.locator('.mafia-setup')).toBeVisible();
   await page.getByRole('radio', { name: '7명' }).click();
   await page.getByRole('radio', { name: '시민', exact: true }).click();
-  await expect(page.locator('.mafia-setup')).toContainText('Claude 대사는 claude.ai에서 열었을 때만 돼요');
+  // claude.ai 밖에서는 Claude 대신 Gemini 연결 칸이 보인다
+  await expect(page.locator('.mf-gemini')).toContainText('Gemini로 대화하기');
   await page.getByRole('button', { name: '시작하기' }).click();
 
   await expect(page.locator('.mafia-screen')).toBeVisible();
@@ -94,6 +95,46 @@ test('마피아: AI 친구들과 밤·낮 대화·투표', async ({ page }) => {
   const after = await state(page);
   expect(['night', 'over']).toContain(after.phase);
   if (after.phase === 'night') await expect(page.locator('.mf-head h1')).toContainText('2일째 밤');
+  expect(errors).toEqual([]);
+});
+
+test('Gemini 키를 연결하면 AI 친구들이 Gemini가 쓴 말로 대꾸한다 (일상 대화는 자유 대화로)', async ({ page }) => {
+  const prompts: string[] = [];
+  await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'GET') return route.fulfill({ json: { models: [{ name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] }, { name: 'models/gemini-3-flash-preview', supportedGenerationMethods: ['generateContent'] }] } });
+    expect(req.headers()['x-goog-api-key']).toBe('test-key');
+    const body = JSON.parse(req.postData() ?? '{}') as { contents: { parts: { text: string }[] }[] };
+    const prompt = body.contents[0]?.parts[0]?.text ?? '';
+    prompts.push(prompt);
+    const ids = [...prompt.matchAll(/\{"id":(\d+)/g)].map((m) => Number(m[1]));
+    const text = JSON.stringify({ lines: ids.map((id) => ({ id, text: `꾸잉! 제미나이가 쓴 말 ${id}` })) });
+    return route.fulfill({ json: { candidates: [{ content: { parts: [{ text }] } }] } });
+  });
+  const errors = await open(page);
+  await page.locator('.plate-mafia').click();
+  await page.getByPlaceholder('Gemini API 키 붙여넣기').fill('test-key');
+  await page.getByRole('button', { name: '연결', exact: true }).click();
+  await expect(page.locator('.mf-gemini')).toContainText('연결됨 · gemini-3.8-flash');
+  await page.getByRole('radio', { name: '7명' }).click();
+  await page.getByRole('radio', { name: '시민', exact: true }).click();
+  await page.getByRole('radio', { name: '끄기' }).click();
+  await page.getByRole('button', { name: '시작하기' }).click();
+  await expect(page.locator('.mf-claude', { hasText: 'Gemini' })).toBeVisible();
+
+  await page.getByRole('button', { name: '잠들기' }).click();
+  await expect(page.locator('.mf-line[data-kind="say"]').first()).toContainText('제미나이가 쓴 말');
+  expect(prompts[0]).toContain('기니피그');
+  if ((await state(page)).alive) {
+    if (await page.locator('.mf-skip').isVisible()) await page.locator('.mf-skip').click();
+    const before = await page.locator('.mf-line[data-kind="say"]').count();
+    await page.getByPlaceholder('하고 싶은 말').fill('다들 오늘 아침 뭐 먹었어?');
+    await page.getByRole('button', { name: '보내기' }).click();
+    await expect(page.locator('.mf-line[data-kind="say"]').nth(before)).toContainText('제미나이가 쓴 말');
+    const last = prompts[prompts.length - 1] ?? '';
+    expect(last).toContain('자유 대화');
+    expect(last).toContain('다들 오늘 아침 뭐 먹었어?');
+  }
   expect(errors).toEqual([]);
 });
 

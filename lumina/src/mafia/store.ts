@@ -7,7 +7,7 @@
  * 비밀(내 역할, 경찰 조사 결과, 마피아끼리 귓속말)은 줄마다 볼 수 있는 자리(to)를 적어 두고 화면에서 거른다.
  */
 import { create } from 'zustand';
-import { sfx } from '../audio/sfx';
+import { chatter, sfx } from '../audio/sfx';
 import type { CharacterId } from '../characters/roster';
 import { translate } from '../i18n';
 import { bridge, gameApis, type OnlineInfo, type TableDoc } from '../net/bridge';
@@ -15,19 +15,25 @@ import { useOnline } from '../net/online';
 import { useGame } from '../store/game';
 import { useSettings } from '../store/settings';
 import { readJSON, writeJSON } from '../store/storage';
-import { FATAL, LIMITED, claudeSample, polish, type HistoryLine } from './claude';
+import { FATAL, LIMITED, claudeSample, claudeWriter, polish, type HistoryLine, type JsonWriter } from './claude';
+import { GeminiFail, connectGemini, geminiJson, loadGemini, saveGemini } from './gemini';
 import { CAST, MAX_PLAYERS, MIN_PLAYERS, PERSONA, aiNight, aiVote, killChoice, lastAct, living, newGame, plan, quietNight, record, resolveNight, resolveVote, tally, type Act, type Game, type Role, type Trigger } from './engine';
 import { humanLine, lineFor, nameOf, narrate, parseHuman, roleName, suggestLine } from './talk';
 import { canSpeak, hush, speak, unlockSpeech } from './voice';
+
+export type VoiceMode = 'speak' | 'babble' | 'off';
+const VOICE_MODES: readonly VoiceMode[] = ['speak', 'babble', 'off'];
 
 export interface MafiaConfig {
   count: number;
   me: CharacterId;
   role: Role | 'random';
-  /** 대사를 목소리로 읽어 주기 */
-  voice: boolean;
+  /** 대사 소리: 귀여운 목소리로 읽기 · 꾸잉꾸잉 (말 대신 기니피그 수다) · 끄기 */
+  voice: VoiceMode;
   /** claude.ai에서 Claude가 대사 다듬기 */
   claude: boolean;
+  /** 공개 사이트에서 Gemini(내 키)가 대사 쓰기 */
+  gemini: boolean;
 }
 
 /** say: AI 대사 · chat: 사람이 한 말 · sys: 진행 · secret: 비밀 · vote: 투표 */
@@ -79,8 +85,10 @@ function loadSetup(): MafiaConfig {
     count: Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, Math.round(Number(raw?.count)) || 7)),
     me: CAST.includes(raw?.me as CharacterId) ? (raw?.me as CharacterId) : 'moka',
     role: ROLE_CHOICES.includes(raw?.role as Role) ? (raw?.role as Role | 'random') : 'random',
-    voice: raw?.voice !== false,
+    // 예전에는 켜기/끄기였다
+    voice: VOICE_MODES.includes(raw?.voice as VoiceMode) ? (raw?.voice as VoiceMode) : (raw?.voice as unknown) === false ? 'off' : 'speak',
     claude: raw?.claude !== false,
+    gemini: raw?.gemini !== false,
   };
 }
 
@@ -101,7 +109,13 @@ interface MafiaState {
   pick: number | null;
   /** 이 화면에서 Claude를 부를 수 있는지 */
   claudeOk: boolean;
-  note: 'claudeOff' | 'claudeLimit' | null;
+  /** Gemini 키로 고른 모델 (키가 없으면 null) */
+  geminiModel: string | null;
+  /** Gemini 연결 확인 중 · 실패 이유 */
+  geminiState: 'idle' | 'checking' | GeminiFail['code'];
+  note: 'claudeOff' | 'claudeLimit' | 'geminiKey' | 'geminiLimit' | null;
+  connectGemini(key: string): Promise<boolean>;
+  forgetGemini(): void;
   setCfg(p: Partial<MafiaConfig>): void;
   probe(): void;
   start(): void;
@@ -179,7 +193,19 @@ function history(s: MafiaSession): HistoryLine[] {
     }));
 }
 
-/** AI들이 한 차례 말한다 (Claude를 쓸 수 있으면 초안을 다듬어서) */
+/** 대사를 써 줄 쪽: claude.ai면 Claude, 공개 사이트에서 키가 있으면 Gemini, 아니면 없음 (기본 대사) */
+async function writer(): Promise<JsonWriter | null> {
+  const { cfg, claudeOk, geminiModel } = get();
+  if (cfg.claude && claudeOk) {
+    const sample = await claudeSample();
+    if (sample) return claudeWriter(sample);
+  }
+  const gem = loadGemini();
+  if (cfg.gemini && gem && geminiModel) return (prompt, signal) => geminiJson({ key: gem.key, model: geminiModel }, prompt, signal);
+  return null;
+}
+
+/** AI들이 한 차례 말한다 (Claude·Gemini를 쓸 수 있으면 초안을 다듬어서) */
 async function talk(s: MafiaSession, tr: Trigger): Promise<void> {
   const g = s.game;
   const said = g.phase === 'day' ? plan(g, tr) : [];
@@ -189,21 +215,27 @@ async function talk(s: MafiaSession, tr: Trigger): Promise<void> {
   }
   const L = lang();
   let texts = said.map((x) => lineFor(g, x, L));
-  const { cfg, claudeOk } = get();
-  const sample = cfg.claude && claudeOk ? await claudeSample() : null;
-  if (sample) {
-    // 사람이 한 말은 먼저 올려 두고, Claude가 쓰는 동안 기다린다
+  const write = await writer();
+  if (write) {
+    // 사람이 한 말은 먼저 올려 두고, 대사를 쓰는 동안 기다린다
     commit(s);
     const c = (ctl = new AbortController());
     useMafia.setState({ thinking: true });
+    const asked = tr.k === 'human' ? [...s.lines].reverse().find((l) => l.kind === 'chat' && l.by === tr.by) : undefined;
+    const latest = asked ? { name: nameOf(g, tr.k === 'human' ? tr.by : 0, L) + (L === 'ko' ? '(사람)' : ' (human)'), text: asked.text } : undefined;
     try {
-      texts = await polish(sample, g, said, texts, history(s), L, c.signal);
+      texts = await polish(write, g, said, texts, history(s), L, c.signal, latest);
     } catch (e) {
-      const code = String((e as { code?: unknown } | null)?.code ?? '');
-      if (FATAL.has(code)) useMafia.setState({ claudeOk: false, note: 'claudeOff' });
-      else if (LIMITED.has(code)) {
-        useMafia.setState({ note: 'claudeLimit' });
-        get().setCfg({ claude: false });
+      if (e instanceof GeminiFail) {
+        if (e.code === 'bad-key') useMafia.setState({ note: 'geminiKey', geminiModel: null, geminiState: 'bad-key' });
+        else if (e.code === 'rate') useMafia.setState({ note: 'geminiLimit' });
+      } else {
+        const code = String((e as { code?: unknown } | null)?.code ?? '');
+        if (FATAL.has(code)) useMafia.setState({ claudeOk: false, note: 'claudeOff' });
+        else if (LIMITED.has(code)) {
+          useMafia.setState({ note: 'claudeLimit' });
+          get().setCfg({ claude: false });
+        }
       }
     } finally {
       ctl = null;
@@ -452,10 +484,21 @@ async function present(l: Line, s: MafiaSession, my: number): Promise<void> {
   const p = l.by === null ? undefined : s.game.players[l.by];
   const { cfg } = get();
   // 비밀과 사람이 친 말은 소리 내어 읽지 않는다 (같은 방에 있으면 들리니까)
-  if (l.kind === 'say' && p && cfg.voice && canSpeak()) {
-    await speak(l.text, { lang: lang(), pitch: PERSONA[p.character].pitch, rate: PERSONA[p.character].rate });
-    await pause(220, my);
-    return;
+  if (l.kind === 'say' && p) {
+    const per = PERSONA[p.character];
+    if (cfg.voice === 'speak' && canSpeak()) {
+      // 꾸잉 한 번 하고 높은 목소리로
+      sfx('squeak', { pitch: per.pitch / 1.6 });
+      await pause(160, my);
+      await speak(l.text, { lang: lang(), pitch: per.pitch, rate: per.rate });
+      await pause(220, my);
+      return;
+    }
+    if (cfg.voice === 'babble') {
+      const ms = chatter(l.text, per.pitch / 1.6);
+      await pause(Math.max(ms, 900) + 350, my);
+      return;
+    }
   }
   if (l.kind === 'say') sfx('pop');
   await pause(l.kind === 'say' ? Math.min(3400, 1000 + l.text.length * 45) : l.kind === 'vote' ? 550 : l.kind === 'chat' ? 250 : 450, my);
@@ -506,13 +549,36 @@ export const useMafia = create<MafiaState>((set) => ({
   waiting: false,
   pick: null,
   claudeOk: false,
+  geminiModel: loadGemini()?.model ?? null,
+  geminiState: 'idle',
   note: null,
 
   setCfg(p) {
     const cfg = { ...get().cfg, ...p };
     set({ cfg });
     writeJSON(SETUP_KEY, cfg);
-    if (p.voice === false) hush();
+    if (p.voice && p.voice !== 'speak') hush();
+  },
+
+  async connectGemini(key) {
+    const k = key.trim();
+    if (!k) return false;
+    set({ geminiState: 'checking' });
+    try {
+      const model = await connectGemini(k);
+      saveGemini({ key: k, model });
+      set({ geminiModel: model, geminiState: 'idle', note: null });
+      get().setCfg({ gemini: true });
+      return true;
+    } catch (e) {
+      set({ geminiState: e instanceof GeminiFail ? e.code : 'net' });
+      return false;
+    }
+  },
+
+  forgetGemini() {
+    saveGemini(null);
+    set({ geminiModel: null, geminiState: 'idle' });
   },
 
   probe() {

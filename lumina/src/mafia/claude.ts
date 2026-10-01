@@ -1,8 +1,7 @@
 /**
- * claude.ai 아티팩트 안에서만: AI 친구들의 대사를 Claude가 대화 흐름에 맞게 다듬는다.
- * 누구를 의심·변호하고 무슨 역할을 주장할지는 게임 두뇌가 정하고, Claude에게는 살아 있는 친구들의
- * 진짜 역할을 보내지 않는다 (공개된 사실 + 초안 문장만). 보는 사람의 Claude 사용량을 쓰므로
- * 사람이 버튼을 누른 뒤에만 부르고, 실패하면 초안을 그대로 쓴다. 다른 곳(공개 사이트)에서는 꺼져 있다.
+ * AI 친구들의 대사 다듬기 — 프롬프트와 답 받기는 Claude·Gemini가 같이 쓰고, 여기에는 claude.ai 아티팩트의 Claude 연결도 있다.
+ * 누구를 의심·변호하고 무슨 역할을 주장할지는 게임 두뇌가 정하고, 대사를 쓰는 쪽에는 살아 있는 친구들의
+ * 진짜 역할을 보내지 않는다 (공개된 사실 + 초안 문장 + 최근 대화만). 사람이 무언가 한 뒤에만 부르고, 실패하면 초안을 그대로 쓴다.
  */
 import type { Lang } from '../i18n';
 import { PERSONA, type Game, type Said } from './engine';
@@ -41,8 +40,8 @@ export const FATAL: ReadonlySet<string> = new Set(['not_granted', 'sampling_disa
 export const LIMITED: ReadonlySet<string> = new Set(['rate_limited', 'session_expired']);
 
 const STYLE = {
-  ko: { polite: '차분한 존댓말', casual: '활발한 반말', cute: '귀여운 존댓말 (가끔 "뀨")', cool: '짧고 시크한 반말' },
-  en: { polite: 'calm and polite', casual: 'energetic and casual', cute: 'cute and sweet', cool: 'short and cool' },
+  ko: { polite: '상냥한 존댓말 ("~용")', casual: '활발한 반말 ("꾸잉!")', cute: '애교 많은 존댓말 ("뀨잉~", "~용")', cool: '짧고 시크한 반말 ("…뀨.")' },
+  en: { polite: 'sweet and polite', casual: 'bouncy and casual', cute: 'extra cute', cool: 'short and cool' },
 } as const;
 
 export interface HistoryLine {
@@ -50,7 +49,15 @@ export interface HistoryLine {
   text: string;
 }
 
-export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly string[], history: readonly HistoryLine[], lang: Lang): string {
+/** 대사를 써 주는 쪽 (Claude 또는 Gemini): 프롬프트를 받아 JSON 하나를 돌려준다 */
+export type JsonWriter = (prompt: string, signal: AbortSignal) => Promise<unknown>;
+
+export const claudeWriter =
+  (sample: Sample): JsonWriter =>
+  (prompt, signal) =>
+    sample.json(prompt, { modelTier: 'quick', cache: false, signal });
+
+export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly string[], history: readonly HistoryLine[], lang: Lang, latest?: HistoryLine): string {
   const ko = lang === 'ko';
   const nm = (i: number): string => nameOf(g, i, lang);
   const alive = g.players
@@ -67,49 +74,65 @@ export function buildPrompt(g: Game, said: readonly Said[], drafts: readonly str
       .join('\n') || (ko ? '아직 없음' : 'none yet');
   const claims = g.claims.filter((c) => c.role !== 'citizen').map((c) => `${nm(c.by)} → ${roleName(c.role, lang)}`);
   const talk = history
-    .slice(-14)
+    .slice(-16)
     .map((h) => `${h.name}: ${h.text}`)
     .join('\n');
-  const items = said.map((s, id) => JSON.stringify({ id, name: nm(s.by), style: STYLE[lang][PERSONA[g.players[s.by]?.character ?? 'hwigi'].style], draft: drafts[id] ?? '' }));
+  const items = said.map((s, id) => {
+    const free = s.act.k === 'chat';
+    return JSON.stringify({
+      id,
+      name: nm(s.by),
+      style: STYLE[lang][PERSONA[g.players[s.by]?.character ?? 'hwigi'].style],
+      kind: free ? (ko ? '자유 대화' : 'free chat') : ko ? '뜻' : 'meaning',
+      ...(s.act.k === 'chat' ? { to: nm(s.act.to) } : {}),
+      draft: drafts[id] ?? '',
+    });
+  });
   const lines = ko
     ? [
-        '너는 마피아 게임에 나오는 귀여운 기니피그 친구들의 대사를 다듬는 작가야.',
-        '[초안]마다 그 캐릭터가 할 말을 자연스러운 구어체로 다시 써. 지켜야 할 것:',
-        '- 초안의 뜻(누구를 의심하는지, 누구를 믿는지, 무슨 역할이라고 주장하는지, 조사 결과)은 바꾸거나 빼지 마.',
-        '- 초안에 없는 역할·조사 결과·사실을 지어내지 마. 살아 있는 친구의 진짜 역할은 아무도 몰라.',
-        '- 한 줄에 1~2문장, 60자 이내. 이모지, 따옴표, 괄호 설명 없이 대사만.',
-        '- 바로 앞 대화(특히 사람 플레이어의 말)에 대꾸하듯 이어지게 써도 좋아. 같은 표현을 되풀이하지 마.',
+        '너는 마피아 게임에 나오는 귀여운 기니피그 친구들의 대사를 쓰는 작가야.',
+        '모두 기니피그라서 말투가 귀여워. 존댓말 친구는 "~용", "~해용", "~이에용" 같은 말끝을 자주 쓰고, 다들 "꾸잉", "뀨", "꾸르르" 같은 기니피그 소리를 가끔 섞어 (예: "꾸잉, 전 의사 맞는데용!"). 무섭거나 거친 말은 쓰지 마.',
+        '[할 말]의 친구마다 대사 한 줄을 써. 지켜야 할 것:',
+        '- kind가 "뜻"이면 초안의 뜻(누구를 의심하는지, 누구를 믿는지, 무슨 역할이라고 하는지, 조사 결과)을 바꾸거나 빼지 말고 자연스럽게 다시 써.',
+        '- kind가 "자유 대화"면 to에게 그 캐릭터답게 자연스럽게 대답해. 게임 얘기가 아니어도 좋아 (먹이, 기분, 취미, 날씨 같은 일상 이야기). 물어보면 대답하고, 가끔 되물어도 돼. 초안은 참고만 해.',
+        '- 없는 역할·조사 결과·사실을 지어내지 마. 살아 있는 친구의 진짜 역할은 아무도 몰라 (자기 역할을 밝히라고 하면 시치미를 떼거나 둘러대).',
+        '- 한 줄에 1~2문장, 70자 이내. 이모지와 괄호 설명 없이 대사만.',
+        '- 바로 앞 대화에 이어지게 쓰고, 같은 표현을 되풀이하지 마.',
         '',
         `[상황] ${g.day}일째 낮. 살아 있는 친구: ${alive}`,
         `[밝혀진 사실]\n${facts}`,
         claims.length ? `[역할 주장] ${claims.join(', ')}` : '',
         talk ? `[최근 대화]\n${talk}` : '',
-        `[초안]\n${items.join('\n')}`,
+        latest ? `[방금 사람이 한 말] ${latest.name}: ${latest.text}` : '',
+        `[할 말]\n${items.join('\n')}`,
         '',
-        '답은 JSON 하나만: {"lines":[{"id":0,"text":"..."}]} — 초안의 id마다 한 줄씩.',
+        '답은 JSON 하나만: {"lines":[{"id":0,"text":"..."}]} — [할 말]의 id마다 한 줄씩.',
       ]
     : [
         'You write lines for cute guinea pig characters in a Mafia (social deduction) game.',
-        'Rewrite each [draft] as natural spoken dialogue for that character. Rules:',
-        '- Keep the meaning exactly: who they suspect, who they trust, what role they claim, any investigation result.',
-        '- Never invent roles, results or facts that are not in the draft. Nobody knows the living players’ true roles.',
-        '- One or two sentences, under 120 characters. No emoji, quotes or stage directions.',
-        '- You may respond to the latest conversation (especially the human player). Do not repeat phrases.',
+        'They are guinea pigs, so they talk cutely and sometimes add guinea pig sounds like "squeak" or "wheek". Never scary or rude.',
+        'Write one line for each entry in [To say]. Rules:',
+        '- kind "meaning": keep the draft’s meaning exactly (who they suspect or trust, what role they claim, any result), just make it natural.',
+        '- kind "free chat": reply naturally to "to" in character. Everyday small talk is fine (food, mood, hobbies, weather). Answer questions; sometimes ask back. The draft is only a hint.',
+        '- Never invent roles, results or facts. Nobody knows the living players’ true roles (if asked to reveal a role, dodge playfully).',
+        '- One or two sentences, under 120 characters. No emoji or stage directions.',
+        '- Follow on from the latest conversation and do not repeat phrases.',
         '',
         `[Situation] Day ${g.day}. Alive: ${alive}`,
         `[Revealed]\n${facts}`,
         claims.length ? `[Role claims] ${claims.join(', ')}` : '',
         talk ? `[Recent talk]\n${talk}` : '',
-        `[Drafts]\n${items.join('\n')}`,
+        latest ? `[Human just said] ${latest.name}: ${latest.text}` : '',
+        `[To say]\n${items.join('\n')}`,
         '',
-        'Reply with only JSON: {"lines":[{"id":0,"text":"..."}]} — one line per draft id.',
+        'Reply with only JSON: {"lines":[{"id":0,"text":"..."}]} — one line per id.',
       ];
   return lines.filter(Boolean).join('\n');
 }
 
-/** Claude가 다듬은 대사 (빠진 줄은 초안 그대로) */
-export async function polish(sample: Sample, g: Game, said: readonly Said[], drafts: readonly string[], history: readonly HistoryLine[], lang: Lang, signal: AbortSignal): Promise<string[]> {
-  const r = await sample.json<{ lines?: { id?: unknown; text?: unknown }[] }>(buildPrompt(g, said, drafts, history, lang), { modelTier: 'quick', cache: false, signal });
+/** 대사를 다듬어 받는다 (빠진 줄은 초안 그대로) */
+export async function polish(write: JsonWriter, g: Game, said: readonly Said[], drafts: readonly string[], history: readonly HistoryLine[], lang: Lang, signal: AbortSignal, latest?: HistoryLine): Promise<string[]> {
+  const r = (await write(buildPrompt(g, said, drafts, history, lang, latest), signal)) as { lines?: { id?: unknown; text?: unknown }[] } | null;
   const out = [...drafts];
   for (const l of Array.isArray(r?.lines) ? r.lines : []) {
     const k = Number(l?.id);
