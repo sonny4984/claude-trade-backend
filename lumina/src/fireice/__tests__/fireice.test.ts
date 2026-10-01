@@ -261,7 +261,8 @@ describe('불과 얼음 단계 — 실제 물리로 풀이 따라가기', () => 
       const r = replay(lv, path);
       expect(r.why).toBe('');
       expect(r.ok).toBe(true);
-    });
+      // 풀이 찾기 + 물리 재생이라 다른 시험과 같이 돌면 5초를 넘기기도 한다
+    }, 30_000);
   }
 });
 
