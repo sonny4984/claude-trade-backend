@@ -665,6 +665,7 @@ export const ko = {
     pickLevel: '단계 고르기',
     locked: '앞 단계를 먼저 통과해요',
     start: '{n}단계 시작',
+    resume: '{n}단계부터 이어서 하기',
     howTitle: '이렇게 해요',
     how: [
       '불과 얼음이 각자 제 색 문(불꽃·눈꽃)에 함께 서면 통과예요.',

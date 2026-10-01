@@ -63,7 +63,8 @@ test('불과 얼음 혼자 하기: 움직이고, 바꾸고, 둘 다 문에 서�
   const errors = await open(page);
   await page.locator('.plate-fireice').click();
   await expect(page.locator('.fi-level')).toHaveCount(34);
-  await expect(page.locator('.fi-level').nth(1)).toBeDisabled();
+  // 모든 단계를 고를 수 있다 (깬 단계를 다시 안 해도 되게)
+  await expect(page.locator('.fi-level').nth(1)).toBeEnabled();
   await page.locator('.screen-foot .btn-primary').click();
   await expect(page.locator('.fireice')).toBeVisible();
   await expect(page.locator('.fi-canvas')).toBeVisible();

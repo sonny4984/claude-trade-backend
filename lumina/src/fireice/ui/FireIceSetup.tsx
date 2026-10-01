@@ -155,7 +155,7 @@ export function FireIceSetup() {
       </div>
       <footer className="screen-foot">
         <button type="button" className="btn btn-primary btn-lg btn-block" onClick={start}>
-          {t('fireice.start', { n: level + 1 })}
+          {t(Object.keys(progress).length && level === firstOpenLevel(progress, players) ? 'fireice.resume' : 'fireice.start', { n: levelNo(level) })}
         </button>
       </footer>
     </div>

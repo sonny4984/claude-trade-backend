@@ -667,6 +667,7 @@ export const en: Dict = {
     pickLevel: 'Levels',
     locked: 'Clear the previous level first',
     start: 'Start level {n}',
+    resume: 'Continue from level {n}',
     howTitle: 'How to play',
     how: [
       'Clear the level when Fire and Ice both stand in their own doors (flame and snowflake).',

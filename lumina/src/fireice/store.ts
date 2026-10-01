@@ -8,6 +8,7 @@
  */
 import { create } from 'zustand';
 import { LEVELS } from './levels';
+import { useOnline } from '../net/online';
 import { ELEMENTS, parseLevel, type Element, type LevelDef, type Pool } from './level';
 import { solve, solverState, type HintStep } from './hints';
 import { cleared, newWorld, setPuppet, step, type Input, type WorldEvent, type WorldState, markPrev, PHYS } from './world';
@@ -162,8 +163,13 @@ export function starsFor(level: number, time: number, gems: number, total: numbe
 }
 
 function loadProgress(): Progress {
-  const raw = readJSON<Record<string, LevelBest>>(PROGRESS_KEY);
-  if (!raw || typeof raw !== 'object') return {};
+  return cleanProgress(readJSON<unknown>(PROGRESS_KEY));
+}
+
+/** 저장된(또는 친구 기기에서 온) 진행을 아는 단계·값만 남겨 다듬는다 */
+function cleanProgress(input: unknown): Progress {
+  if (!input || typeof input !== 'object') return {};
+  const raw = input as Record<string, LevelBest | undefined>;
   const out: Record<string, LevelBest> = {};
   for (const def of LEVELS) {
     const b = raw[def.id];
@@ -172,13 +178,24 @@ function loadProgress(): Progress {
   return out;
 }
 
-/** 그 단계를 열었나 (첫 단계, 또는 앞 단계를 통과) */
-export function unlocked(progress: Progress, level: number): boolean {
-  const list = levelsFor(TRIO[level] ? 3 : 2);
-  const k = list.indexOf(level);
-  if (k <= 0) return true;
-  const prev = LEVELS[list[k - 1] as number];
-  return !!prev && !!progress[prev.id];
+/** 그 단계를 고를 수 있나 — 모든 단계를 연다 (기기를 바꾸거나 홈 화면 앱으로 옮겨도 깬 단계를 다시 안 해도 되게). 처음 고르는 건 안 깬 첫 단계 */
+export function unlocked(_progress: Progress, _level: number): boolean {
+  return true;
+}
+
+/** 진행 합치기: 단계마다 별은 많은 쪽, 시간은 짧은 쪽 (바뀐 게 없으면 null) */
+function mergeProgress(a: Progress, b: Progress): Progress | null {
+  let changed = false;
+  const out: Record<string, LevelBest> = { ...a };
+  for (const [id, x] of Object.entries(b)) {
+    const y = out[id];
+    const m: LevelBest = y ? { stars: Math.max(y.stars, x.stars), time: Math.min(y.time, x.time), gems: Math.max(y.gems, x.gems) } : x;
+    if (!y || m.stars !== y.stars || m.time !== y.time || m.gems !== y.gems) {
+      out[id] = m;
+      changed = true;
+    }
+  }
+  return changed ? out : null;
 }
 
 /** 처음 할 단계: 아직 못 깬 첫 단계 */
@@ -473,6 +490,25 @@ export const useFireIce = create<FireIceStore>((set, get) => {
     runtime.offset[el] = was === undefined ? off : Math.min(off, was + 0.002);
     runtime.puppet[el] = snap;
   });
+  // 온라인 방: 서로 깬 단계를 합친다 — 누구 기기로 하든 이미 깬 단계는 다시 안 해도 되게 (대기실에서 주고받아 방장이 시작할 단계에 반영)
+  onRealtime('fprog', (_seat, data) => {
+    const merged = mergeProgress(get().progress, cleanProgress(data));
+    if (!merged) return;
+    set({ progress: merged });
+    writeJSON(PROGRESS_KEY, merged);
+  });
+  let seenSeats = '';
+  useOnline.subscribe((o) => {
+    if ((o.status !== 'lobby' && o.status !== 'playing') || (o.table?.game ?? o.game) !== 'fireice') {
+      seenSeats = '';
+      return;
+    }
+    const key = (o.table?.seats ?? []).map((x) => x.peer ?? '').join();
+    if (key === seenSeats) return;
+    seenSeats = key;
+    setTimeout(() => bridge.emit?.('fprog', get().progress), 400);
+  });
+
   onRealtime('fe', (seat, data) => {
     const s = get().session;
     const w = runtime.world;
