@@ -20,6 +20,8 @@ import { FireIceSetup } from '../fireice/ui/FireIceSetup';
 import { FireIceScreen } from '../fireice/ui/FireIceScreen';
 import { MafiaSetup } from '../mafia/ui/MafiaSetup';
 import { MafiaScreen } from '../mafia/ui/MafiaScreen';
+import { claimGeminiLink } from '../mafia/store';
+import { translate } from '../i18n';
 import { useOnline } from '../net/online';
 import { CommsLayer } from './online/Comms';
 import { readInvite } from '../net/site';
@@ -100,6 +102,14 @@ export function App() {
     const id = window.setTimeout(() => void loadPortrait3d(), 60);
     return () => window.clearTimeout(id);
   }, [show3d]);
+  // Gemini 키 링크(#gemini=키)로 열렸으면 키를 넣고 마피아 준비 화면으로
+  useEffect(() => {
+    void claimGeminiLink().then((ok) => {
+      if (ok === null) return;
+      useGame.getState().go('mafia-setup');
+      useGame.getState().toastMsg(translate(useSettings.getState().lang, ok ? 'mafia.geminiLinked' : 'mafia.geminiLinkFail'), ok ? 'good' : 'bad');
+    });
+  }, []);
   // 초대 링크(?room=코드)로 열렸으면 바로 입장 화면으로
   useEffect(() => {
     const inv = readInvite();

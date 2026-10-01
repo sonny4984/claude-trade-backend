@@ -46,10 +46,7 @@ function GeminiCard() {
     );
   return (
     <div className="mf-gemini">
-      <p className="mf-gemini-title">
-        <b>{t('mafia.gemini')}</b>
-        <small className="toggle-sub">{t('mafia.geminiSub')}</small>
-      </p>
+      <p className="mf-sub">{t('mafia.geminiSub')}</p>
       <form
         className="mf-input"
         onSubmit={(e) => {
@@ -143,14 +140,20 @@ export function MafiaSetup() {
             ))}
           </div>
           <p className="mf-sub">{t(`mafia.voiceModeSub.${cfg.voice}`)}</p>
+        </section>
+        <section className="card" id="mf-ai-talk">
+          <h2 className="card-title">{t(claudeOk ? 'mafia.claude' : 'mafia.gemini')}</h2>
           {claudeOk ? (
-            <label className="toggle-row">
-              <span>
-                {t('mafia.claude')}
-                <small className="toggle-sub">{t('mafia.claudeSub')}</small>
-              </span>
-              <input type="checkbox" className="switch" checked={cfg.claude} onChange={(e) => setCfg({ claude: e.target.checked })} />
-            </label>
+            <>
+              <label className="toggle-row">
+                <span>
+                  {t('mafia.claude')}
+                  <small className="toggle-sub">{t('mafia.claudeSub')}</small>
+                </span>
+                <input type="checkbox" className="switch" checked={cfg.claude} onChange={(e) => setCfg({ claude: e.target.checked })} />
+              </label>
+              <p className="mf-sub">{t('mafia.geminiElsewhere')}</p>
+            </>
           ) : (
             <GeminiCard />
           )}

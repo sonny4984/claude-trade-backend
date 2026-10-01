@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { aiNight, aiVote, living, newGame, plan, record, resolveNight, resolveVote, rolesFor, suspicion, type Act, type Game, type Side } from '../engine';
 import { cutify, fill, josa, lineFor, parseHuman } from '../talk';
-import { GeminiFail, chooseModel, geminiJson, parseLoose } from '../gemini';
+import { GeminiFail, chooseModel, connectGemini, geminiJson, parseLoose, rankModels } from '../gemini';
 
 /** AI끼리 한 판 — 밤 → 낮 토론 세 번 → 투표 */
 function autoplay(seed: number, count: number): { winner: Side | null; days: number; lines: number } {
@@ -200,6 +200,7 @@ describe('Gemini', () => {
     expect(chooseModel(['models/gemini-3.5-flash', 'models/gemini-3.8-flash', 'models/gemini-3.8-flash-lite', 'models/gemini-3-flash-preview', 'models/gemini-3.9-flash-image'])).toBe('gemini-3.8-flash');
     expect(chooseModel(['models/gemini-3.5-flash-lite'])).toBe('gemini-3.5-flash-lite');
     expect(chooseModel(['models/text-embedding-004'])).toBeNull();
+    expect(rankModels(['models/gemini-3.1-flash-lite', 'models/gemini-3.5-flash', 'models/gemini-flash-latest', 'models/gemini-3.8-flash-tts'])).toEqual(['gemini-3.5-flash', 'gemini-3.1-flash-lite']);
   });
 
   it('답에서 JSON을 꺼낸다', () => {
@@ -229,6 +230,15 @@ describe('Gemini', () => {
       await expect(geminiJson(setup, '안녕', signal)).rejects.toMatchObject({ code: 'rate' });
       queue = [reply(400, { error: { message: 'API key not valid' } })];
       await expect(geminiJson(setup, '안녕', signal)).rejects.toBeInstanceOf(GeminiFail);
+      // 붐비면(503) 다음 후보 모델로 넘어간다
+      calls.length = 0;
+      queue = [reply(503, { error: { status: 'UNAVAILABLE' } }), reply(200, ok)];
+      expect(await geminiJson({ key: 'k', model: 'gemini-3.8-flash', models: ['gemini-3.8-flash', 'gemini-3.5-flash'] }, '안녕', signal)).toEqual({ lines: [{ id: 0, text: '꾸잉 안녕!' }] });
+      expect(calls.map((c) => c.url.replace(/.*models\//, ''))).toEqual(['gemini-3.8-flash:generateContent', 'gemini-3.5-flash:generateContent']);
+      // 연결할 때도 실제로 답하는 모델을 고른다
+      calls.length = 0;
+      queue = [reply(200, { models: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'].map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ['generateContent'] })) }), reply(503, {}), reply(200, { candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] })];
+      expect(await connectGemini('k')).toEqual({ model: 'gemini-3.5-flash', models: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'] });
     } finally {
       globalThis.fetch = real;
     }

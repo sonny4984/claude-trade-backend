@@ -56,7 +56,7 @@ test('마피아: AI 친구들과 밤·낮 대화·투표', async ({ page }) => {
   await page.getByRole('radio', { name: '7명' }).click();
   await page.getByRole('radio', { name: '시민', exact: true }).click();
   // claude.ai 밖에서는 Claude 대신 Gemini 연결 칸이 보인다
-  await expect(page.locator('.mf-gemini')).toContainText('Gemini로 대화하기');
+  await expect(page.locator('#mf-ai-talk')).toContainText('Gemini로 대화하기');
   await page.getByRole('button', { name: '시작하기' }).click();
 
   await expect(page.locator('.mafia-screen')).toBeVisible();
@@ -124,7 +124,7 @@ test('Gemini 키를 연결하면 AI 친구들이 Gemini가 쓴 말로 대꾸한�
 
   await page.getByRole('button', { name: '잠들기' }).click();
   await expect(page.locator('.mf-line[data-kind="say"]').first()).toContainText('제미나이가 쓴 말');
-  expect(prompts[0]).toContain('기니피그');
+  expect(prompts.some((x) => x.includes('기니피그'))).toBe(true);
   if ((await state(page)).alive) {
     if (await page.locator('.mf-skip').isVisible()) await page.locator('.mf-skip').click();
     const before = await page.locator('.mf-line[data-kind="say"]').count();
@@ -135,6 +135,19 @@ test('Gemini 키를 연결하면 AI 친구들이 Gemini가 쓴 말로 대꾸한�
     expect(last).toContain('자유 대화');
     expect(last).toContain('다들 오늘 아침 뭐 먹었어?');
   }
+  expect(errors).toEqual([]);
+});
+
+test('Gemini 키 링크(#gemini=키)로 열면 키가 들어가고 주소에서는 지워진다', async ({ page }) => {
+  await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { models: [{ name: 'models/gemini-3.5-flash', supportedGenerationMethods: ['generateContent'] }] } });
+    return route.fulfill({ json: { candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] } });
+  });
+  const errors = await open(page, '/#gemini=link-key', false);
+  await expect(page.locator('.mafia-setup')).toBeVisible();
+  await expect(page.locator('.mf-gemini')).toContainText('연결됨 · gemini-3.5-flash');
+  expect(page.url()).not.toContain('link-key');
+  expect(await page.evaluate(() => localStorage.getItem('lumina.gemini.v1'))).toContain('link-key');
   expect(errors).toEqual([]);
 });
 

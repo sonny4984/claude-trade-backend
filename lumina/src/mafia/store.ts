@@ -16,7 +16,7 @@ import { useGame } from '../store/game';
 import { useSettings } from '../store/settings';
 import { readJSON, writeJSON } from '../store/storage';
 import { FATAL, LIMITED, claudeSample, claudeWriter, polish, type HistoryLine, type JsonWriter } from './claude';
-import { GeminiFail, connectGemini, geminiJson, loadGemini, saveGemini } from './gemini';
+import { GeminiFail, connectGemini, geminiJson, loadGemini, saveGemini, takeKeyFromUrl } from './gemini';
 import { CAST, MAX_PLAYERS, MIN_PLAYERS, PERSONA, aiNight, aiVote, killChoice, lastAct, living, newGame, plan, quietNight, record, resolveNight, resolveVote, tally, type Act, type Game, type Role, type Trigger } from './engine';
 import { humanLine, lineFor, nameOf, narrate, parseHuman, roleName, suggestLine } from './talk';
 import { canSpeak, hush, speak, unlockSpeech } from './voice';
@@ -113,7 +113,7 @@ interface MafiaState {
   geminiModel: string | null;
   /** Gemini 연결 확인 중 · 실패 이유 */
   geminiState: 'idle' | 'checking' | GeminiFail['code'];
-  note: 'claudeOff' | 'claudeLimit' | 'geminiKey' | 'geminiLimit' | null;
+  note: 'claudeOff' | 'claudeLimit' | 'geminiKey' | 'geminiLimit' | 'geminiBusy' | null;
   connectGemini(key: string): Promise<boolean>;
   forgetGemini(): void;
   setCfg(p: Partial<MafiaConfig>): void;
@@ -201,7 +201,7 @@ async function writer(): Promise<JsonWriter | null> {
     if (sample) return claudeWriter(sample);
   }
   const gem = loadGemini();
-  if (cfg.gemini && gem && geminiModel) return (prompt, signal) => geminiJson({ key: gem.key, model: geminiModel }, prompt, signal);
+  if (cfg.gemini && gem && geminiModel) return (prompt, signal) => geminiJson(gem, prompt, signal);
   return null;
 }
 
@@ -229,6 +229,7 @@ async function talk(s: MafiaSession, tr: Trigger): Promise<void> {
       if (e instanceof GeminiFail) {
         if (e.code === 'bad-key') useMafia.setState({ note: 'geminiKey', geminiModel: null, geminiState: 'bad-key' });
         else if (e.code === 'rate') useMafia.setState({ note: 'geminiLimit' });
+        else if (e.code === 'busy') useMafia.setState({ note: 'geminiBusy' });
       } else {
         const code = String((e as { code?: unknown } | null)?.code ?? '');
         if (FATAL.has(code)) useMafia.setState({ claudeOk: false, note: 'claudeOff' });
@@ -565,8 +566,8 @@ export const useMafia = create<MafiaState>((set) => ({
     if (!k) return false;
     set({ geminiState: 'checking' });
     try {
-      const model = await connectGemini(k);
-      saveGemini({ key: k, model });
+      const { model, models } = await connectGemini(k);
+      saveGemini({ key: k, model, models });
       set({ geminiModel: model, geminiState: 'idle', note: null });
       get().setCfg({ gemini: true });
       return true;
@@ -727,6 +728,12 @@ export const useMafia = create<MafiaState>((set) => ({
 }));
 
 gameApis.mafia = () => useMafia.getState();
+
+/** 링크(#gemini=키)로 열었으면 키를 이 기기에 넣고 연결해 본다 — 결과를 돌려준다 (없으면 null) */
+export async function claimGeminiLink(): Promise<boolean | null> {
+  const key = takeKeyFromUrl();
+  return key ? useMafia.getState().connectGemini(key) : null;
+}
 
 // 시험용 손잡이 — 내 컴퓨터(localhost)에서 열었을 때만
 if (typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) {
