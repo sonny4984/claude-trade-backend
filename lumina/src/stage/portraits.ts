@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import type { CharacterId } from '../characters/roster';
 import type { Expression } from '../characters/draw2d';
-import { createMats, type Mats } from './materials';
+import { SHELLS, addLights, createMats, type Mats } from './materials';
 import { Guinea } from './guinea';
 
 let renderer: THREE.WebGLRenderer | null = null;
@@ -31,13 +31,9 @@ function setup(): boolean {
       renderer = null;
     });
     // 초상화는 자르지 않는다 (아주 아래쪽 평면)
-    mats = createMats(new THREE.Plane(new THREE.Vector3(0, 1, 0), 100));
+    mats = createMats(new THREE.Plane(new THREE.Vector3(0, 1, 0), 100), SHELLS.portrait);
     scene = new THREE.Scene();
-    scene.add(new THREE.AmbientLight(0xffffff, 1.55));
-    scene.add(new THREE.HemisphereLight(0xfff8ee, 0x8a7a64, 0.7));
-    const key = new THREE.DirectionalLight(0xfff3e2, 1.9);
-    key.position.set(-4, 6, 8);
-    scene.add(key);
+    addLights(scene);
     return true;
   } catch {
     broken = true;

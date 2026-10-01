@@ -1,316 +1,563 @@
 /**
- * 기니피그 친구들을 2D 캔버스에 그린다 — 두꺼운 검정 외곽선 + 흰 몸의 스티커 화풍.
- *  · drawFace: 눈·눈썹·코·입·(뽀니의 회색 주둥이) — 3D 얼굴 텍스처와 2D 초상화가 같이 쓴다
- *  · drawCharacter: 몸 전체 (초상화·결과 카드·WebGL이 안 될 때)
+ * 기니피그 친구들을 2D 캔버스에 그린다 — 3D 모델과 같은 치수·털옷(anatomy, roster의 coat)으로.
+ * 몸·어깨·머리·볼·주둥이(타원체)를 한 점씩 직접 칠해 빛·털 무늬·털결·보송한 가장자리를 내고,
+ * 그 위에 귀·눈·코·입·수염·나비넥타이·안경을 그린다. 3D가 늦게 뜨거나 없을 때도 같은 친구로 보이게.
+ *  · drawCharacter: 정면 흉상 (초상화·결과 카드·불과 얼음 스프라이트·WebGL이 없을 때)
  */
-import { CHARACTERS, type CharacterId } from './roster';
+import { CHARACTERS, type CharacterId, type Coat, type CoatPatch } from './roster';
+import {
+  BLUSH,
+  BODY_POS,
+  BODY_R,
+  CHEEK_POS,
+  CHEEK_R,
+  EAR,
+  EYE,
+  EYE_R,
+  SHOULDER_POS,
+  SHOULDER_R,
+  SKULL_AT,
+  SKULL_R,
+  SNOUT_POS,
+  SNOUT_R,
+  browColors,
+  darkSnout,
+  headTopOf,
+  lighten,
+  messyOf,
+  rgbOf,
+  shade,
+  skullPoint,
+  type V3,
+} from './anatomy';
 
 export type Expression = 'idle' | 'blink' | 'happy' | 'surprised' | 'sad' | 'think' | 'win' | 'lose';
 
-const INK = '#141414';
+const sad = (ex: Expression): boolean => ex === 'sad' || ex === 'lose';
 
-/** 원작의 "6"자 눈: 고리 + 꼬리, 안쪽 동공 */
-function eye(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, mirror: boolean, look: { x: number; y: number }, blink: boolean): void {
-  ctx.save();
-  ctx.translate(x, y);
-  if (mirror) ctx.scale(-1, 1);
-  ctx.strokeStyle = INK;
-  ctx.fillStyle = INK;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  if (blink) {
-    ctx.lineWidth = s * 0.26;
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.55, s * 0.1);
-    ctx.quadraticCurveTo(0, s * 0.42, s * 0.55, s * 0.1);
-    ctx.stroke();
-    ctx.restore();
-    return;
+/** 정면에서 본 귀 가운데 (머리 공간 x, y)와 처진 각 — 3D 귀(guinea.ts makeEar)를 정면에 비춘 값 */
+const EAR_AT = (() => {
+  const p = skullPoint(EAR.yaw, EAR.pitch);
+  const n = [p[0] / (SKULL_R[0] * SKULL_R[0]), p[1] / (SKULL_R[1] * SKULL_R[1]), p[2] / (SKULL_R[2] * SKULL_R[2])];
+  const nl = Math.hypot(n[0] as number, n[1] as number, n[2] as number);
+  const o = [(n[0] as number) / nl + 0.75, (n[1] as number) / nl - 1.45, (n[2] as number) / nl + 0.05];
+  const ol = Math.hypot(o[0] as number, o[1] as number, o[2] as number);
+  return [p[0] + ((o[0] as number) / ol) * 0.17, p[1] + ((o[1] as number) / ol) * 0.17] as const;
+})();
+const EAR_TILT = 0.5;
+
+// ── 값 노이즈 (털 무늬 경계·털결·가닥) ─────────────────────────────
+
+function hash3(x: number, y: number, z: number): number {
+  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(z, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function noise3(x: number, y: number, z: number): number {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const iz = Math.floor(z);
+  let fx = x - ix;
+  let fy = y - iy;
+  let fz = z - iz;
+  fx = fx * fx * (3 - 2 * fx);
+  fy = fy * fy * (3 - 2 * fy);
+  fz = fz * fz * (3 - 2 * fz);
+  const l = (a: number, b: number, t: number): number => a + (b - a) * t;
+  return l(
+    l(l(hash3(ix, iy, iz), hash3(ix + 1, iy, iz), fx), l(hash3(ix, iy + 1, iz), hash3(ix + 1, iy + 1, iz), fx), fy),
+    l(l(hash3(ix, iy, iz + 1), hash3(ix + 1, iy, iz + 1), fx), l(hash3(ix, iy + 1, iz + 1), hash3(ix + 1, iy + 1, iz + 1), fx), fy),
+    fz,
+  );
+}
+
+// ── 털옷 칠하기 ──────────────────────────────────────────────
+
+interface Paint {
+  readonly base: [number, number, number];
+  readonly patches: readonly { c: V3; r: V3; col: [number, number, number]; a: number }[];
+  readonly ticked: number;
+  readonly seed: number;
+}
+
+function paintOf(coat: Coat, on: 'head' | 'body', seed: number): Paint {
+  const list: CoatPatch[] = coat.patches.filter((p) => p.on === on);
+  if (on === 'head')
+    for (const dir of [-1, 1])
+      list.push({ on: 'head', c: [dir * BLUSH.c[0], BLUSH.c[1], BLUSH.c[2]], r: BLUSH.r, color: BLUSH.color, a: BLUSH.a });
+  return {
+    base: rgbOf(coat.base),
+    patches: list.map((p) => ({ c: p.c, r: p.r, col: rgbOf(p.color), a: p.a ?? 1 })),
+    ticked: coat.ticked,
+    seed,
+  };
+}
+
+/** 부위 공간의 점 p에서 털색 (셰이더와 같은 규칙) */
+function furAt(pt: Paint, x: number, y: number, z: number, out: [number, number, number]): void {
+  out[0] = pt.base[0];
+  out[1] = pt.base[1];
+  out[2] = pt.base[2];
+  if (pt.patches.length) {
+    const n = noise3(x * 4 + pt.seed, y * 4 + pt.seed, z * 4 + pt.seed) * 0.6 + noise3(x * 9 - pt.seed, y * 9 - pt.seed, z * 9 - pt.seed) * 0.4;
+    for (const q of pt.patches) {
+      const dx = (x - q.c[0]) / q.r[0];
+      const dy = (y - q.c[1]) / q.r[1];
+      const dz = (z - q.c[2]) / q.r[2];
+      const k = Math.sqrt(dx * dx + dy * dy + dz * dz) + (n - 0.5) * 0.3;
+      if (k >= 1) continue;
+      const t = k <= 0.84 ? 1 : 1 - smooth((k - 0.84) / 0.16);
+      const a = t * q.a;
+      out[0] += (q.col[0] - out[0]) * a;
+      out[1] += (q.col[1] - out[1]) * a;
+      out[2] += (q.col[2] - out[2]) * a;
+    }
   }
-  // 고리 (살짝 기운 타원)
-  ctx.lineWidth = s * 0.24;
-  ctx.beginPath();
-  ctx.ellipse(0, s * 0.08, s * 0.5, s * 0.64, -0.18, 0, Math.PI * 2);
-  ctx.stroke();
-  // 꼬리: 고리 위쪽에서 바깥 위로 말려 올라감 ("6")
-  ctx.lineWidth = s * 0.22;
-  ctx.beginPath();
-  ctx.moveTo(s * 0.18, -s * 0.52);
-  ctx.quadraticCurveTo(-s * 0.2, -s * 0.95, -s * 0.62, -s * 0.66);
-  ctx.stroke();
-  // 동공
-  ctx.beginPath();
-  ctx.ellipse(look.x * s * 0.16 + s * 0.08, s * 0.2 + look.y * s * 0.16, s * 0.27, s * 0.34, -0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
 }
 
-function happyEye(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
-  ctx.save();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = s * 0.26;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(x - s * 0.55, y + s * 0.3);
-  ctx.quadraticCurveTo(x, y - s * 0.55, x + s * 0.55, y + s * 0.3);
-  ctx.stroke();
-  ctx.restore();
+const smooth = (t: number): number => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
+interface Blob {
+  readonly c: V3;
+  readonly r: V3;
+  readonly paint: Paint;
+  /** 부위 공간의 원점 (몸 공간이면 0, 머리 공간이면 머리 가운데) */
+  readonly origin: V3;
+  /** 가장자리 털 길이 · 뭉침 */
+  readonly fur: number;
+  readonly messy: number;
 }
+
+const LIGHT = ((): V3 => {
+  const v = [-0.45, 0.62, 0.65];
+  const l = Math.hypot(v[0] as number, v[1] as number, v[2] as number);
+  return [(v[0] as number) / l, (v[1] as number) / l, (v[2] as number) / l];
+})();
 
 /**
- * 얼굴만 (투명 배경). (cx, cy) = 얼굴 중심, w = 머리 폭 기준 크기.
+ * 타원체 털뭉치들을 한 점씩 칠한 이미지 (깊이 버퍼로 앞의 것이 덮는다).
+ * S: 1 월드 단위의 픽셀 수, (ox, oy): 월드 원점의 픽셀 위치
  */
-export function drawFace(ctx: CanvasRenderingContext2D, id: CharacterId, ex: Expression, cx: number, cy: number, w: number): void {
-  const spec = CHARACTERS[id];
-  const s = w * 0.11; // 눈 크기 단위
-  const ey = cy - w * 0.06;
-  const ex1 = cx - w * 0.19;
-  const ex2 = cx + w * 0.19;
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  // 뽀니: 회색 주둥이
-  if (spec.muzzle) {
-    ctx.fillStyle = '#c9c9c9';
-    ctx.beginPath();
-    ctx.ellipse(cx + w * 0.01, cy + w * 0.17, w * 0.2, w * 0.15, 0, 0, Math.PI * 2);
-    ctx.fill();
+function paintBlobs(blobs: readonly Blob[], size: number, S: number, ox: number, oy: number): ImageData | null {
+  let img: ImageData;
+  try {
+    img = new ImageData(size, size);
+  } catch {
+    return null;
   }
-  // 모카: 갈색 무늬 (한쪽 눈가)
-  if (spec.patches) {
-    ctx.fillStyle = '#b07a4e';
-    ctx.beginPath();
-    ctx.ellipse(cx + w * 0.2, cy - w * 0.1, w * 0.19, w * 0.16, 0.4, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  const look =
-    ex === 'think' ? { x: -0.6, y: -0.7 } : ex === 'surprised' ? { x: 0, y: 0 } : ex === 'sad' || ex === 'lose' ? { x: 0, y: 0.6 } : { x: 0.1, y: 0.1 };
-  const big = ex === 'surprised' ? 1.22 : 1;
-  if (ex === 'happy' || ex === 'win') {
-    happyEye(ctx, ex1, ey, s);
-    happyEye(ctx, ex2, ey, s);
-  } else {
-    eye(ctx, ex1, ey, s * big, false, look, ex === 'blink');
-    eye(ctx, ex2, ey, s * big, true, { x: -look.x, y: look.y }, ex === 'blink');
-  }
-
-  // 모카: 동그란 안경
-  if (spec.glasses) {
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = w * 0.022;
-    ctx.beginPath();
-    ctx.arc(ex1, ey + s * 0.1, s * 1.05, 0, Math.PI * 2);
-    ctx.moveTo(ex2 + s * 1.05, ey + s * 0.1);
-    ctx.arc(ex2, ey + s * 0.1, s * 1.05, 0, Math.PI * 2);
-    ctx.moveTo(ex1 + s * 1.05, ey);
-    ctx.quadraticCurveTo(cx, ey - s * 0.4, ex2 - s * 1.05, ey);
-    ctx.stroke();
-  }
-
-  // 눈썹
-  ctx.strokeStyle = INK;
-  const sad = ex === 'sad' || ex === 'lose';
-  if (spec.brows === 'bushy') {
-    // 휘기: 굵고 부스스한 눈썹
-    ctx.lineWidth = w * 0.05;
-    for (const [bx, dir] of [
-      [ex1, -1],
-      [ex2, 1],
-    ] as const) {
-      ctx.beginPath();
-      const inner = sad ? -0.02 : 0.03;
-      ctx.moveTo(bx - dir * w * 0.12, ey - w * 0.16);
-      ctx.quadraticCurveTo(bx, ey - w * (0.23 + inner), bx + dir * w * 0.1, ey - w * (0.16 - (sad ? 0.05 : -0.02)));
-      ctx.stroke();
+  const px = img.data;
+  const zbuf = new Float32Array(size * size).fill(-1e9);
+  const col: [number, number, number] = [0, 0, 0];
+  // 털결 노이즈는 그림 크기에 맞춰 (작은 그림에서 지글거리지 않게)
+  const grain = Math.min(70, size * 0.22);
+  for (const b of blobs) {
+    const ext = b.fur > 0 ? b.fur / Math.min(b.r[0], b.r[1]) : 0;
+    const reach = 1 + ext * (1 + b.messy * 1.05);
+    const x0 = Math.max(0, Math.floor(ox + (b.c[0] - b.r[0] * reach) * S) - 1);
+    const x1 = Math.min(size - 1, Math.ceil(ox + (b.c[0] + b.r[0] * reach) * S) + 1);
+    const y0 = Math.max(0, Math.floor(oy - (b.c[1] + b.r[1] * reach) * S) - 1);
+    const y1 = Math.min(size - 1, Math.ceil(oy - (b.c[1] - b.r[1] * reach) * S) + 1);
+    const edgePx = Math.min(b.r[0], b.r[1]) * S;
+    for (let py = y0; py <= y1; py++) {
+      const Y = (oy - (py + 0.5)) / S;
+      const v = (Y - b.c[1]) / b.r[1];
+      for (let qx = x0; qx <= x1; qx++) {
+        const X = (qx + 0.5 - ox) / S;
+        const u = (X - b.c[0]) / b.r[0];
+        const d2 = u * u + v * v;
+        if (d2 >= reach * reach) continue;
+        const d = Math.sqrt(d2);
+        let alpha = 1;
+        let shellT = -1;
+        if (d > 1) {
+          // 바깥 털: 각도별 가닥이 이어지는 만큼만
+          if (ext <= 0) continue;
+          const ang = Math.atan2(v, u);
+          const cl = noise3(Math.cos(ang) * 3.3 + b.paint.seed, Math.sin(ang) * 3.3, 0.5);
+          const len = ext * (1 + b.messy * (1.5 * cl * cl - 0.45));
+          const t = (d - 1) / Math.max(1e-3, len);
+          if (t >= 1) continue;
+          // 가닥: 각도와 높이를 같이 섞어 곧은 가시처럼 보이지 않게
+          const strand = hash3(Math.floor((ang + Math.PI) * edgePx * 0.9), Math.floor(t * 3), b.paint.seed | 0);
+          if (strand < 0.25 + t * 0.65) continue;
+          shellT = t;
+          alpha = 1 - t * 0.55;
+        } else {
+          // 부드러운 가장자리 (털이 없는 조각만)
+          if (ext <= 0) alpha = Math.min(1, (1 - d) * edgePx + 0.5);
+        }
+        const dd = Math.min(1, d);
+        const uu = d > 1 ? u / d : u;
+        const vv = d > 1 ? v / d : v;
+        const z = Math.sqrt(Math.max(0, 1 - dd * dd));
+        const Z = b.c[2] + z * b.r[2] + (shellT >= 0 ? -0.001 : 0);
+        const i = py * size + qx;
+        if (Z <= (zbuf[i] as number)) continue;
+        // 부위 공간의 점
+        const sx = b.c[0] + uu * b.r[0] - b.origin[0];
+        const sy = b.c[1] + vv * b.r[1] - b.origin[1];
+        const sz = b.c[2] + z * b.r[2] - b.origin[2];
+        furAt(b.paint, sx, sy, sz, col);
+        // 빛: 타원체 법선
+        let nx = uu / b.r[0];
+        let ny = vv / b.r[1];
+        let nz = z / b.r[2];
+        const nl = Math.hypot(nx, ny, nz) || 1;
+        nx /= nl;
+        ny /= nl;
+        nz /= nl;
+        const diff = Math.max(0, nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
+        const rim = Math.pow(1 - Math.max(0, nz), 2.4) * 0.32;
+        let k = 0.7 + 0.42 * diff + rim;
+        // 털결과 아구티 깨알
+        k *= 0.93 + 0.12 * noise3(sx * grain * 0.42, sy * grain, sz * grain * 0.42);
+        if (b.paint.ticked > 0) k *= 1 + b.paint.ticked * (hash3(Math.floor(sx * grain * 1.3), Math.floor(sy * grain * 1.3), Math.floor(sz * grain * 1.3)) < 0.5 ? -0.3 : 0.22);
+        if (shellT >= 0) k *= 0.86 + 0.21 * shellT;
+        const o = i * 4;
+        const r = Math.min(255, col[0] * k);
+        const g = Math.min(255, col[1] * k);
+        const bb = Math.min(255, col[2] * k);
+        if (alpha >= 1) {
+          px[o] = r;
+          px[o + 1] = g;
+          px[o + 2] = bb;
+          px[o + 3] = 255;
+        } else if (alpha > 0) {
+          // 아래에 칠한 것과 섞는다
+          const ea = (px[o + 3] as number) / 255;
+          const na = alpha + ea * (1 - alpha);
+          px[o] = (r * alpha + (px[o] as number) * ea * (1 - alpha)) / na;
+          px[o + 1] = (g * alpha + (px[o + 1] as number) * ea * (1 - alpha)) / na;
+          px[o + 2] = (bb * alpha + (px[o + 2] as number) * ea * (1 - alpha)) / na;
+          px[o + 3] = na * 255;
+        } else continue;
+        zbuf[i] = Z;
+      }
     }
-  } else if (spec.brows === 'serious') {
-    // 기니니: 가늘고 진지하게 안쪽이 내려간 눈썹
-    ctx.lineWidth = w * 0.028;
-    for (const [bx, dir] of [
-      [ex1, 1],
-      [ex2, -1],
-    ] as const) {
-      ctx.beginPath();
-      const tilt = sad ? -0.03 : 0.035;
-      ctx.moveTo(bx - dir * w * 0.1, ey - w * (0.19 + tilt));
-      ctx.lineTo(bx + dir * w * 0.08, ey - w * (0.19 - tilt));
-      ctx.stroke();
-    }
-  } else if (sad) {
-    ctx.lineWidth = w * 0.022;
-    for (const [bx, dir] of [
-      [ex1, 1],
-      [ex2, -1],
-    ] as const) {
-      ctx.beginPath();
-      ctx.moveTo(bx - dir * w * 0.08, ey - w * 0.15);
-      ctx.lineTo(bx + dir * w * 0.06, ey - w * 0.19);
-      ctx.stroke();
-    }
   }
-
-  // 코 + 입: 원작의 휘어진 선과 작은 코 덩어리
-  const ny = cy + w * 0.15;
-  ctx.lineWidth = w * 0.03;
-  ctx.beginPath();
-  ctx.moveTo(cx - w * 0.14, ny - w * 0.03);
-  ctx.quadraticCurveTo(cx - w * 0.05, ny + w * 0.06, cx + w * 0.05, ny + w * 0.01);
-  ctx.stroke();
-  ctx.fillStyle = INK;
-  ctx.beginPath();
-  ctx.ellipse(cx + w * 0.055, ny - w * 0.005, w * 0.045, w * 0.03, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-  // 입
-  ctx.lineWidth = w * 0.026;
-  ctx.beginPath();
-  if (ex === 'surprised') {
-    ctx.ellipse(cx + w * 0.01, ny + w * 0.085, w * 0.03, w * 0.038, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  } else if (ex === 'win' || ex === 'happy') {
-    ctx.moveTo(cx - w * 0.06, ny + w * 0.06);
-    ctx.quadraticCurveTo(cx + w * 0.01, ny + w * 0.13, cx + w * 0.08, ny + w * 0.06);
-    ctx.stroke();
-  } else if (sad) {
-    ctx.moveTo(cx - w * 0.05, ny + w * 0.1);
-    ctx.quadraticCurveTo(cx + w * 0.01, ny + w * 0.06, cx + w * 0.07, ny + w * 0.1);
-    ctx.stroke();
-  } else {
-    ctx.moveTo(cx - w * 0.05, ny + w * 0.075);
-    ctx.quadraticCurveTo(cx + w * 0.01, ny + w * 0.1, cx + w * 0.06, ny + w * 0.07);
-    ctx.stroke();
-  }
-  // 패배: 땀방울
-  if (ex === 'lose') {
-    ctx.fillStyle = '#8ec5ef';
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = w * 0.012;
-    ctx.beginPath();
-    const dx = cx + w * 0.34;
-    const dy = cy - w * 0.2;
-    ctx.moveTo(dx, dy - w * 0.06);
-    ctx.quadraticCurveTo(dx + w * 0.05, dy + w * 0.02, dx, dy + w * 0.04);
-    ctx.quadraticCurveTo(dx - w * 0.05, dy + w * 0.02, dx, dy - w * 0.06);
-    ctx.fill();
-    ctx.stroke();
-  }
-  ctx.restore();
+  return img;
 }
 
-/** 휘기의 부스스한 갈기 윤곽 */
-function fluffyPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
-  const n = 22;
-  ctx.beginPath();
-  for (let i = 0; i <= n; i++) {
-    const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
-    const side = Math.abs(Math.cos(a));
-    const bottom = Math.sin(a) > 0.55;
-    const spike = bottom ? 0.02 : 0.1 + side * 0.14 + (i % 2 ? 0.05 : -0.03);
-    const rr = r * (1 + (i % 2 ? spike : -0.02));
-    const x = cx + Math.cos(a) * rr * 1.08;
-    const y = cy + Math.sin(a) * rr * 0.96;
-    if (i === 0) ctx.moveTo(x, y);
-    else {
-      const pa = a - Math.PI / n;
-      ctx.quadraticCurveTo(cx + Math.cos(pa) * r * 0.98, cy + Math.sin(pa) * r * 0.9, x, y);
-    }
-  }
-  ctx.closePath();
-}
+// ── 얼굴과 소품 ───────────────────────────────────────────────
 
-function bowTie(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number, color: string): void {
-  ctx.save();
-  ctx.fillStyle = color;
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = w * 0.012;
-  ctx.lineJoin = 'round';
+function ellipse(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, rot = 0): void {
   ctx.beginPath();
-  ctx.moveTo(cx - w * 0.02, cy);
-  ctx.lineTo(cx - w * 0.14, cy - w * 0.06);
-  ctx.quadraticCurveTo(cx - w * 0.16, cy, cx - w * 0.14, cy + w * 0.07);
-  ctx.closePath();
-  ctx.moveTo(cx + w * 0.02, cy);
-  ctx.lineTo(cx + w * 0.15, cy - w * 0.065);
-  ctx.quadraticCurveTo(cx + w * 0.17, cy, cx + w * 0.15, cy + w * 0.06);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, w * 0.035, w * 0.035, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, Math.PI * 2);
 }
 
 /**
- * 캐릭터 전신 (정면 스티커). (0,0)~(size,size) 정사각형 안에 그린다.
+ * 캐릭터 정면 흉상. (0,0)~(size,size) 정사각형 안에 그린다 (3D 초상화와 같은 틀).
  */
 export function drawCharacter(ctx: CanvasRenderingContext2D, id: CharacterId, ex: Expression, size: number, bg?: string): void {
   const spec = CHARACTERS[id];
-  const w = size * 0.72;
-  const cx = size / 2;
-  const headY = size * 0.4;
-  const bodyY = size * 0.62;
+  const coat = spec.coat;
+  const messy = messyOf(coat);
+  const top = headTopOf(coat) + 0.14;
+  const bottom = -0.42;
+  const S = size / (top - bottom);
+  const ox = size / 2;
+  const oy = size + bottom * S;
+  const P = (x: number, y: number): [number, number] => [ox + x * S, oy - y * S];
+  const seed = [...id].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 97;
+  const head = paintOf(coat, 'head', seed);
+  const body = paintOf(coat, 'body', seed + 11);
+  const at = (o: V3, p: V3): V3 => [o[0] + p[0], o[1] + p[1], o[2] + p[2]];
+
   ctx.save();
   if (bg) {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, size, size);
   }
-  ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  const stroke = size * 0.028;
-  // 발
-  ctx.fillStyle = '#ffffff';
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = stroke;
-  for (const fx of [-0.08, 0.08]) {
-    ctx.beginPath();
-    ctx.ellipse(cx + fx * size, bodyY + w * 0.36, w * 0.07, w * 0.05, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+  ctx.lineJoin = 'round';
+
+  // 몸·머리·주둥이·볼
+  const blobs: Blob[] = [
+    { c: BODY_POS, r: BODY_R, paint: body, origin: [0, 0, 0], fur: coat.fur, messy: messy * 0.6 },
+    { c: SHOULDER_POS, r: SHOULDER_R, paint: body, origin: [0, 0, 0], fur: 0, messy: 0 },
+    { c: SKULL_AT, r: SKULL_R, paint: head, origin: SKULL_AT, fur: coat.fur, messy },
+    { c: at(SKULL_AT, [-CHEEK_POS[0], CHEEK_POS[1], CHEEK_POS[2]]), r: CHEEK_R, paint: head, origin: SKULL_AT, fur: 0, messy: 0 },
+    { c: at(SKULL_AT, CHEEK_POS), r: CHEEK_R, paint: head, origin: SKULL_AT, fur: 0, messy: 0 },
+    { c: at(SKULL_AT, SNOUT_POS), r: SNOUT_R, paint: head, origin: SKULL_AT, fur: 0, messy: 0 },
+  ];
+  const img = paintBlobs(blobs, size, S, ox, oy);
+  if (img) {
+    const layer = document.createElement('canvas');
+    layer.width = size;
+    layer.height = size;
+    layer.getContext('2d')?.putImageData(img, 0, 0);
+    ctx.drawImage(layer, 0, 0);
   }
-  // 몸
-  ctx.beginPath();
-  ctx.ellipse(cx, bodyY, w * 0.4, w * 0.38, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  // 머리 (휘기는 갈기, 나머지는 구름 모양 위쪽 두 봉우리)
-  if (spec.fur === 'fluffy') {
-    fluffyPath(ctx, cx, headY, w * 0.46);
+
+  // 귀: 머리 위옆에 붙어 바깥 아래로 처진 꽃잎 (3D와 같은 자리 — 머리 옆면보다 앞에 온다)
+  for (const dir of [-1, 1] as const) {
+    const [cx, cy] = P(SKULL_AT[0] + dir * EAR_AT[0], SKULL_AT[1] + EAR_AT[1]);
+    const rot = dir * EAR_TILT;
+    const ear = dir < 0 ? coat.ears[0] : coat.ears[1];
+    const g = ctx.createLinearGradient(cx, cy - 0.2 * S, cx, cy + 0.2 * S);
+    g.addColorStop(0, lighten(ear, 0.14));
+    g.addColorStop(1, shade(ear, 0.1));
+    ctx.fillStyle = g;
+    ellipse(ctx, cx, cy, 0.31 * S, 0.16 * S, rot);
     ctx.fill();
-    ctx.stroke();
-    // 안쪽 털 결
-    ctx.lineWidth = stroke * 0.7;
-    for (const [x0, y0, x1, y1] of [
-      [-0.3, -0.05, -0.36, 0.12],
-      [0.3, -0.05, 0.37, 0.12],
-      [-0.08, -0.36, 0.02, -0.28],
-    ]) {
+    ctx.fillStyle = coat.earIn;
+    ellipse(ctx, cx - dir * 0.05 * S, cy + 0.01 * S, 0.19 * S, 0.085 * S, rot);
+    ctx.fill();
+  }
+
+  // 눈
+  const ep = skullPoint(EYE.yaw, EYE.pitch);
+  const eyeY = SKULL_AT[1] + ep[1];
+  const big = ex === 'surprised' ? 1.16 : 1;
+  const erx = EYE_R * 0.84 * big * S;
+  const ery = EYE_R * 1.04 * big * S * (sad(ex) ? 0.94 : 1);
+  for (const dir of [-1, 1] as const) {
+    const [cx, cy] = P(SKULL_AT[0] + dir * ep[0] * 0.95, eyeY);
+    if (ex === 'happy' || ex === 'win') {
+      ctx.strokeStyle = coat.eye;
+      ctx.lineWidth = EYE_R * 0.32 * S;
       ctx.beginPath();
-      ctx.moveTo(cx + (x0 as number) * w, headY + (y0 as number) * w);
-      ctx.quadraticCurveTo(cx + ((x0 as number) + (x1 as number)) * 0.5 * w * 1.05, headY + ((y0 as number) + (y1 as number)) * 0.5 * w, cx + (x1 as number) * w, headY + (y1 as number) * w);
+      ctx.moveTo(cx - erx, cy + ery * 0.25);
+      ctx.quadraticCurveTo(cx, cy - ery * 1.15, cx + erx, cy + ery * 0.25);
+      ctx.stroke();
+      continue;
+    }
+    if (ex === 'blink') {
+      ctx.strokeStyle = coat.eye;
+      ctx.lineWidth = EYE_R * 0.24 * S;
+      ctx.beginPath();
+      ctx.moveTo(cx - erx, cy);
+      ctx.quadraticCurveTo(cx, cy + ery * 0.35, cx + erx, cy);
+      ctx.stroke();
+      continue;
+    }
+    const g = ctx.createRadialGradient(cx - erx * 0.3, cy - ery * 0.35, erx * 0.1, cx, cy, ery * 1.05);
+    g.addColorStop(0, lighten(coat.eye, 0.28));
+    g.addColorStop(1, coat.eye);
+    ctx.fillStyle = g;
+    ellipse(ctx, cx, cy, erx, ery);
+    ctx.fill();
+    const teary = sad(ex) ? 1.3 : ex === 'surprised' ? 1.1 : 1;
+    const up = ex === 'think' ? -0.3 : 0;
+    ctx.fillStyle = '#ffffff';
+    ellipse(ctx, cx - erx * 0.36, cy - ery * (0.42 - up), EYE_R * 0.3 * teary * S, EYE_R * 0.3 * teary * S);
+    ctx.fill();
+    ellipse(ctx, cx + erx * 0.34, cy + ery * (0.36 + up), EYE_R * 0.15 * teary * S, EYE_R * 0.15 * teary * S);
+    ctx.fill();
+  }
+
+  // 눈썹
+  const brows = browColors(coat);
+  if (spec.brows !== 'none' || sad(ex)) {
+    for (const dir of [-1, 1] as const) {
+      let inner = 0;
+      let outer = 0;
+      let width = 0.04;
+      if (spec.brows === 'bushy') {
+        width = 0.068;
+        inner = sad(ex) ? 0.056 : 0.016;
+        outer = sad(ex) ? -0.024 : 0;
+      } else if (spec.brows === 'serious') {
+        width = 0.04;
+        inner = sad(ex) ? 0.048 : -0.04;
+        outer = sad(ex) ? -0.016 : 0.032;
+      } else {
+        width = 0.028;
+        inner = 0.048;
+        outer = -0.016;
+      }
+      if (ex === 'surprised') {
+        inner += 0.05;
+        outer += 0.05;
+      }
+      const bx = SKULL_AT[0] + dir * ep[0] * 0.93;
+      const by = eyeY + 0.24;
+      ctx.strokeStyle = brows[dir < 0 ? 0 : 1];
+      ctx.lineWidth = width * S;
+      const [x0, y0] = P(bx - dir * 0.13, by + inner);
+      const [xm, ym] = P(bx, by + 0.04 + (inner + outer) / 2);
+      const [x1, y1] = P(bx + dir * 0.13, by + outer);
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.quadraticCurveTo(xm, ym, x1, y1);
       ctx.stroke();
     }
-    ctx.lineWidth = stroke;
-  } else {
-    ctx.beginPath();
-    ctx.arc(cx - w * 0.2, headY - w * 0.28, w * 0.2, Math.PI * 0.9, Math.PI * 1.95);
-    ctx.arc(cx + w * 0.2, headY - w * 0.28, w * 0.2, Math.PI * 1.05, Math.PI * 0.1);
-    ctx.ellipse(cx, headY, w * 0.46, w * 0.4, 0, -0.05, Math.PI + 0.05);
-    ctx.closePath();
+  }
+
+  // 크레스티드 볏의 소용돌이
+  if (coat.breed === 'crested') {
+    const cp = skullPoint(0, 0.93);
+    const [cx, cy] = P(SKULL_AT[0], SKULL_AT[1] + cp[1]);
+    ctx.strokeStyle = 'rgba(205,195,200,0.85)';
+    ctx.lineWidth = Math.max(1, 0.016 * S);
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * 0.015 * S, cy + Math.sin(a) * 0.015 * S);
+      ctx.quadraticCurveTo(cx + Math.cos(a + 0.6) * 0.07 * S, cy + Math.sin(a + 0.6) * 0.07 * S, cx + Math.cos(a + 1.1) * 0.12 * S, cy + Math.sin(a + 1.1) * 0.12 * S);
+      ctx.stroke();
+    }
+  }
+
+  // 코와 입 (주둥이 앞)
+  const snoutY = SKULL_AT[1] + SNOUT_POS[1];
+  const dark = darkSnout(coat);
+  const line = dark ? 'rgba(236,214,205,0.9)' : '#5a3a33';
+  const [nx, ny] = P(0, snoutY + SNOUT_R[1] * Math.sin(0.44));
+  const nw = 0.09 * S;
+  const nh = 0.075 * S;
+  const ng = ctx.createRadialGradient(nx - nw * 0.2, ny - nh * 0.4, nw * 0.1, nx, ny, nw * 1.1);
+  ng.addColorStop(0, lighten(coat.nose, 0.25));
+  ng.addColorStop(1, coat.nose);
+  ctx.fillStyle = ng;
+  ctx.beginPath();
+  ctx.moveTo(nx - nw, ny - nh * 0.45);
+  ctx.quadraticCurveTo(nx, ny - nh * 0.95, nx + nw, ny - nh * 0.45);
+  ctx.quadraticCurveTo(nx + nw * 0.75, ny + nh * 0.35, nx, ny + nh * 0.75);
+  ctx.quadraticCurveTo(nx - nw * 0.75, ny + nh * 0.35, nx - nw, ny - nh * 0.45);
+  ctx.fill();
+  const [, my] = P(0, snoutY + SNOUT_R[1] * Math.sin(0.12));
+  const [lx, ly] = P(-0.115, snoutY + SNOUT_R[1] * Math.sin(0.1));
+  const [rx, ry] = P(0.115, snoutY + SNOUT_R[1] * Math.sin(0.1));
+  const [, dy] = P(0, snoutY + SNOUT_R[1] * Math.sin(-0.04));
+  const u = 0.45 * S; // 주둥이 한 바퀴의 대략 크기 (입 모양 비율)
+  ctx.strokeStyle = line;
+  ctx.lineWidth = Math.max(1, 0.012 * S);
+  ctx.beginPath();
+  ctx.moveTo(nx, ny + nh * 0.7);
+  ctx.lineTo(nx, my);
+  ctx.stroke();
+  ctx.beginPath();
+  if (ex === 'surprised') {
+    ctx.fillStyle = '#9b4d55';
+    const [mx, oy2] = P(0, snoutY + SNOUT_R[1] * Math.sin(-0.02));
+    ellipse(ctx, mx, oy2, 0.03 * S, 0.038 * S);
     ctx.fill();
+  } else if (ex === 'happy' || ex === 'win') {
+    const [mx, m0] = P(0, snoutY);
+    ctx.fillStyle = '#a5505a';
+    ctx.moveTo(lx, ly);
+    ctx.quadraticCurveTo(nx - u * 0.1, my, nx, my);
+    ctx.quadraticCurveTo(nx + u * 0.1, my, rx, ry);
+    ctx.quadraticCurveTo(mx + u * 0.12, m0 + u * 0.2, mx, m0 + u * 0.17);
+    ctx.quadraticCurveTo(mx - u * 0.12, m0 + u * 0.2, lx, ly);
+    ctx.fill();
+    ctx.fillStyle = '#fffaf2';
+    const tw = u * 0.068;
+    for (const left of [nx - u * 0.008 - tw, nx + u * 0.008]) {
+      ctx.beginPath();
+      ctx.rect(left, my - u * 0.005, tw, u * 0.1);
+      ctx.fill();
+    }
+  } else if (sad(ex)) {
+    ctx.moveTo(lx, ly + u * 0.08);
+    ctx.quadraticCurveTo(nx - u * 0.12, my - u * 0.02, nx, my);
+    ctx.quadraticCurveTo(nx + u * 0.12, my - u * 0.02, rx, ry + u * 0.08);
+    ctx.stroke();
+  } else if (ex === 'think') {
+    ctx.moveTo(nx - u * 0.04, my + u * 0.03);
+    ctx.quadraticCurveTo(nx + u * 0.12, my + u * 0.06, rx, ry - u * 0.02);
+    ctx.stroke();
+  } else {
+    ctx.moveTo(lx, ly - u * 0.02);
+    ctx.quadraticCurveTo(nx - u * 0.12, dy, nx, my);
+    ctx.quadraticCurveTo(nx + u * 0.12, dy, rx, ry - u * 0.02);
     ctx.stroke();
   }
-  // 팔 선
-  ctx.lineWidth = stroke * 0.9;
-  for (const dir of [-1, 1]) {
+
+  // 수염
+  ctx.strokeStyle = coat.whisker;
+  ctx.lineWidth = Math.max(0.6, 0.013 * S);
+  for (const dir of [-1, 1])
+    for (const k of [0, 1]) {
+      const [ax, ay] = P(dir * 0.3, SKULL_AT[1] - 0.21 - k * 0.07);
+      const [cx, cy] = P(dir * 0.66, SKULL_AT[1] - 0.16 - k * 0.1);
+      const [bx, by] = P(dir * 1.02, SKULL_AT[1] - 0.14 - k * 0.2);
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.quadraticCurveTo(cx, cy, bx, by);
+      ctx.stroke();
+    }
+
+  // 땀방울
+  if (ex === 'lose') {
+    const sp = skullPoint(EYE.yaw - 0.05, EYE.pitch + 0.62);
+    const [dx, dy2] = P(SKULL_AT[0] + sp[0], SKULL_AT[1] + sp[1]);
+    const r = 0.055 * S;
+    const g = ctx.createLinearGradient(dx, dy2 - r * 1.6, dx, dy2 + r);
+    g.addColorStop(0, '#d8eeff');
+    g.addColorStop(1, '#7fb8ea');
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.moveTo(cx + dir * w * 0.34, bodyY - w * 0.12);
-    ctx.quadraticCurveTo(cx + dir * w * 0.4, bodyY + w * 0.04, cx + dir * w * 0.3, bodyY + w * 0.16);
-    ctx.stroke();
+    ctx.moveTo(dx, dy2 - r * 1.7);
+    ctx.quadraticCurveTo(dx + r * 1.1, dy2, dx, dy2 + r);
+    ctx.quadraticCurveTo(dx - r * 1.1, dy2, dx, dy2 - r * 1.7);
+    ctx.fill();
   }
-  drawFace(ctx, id, ex, cx, headY + w * 0.02, w);
-  bowTie(ctx, cx, headY + w * 0.36, w, spec.bow);
+
+  // 안경
+  if (spec.glasses) {
+    ctx.strokeStyle = '#3b2d27';
+    ctx.lineWidth = 0.036 * S;
+    const ringR = EYE_R * 1.45 * S;
+    const centers: [number, number][] = [];
+    for (const dir of [-1, 1] as const) {
+      const [cx, cy] = P(SKULL_AT[0] + dir * ep[0] * 0.93, eyeY);
+      centers.push([cx, cy]);
+      ellipse(ctx, cx, cy, ringR * 0.92, ringR);
+      ctx.stroke();
+    }
+    const [a, b] = centers;
+    if (a && b) {
+      ctx.lineWidth = 0.03 * S;
+      ctx.beginPath();
+      ctx.moveTo(a[0] + ringR * 0.9, a[1] - ringR * 0.1);
+      ctx.quadraticCurveTo(ox, a[1] - ringR * 0.55, b[0] - ringR * 0.9, b[1] - ringR * 0.1);
+      ctx.stroke();
+    }
+  }
+
+  // 나비넥타이
+  bowTie(ctx, ...P(0, 0.6), S, spec.bow);
+
+  // 앞발 (레일 위)
+  for (const dir of [-1, 1] as const) {
+    const [cx, cy] = P(dir * 0.42, 0.1);
+    const g = ctx.createRadialGradient(cx - 0.05 * S, cy - 0.05 * S, 0.02 * S, cx, cy, 0.2 * S);
+    g.addColorStop(0, lighten(coat.paw, 0.15));
+    g.addColorStop(1, shade(coat.paw, 0.06));
+    ctx.fillStyle = g;
+    ellipse(ctx, cx, cy, 0.18 * S, 0.12 * S);
+    ctx.fill();
+    ctx.fillStyle = shade(coat.paw, 0.12);
+    for (const k of [-1, 0, 1]) {
+      ellipse(ctx, cx + (k * 0.085 + dir * 0.005) * S, cy + 0.075 * S, 0.048 * S, 0.036 * S);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+/** 나비넥타이: (cx, cy) 가운데, S = 1 월드 단위 픽셀 */
+function bowTie(ctx: CanvasRenderingContext2D, cx: number, cy: number, S: number, color: string): void {
+  const w = S * 1.05;
+  ctx.save();
+  const g = ctx.createLinearGradient(cx, cy - 0.12 * w, cx, cy + 0.12 * w);
+  g.addColorStop(0, lighten(color, 0.18));
+  g.addColorStop(1, shade(color, 0.12));
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  for (const dir of [-1, 1]) {
+    ctx.moveTo(cx + dir * 0.03 * w, cy);
+    ctx.lineTo(cx + dir * 0.2 * w, cy - 0.115 * w);
+    ctx.quadraticCurveTo(cx + dir * 0.265 * w, cy, cx + dir * 0.2 * w, cy + 0.115 * w);
+    ctx.closePath();
+  }
+  ctx.fill();
+  ctx.fillStyle = shade(color, 0.05);
+  ellipse(ctx, cx, cy, 0.055 * w, 0.06 * w);
+  ctx.fill();
   ctx.restore();
 }
 

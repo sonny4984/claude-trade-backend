@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import type { CharacterId } from '../characters/roster';
 import type { ReactionKind } from '../store/game';
-import { createMats, glowTexture, type Mats } from './materials';
+import { addLights, createMats, glowTexture, type Mats } from './materials';
 import { Guinea, PAW_Z } from './guinea';
 import { Particles } from './particles';
 
@@ -80,13 +80,7 @@ export class StageScene {
     canvas.addEventListener('webglcontextlost', this.onLost);
 
     this.mats = createMats(this.clip);
-    // three.js의 물리 기반 조명 단위(÷π)에 맞춰 흰 몸이 흰색으로 보이도록 세기를 잡는다
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.55));
-    const hemi = new THREE.HemisphereLight(0xfff8ee, 0x8a7a64, 0.7);
-    this.scene.add(hemi);
-    const key = new THREE.DirectionalLight(0xfff3e2, 1.9);
-    key.position.set(-4, 6, 8);
-    this.scene.add(key);
+    addLights(this.scene);
 
     this.glowTex = glowTexture();
     const gm = new THREE.SpriteMaterial({ map: this.glowTex, color: 0xe2c27f, transparent: true, depthWrite: false, opacity: 0 });
