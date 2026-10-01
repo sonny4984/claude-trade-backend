@@ -18,7 +18,7 @@ interface Tpl {
 const tpl = JSON.parse(readFileSync(process.argv[2] as string, 'utf8')) as Tpl;
 const samples = Number(process.argv[3] ?? 2000);
 const names = Object.keys(tpl.slots);
-let seed = 12345;
+let seed = Number(process.argv[4] ?? 12345);
 // 선형 합동 난수의 아래 비트는 주기가 짧아(0,1,0,1…) 위쪽 비트를 쓴다
 const rnd = (n: number): number => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff) >>> 16) % n;
 const seen = new Set<string>();
