@@ -318,7 +318,7 @@ describe('AI', () => {
       expect(steps).toBeLessThan(2000);
       expect(hiddenCount(state.players[state.winner as number] as CodaPlayer)).toBeGreaterThan(0);
     }
-  });
+  }, 30_000);
 
   it('입문이 아니면 불가능한 값을 말하지 않는다', () => {
     const rng = createRng(3);

@@ -18,6 +18,8 @@ import { GomokuSetup } from '../gomoku/ui/GomokuSetup';
 import { GomokuScreen } from '../gomoku/ui/GomokuScreen';
 import { FireIceSetup } from '../fireice/ui/FireIceSetup';
 import { FireIceScreen } from '../fireice/ui/FireIceScreen';
+import { MafiaSetup } from '../mafia/ui/MafiaSetup';
+import { MafiaScreen } from '../mafia/ui/MafiaScreen';
 import { useOnline } from '../net/online';
 import { CommsLayer } from './online/Comms';
 import { readInvite } from '../net/site';
@@ -89,8 +91,8 @@ function useAutoFullscreen(game: boolean): void {
 export function App() {
   useDocumentSettings();
   const screen = useGame((s) => s.screen);
-  useKeepAwake(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'online');
-  useAutoFullscreen(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice');
+  useKeepAwake(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'mafia' || screen === 'online');
+  useAutoFullscreen(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'mafia');
   const show3d = useSettings((s) => s.show3d);
   useEffect(() => {
     if (!show3d) return;
@@ -131,6 +133,8 @@ export function App() {
       {screen === 'gomoku' && <GomokuScreen />}
       {screen === 'fireice-setup' && <FireIceSetup />}
       {screen === 'fireice' && <FireIceScreen />}
+      {screen === 'mafia-setup' && <MafiaSetup />}
+      {screen === 'mafia' && <MafiaScreen />}
       <Toasts />
       <FullscreenHelp />
       <CommsLayer />

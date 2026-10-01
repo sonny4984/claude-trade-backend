@@ -11,6 +11,7 @@ import './styles/picnic.css';
 import './styles/online.css';
 import './styles/gomoku.css';
 import './styles/fireice.css';
+import './styles/mafia.css';
 import { App } from './ui/App';
 
 createRoot(document.getElementById('root') as HTMLElement).render(

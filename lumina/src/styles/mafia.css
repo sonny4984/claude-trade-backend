@@ -1,0 +1,413 @@
+/*
+ * 마피아 — 친구 자리(초상화), 지금 말하는 친구의 말풍선, 대화 기록, 아래 단추. 밤에는 화면이 어둑해진다.
+ */
+.mafia-screen {
+  gap: 6px;
+  padding: 0 var(--pad-x) calc(var(--safe-bottom) + 8px);
+}
+.mafia-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(120% 80% at 50% 0%, rgba(24, 30, 72, 0.6), rgba(10, 12, 30, 0.75));
+  opacity: 0;
+  transition: opacity 0.8s var(--ease);
+}
+.mafia-screen[data-phase='night']::before {
+  opacity: 1;
+}
+.mafia-screen[data-phase='night'] .mf-head,
+.mafia-screen[data-phase='night'] .mf-prompt {
+  color: #f3f0ff;
+}
+
+.mf-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: calc(var(--safe-top) + 6px) 0 2px;
+}
+.mf-head h1 {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+.mf-claude {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 16px;
+  border: 1px solid var(--panel-line);
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mf-claude[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.mf-note {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.mf-ring {
+  flex: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.mf-ring[data-n='5'],
+.mf-ring[data-n='6'] {
+  grid-template-columns: repeat(3, 1fr);
+}
+.mf-tile {
+  --mf-accent: var(--accent);
+  position: relative;
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 2px 5px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.mf-tile img {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--mf-accent) 35%, transparent);
+}
+.mf-tile[aria-pressed='true'] {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.mf-tile[aria-disabled='true'] {
+  cursor: default;
+}
+.mf-tile[data-speaking] {
+  border-color: var(--mf-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mf-accent) 45%, transparent);
+  animation: mf-bob 0.9s var(--ease-in-out) infinite alternate;
+}
+.mf-tile[data-dead] img {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.mf-tile[data-dead] .mf-name {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+.mf-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.mf-name em {
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-style: normal;
+}
+.mf-tag {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--panel-line);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mf-tag[data-kind='mafia'] {
+  background: #c0392b;
+  color: #fff;
+}
+.mf-tag[data-kind='police'] {
+  background: #2f6fd0;
+  color: #fff;
+}
+.mf-tag[data-kind='doctor'] {
+  background: #2e9b62;
+  color: #fff;
+}
+.mf-tag[data-kind='citizen'],
+.mf-tag[data-kind='town'] {
+  background: #ece5d3;
+  color: #6b5a3a;
+}
+.mf-tag[data-kind='claim'] {
+  background: transparent;
+  border: 1px dashed var(--text-dim);
+}
+.mf-count {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+}
+@keyframes mf-bob {
+  to {
+    transform: translateY(-3px);
+  }
+}
+
+.mf-now {
+  flex: none;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--panel-line);
+  border-radius: 14px;
+  background: var(--panel);
+  font-size: 15px;
+  line-height: 1.35;
+}
+.mf-now b {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.mf-now[data-empty] {
+  visibility: hidden;
+}
+.mf-now[data-thinking] {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+.mf-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.mf-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: mf-dot 1s infinite;
+}
+.mf-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.mf-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes mf-dot {
+  50% {
+    opacity: 0.25;
+    transform: translateY(-2px);
+  }
+}
+
+.mf-log {
+  flex: 1 1 auto;
+  min-height: 60px;
+  margin: 0;
+  padding: 4px 2px;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.mf-line {
+  align-self: flex-start;
+  max-width: 88%;
+  padding: 6px 10px;
+  border-radius: 12px 12px 12px 4px;
+  background: var(--panel);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.mf-line b {
+  display: block;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+.mf-line[data-kind='me'] {
+  align-self: flex-end;
+  border-radius: 12px 12px 4px 12px;
+  background: var(--accent-soft);
+}
+.mf-line[data-kind='me'] b {
+  display: none;
+}
+.mf-line[data-kind='sys'] {
+  align-self: center;
+  max-width: 96%;
+  padding: 2px 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+}
+.mafia-screen[data-phase='night'] .mf-line[data-kind='sys'] {
+  color: #d9d4f2;
+}
+.mf-line[data-kind='secret'] {
+  background: #3b2a5a;
+  color: #f1e9ff;
+}
+.mf-line[data-kind='secret'] b {
+  color: #cdbcf0;
+}
+.mf-line[data-kind='vote'] {
+  padding: 3px 9px;
+  font-size: 13px;
+}
+
+.mf-foot {
+  flex: none;
+  display: grid;
+  gap: 6px;
+  padding-top: 2px;
+}
+.mf-prompt {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 14px;
+  text-align: center;
+}
+.mf-row {
+  display: flex;
+  gap: 8px;
+}
+.mf-row .btn {
+  flex: 1;
+}
+.mf-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mf-chips::-webkit-scrollbar {
+  display: none;
+}
+.mf-chips button {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--panel-line);
+  border-radius: 16px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mf-chips button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.mf-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 3px 3px 10px;
+  border: 1px solid var(--panel-line);
+  border-radius: 22px;
+  background: var(--panel);
+}
+.mf-input input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.mf-input .icon-btn[aria-pressed='true'] {
+  color: var(--danger);
+}
+.mf-send:disabled {
+  opacity: 0.4;
+}
+.mf-result {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  text-align: center;
+}
+.mf-result[data-win] {
+  color: var(--valid);
+}
+
+.mf-sub {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.mf-roles button:disabled {
+  opacity: 0.4;
+}
+
+/* 홈 화면 판: 초승달 */
+.plate-moon {
+  position: absolute;
+  right: 46px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-20deg);
+  pointer-events: none;
+}
+.plate-moon i {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: -6px 3px 0 0 #ffd66b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-tile[data-speaking],
+  .mf-dots i {
+    animation: none;
+  }
+}
+.mafia-screen[data-phase='night'] .mf-head .icon-btn {
+  color: #f3f0ff;
+}

@@ -1,0 +1,172 @@
+import { describe, expect, it } from 'vitest';
+import { aiNight, aiVote, living, newGame, plan, record, resolveNight, resolveVote, rolesFor, suspicion, type Act, type Game, type Side } from '../engine';
+import { fill, josa, lineFor, parseHuman } from '../talk';
+
+/** AI끼리 한 판 — 밤 → 낮 토론 세 번 → 투표 */
+function autoplay(seed: number, count: number): { winner: Side | null; days: number; lines: number } {
+  const g = newGame({ count, me: 'hwigi', seed, allAi: true });
+  let lines = 0;
+  while (!g.winner && g.day < 15) {
+    resolveNight(g, aiNight(g));
+    if (g.winner) break;
+    for (const k of ['open', 'more', 'more'] as const) lines += plan(g, { k }).length;
+    resolveVote(
+      g,
+      living(g).map((p) => ({ day: g.day, by: p.id, t: aiVote(g, p.id) })),
+    );
+  }
+  return { winner: g.winner, days: g.day, lines };
+}
+
+describe('마피아 규칙', () => {
+  it('인원별 역할: 마피아 1~3, 경찰 하나, 의사는 6명부터', () => {
+    expect(rolesFor(5).filter((r) => r === 'mafia')).toHaveLength(1);
+    expect(rolesFor(5)).not.toContain('doctor');
+    for (const n of [6, 7, 8]) {
+      const r = rolesFor(n);
+      expect(r).toHaveLength(n);
+      expect(r.filter((x) => x === 'mafia')).toHaveLength(n === 8 ? 3 : 2);
+      expect(r.filter((x) => x === 'police')).toHaveLength(1);
+      expect(r.filter((x) => x === 'doctor')).toHaveLength(1);
+    }
+  });
+
+  it('고른 역할을 받는다', () => {
+    for (const role of ['mafia', 'police', 'doctor', 'citizen'] as const) expect(newGame({ count: 7, me: 'moka', myRole: role, seed: 3 }).players[0]?.role).toBe(role);
+  });
+
+  it('AI끼리 수백 판: 모두 끝나고, 어느 쪽도 일방적으로 이기지 않는다', () => {
+    for (const count of [5, 6, 7, 8]) {
+      let town = 0;
+      const N = 150;
+      for (let s = 1; s <= N; s++) {
+        const r = autoplay(s * 7919 + count, count);
+        expect(r.winner).not.toBeNull();
+        expect(r.days).toBeLessThan(15);
+        expect(r.lines).toBeGreaterThan(0);
+        if (r.winner === 'town') town++;
+      }
+      expect(town / N).toBeGreaterThan(0.35);
+      expect(town / N).toBeLessThan(0.75);
+    }
+  }, 60_000);
+});
+
+describe('마피아 추리', () => {
+  /** 0번이 시민(관찰자)인 7인 판: 1·2번이 마피아, 3번 경찰 */
+  function fixed(): Game {
+    const g = newGame({ count: 7, me: 'moka', seed: 11, allAi: true });
+    const roles = ['citizen', 'mafia', 'mafia', 'police', 'doctor', 'citizen', 'citizen'] as const;
+    g.players.forEach((p, i) => (p.role = roles[i] ?? 'citizen'));
+    g.phase = 'day';
+    return g;
+  }
+
+  it('경찰 주장이 하나뿐이면 지목된 친구를 크게 의심한다', () => {
+    const g = fixed();
+    const before = suspicion(g, 0)[1] ?? 0;
+    record(g, 3, { k: 'claim', role: 'police', res: [[1, true]] });
+    expect(suspicion(g, 0)[1]).toBeGreaterThan(Math.max(0.6, before * 2));
+  });
+
+  it('진짜 경찰은 자기를 사칭한 친구를 마피아로 본다', () => {
+    const g = fixed();
+    record(g, 2, { k: 'claim', role: 'police', res: [[5, true]] });
+    expect(suspicion(g, 3)[2]).toBeGreaterThan(0.85);
+    // 공개 정보만 보면 주장 하나뿐이라 아직 믿는 쪽
+    expect(suspicion(g, null)[5]).toBeGreaterThan(suspicion(g, null)[2] ?? 1);
+  });
+
+  it('죽은 진짜 경찰이 밝혀지면 사칭한 친구가 들킨다', () => {
+    const g = fixed();
+    record(g, 2, { k: 'claim', role: 'police', res: [[5, true]] });
+    g.players[3]!.alive = false;
+    g.deaths.push({ day: 1, who: 3, cause: 'night', role: 'police' });
+    expect(suspicion(g, 0)[2]).toBeGreaterThan(0.9);
+  });
+
+  it('마피아로 밝혀진 친구를 감싼 친구가 의심받는다', () => {
+    const g = fixed();
+    record(g, 2, { k: 'trust', t: 1, why: 'gut' });
+    resolveVote(g, [
+      { day: 1, by: 0, t: 1 },
+      { day: 1, by: 3, t: 1 },
+      { day: 1, by: 2, t: 4 },
+    ]);
+    const s = suspicion(g, 0);
+    expect(s[1]).toBe(1);
+    expect(s[2]).toBeGreaterThan(s[5] ?? 1);
+  });
+});
+
+describe('마피아 대사', () => {
+  it('받침에 맞는 조사', () => {
+    expect(fill('{t|가} 수상해요', { t: '휘기' })).toBe('휘기가 수상해요');
+    expect(fill('{r|는} {x|였}어요', { r: '경찰', x: '모카' })).toBe('경찰은 모카였어요');
+    expect(fill('{r|였}어요', { r: '시민' })).toBe('시민이었어요');
+    expect(josa('경찰', '로')).toBe('로');
+    expect(josa('시민', '로')).toBe('으로');
+  });
+
+  it('모든 발언이 두 언어로 빈칸 없이 문장이 된다', () => {
+    const g = newGame({ count: 8, me: 'moka', seed: 5 });
+    const acts: Act[] = [
+      ...(['checked', 'fakeClaim', 'claimClash', 'votedTown', 'accusedTown', 'defendedMafia', 'motive', 'quiet', 'gut'] as const).map((why): Act => ({ k: 'accuse', t: 2, why, x: 3 })),
+      { k: 'accuse', t: 2, why: 'fakeClaim', x: 1 },
+      ...(['checked', 'claimed', 'votedMafia', 'gut'] as const).map((why): Act => ({ k: 'trust', t: 2, why, x: 3 })),
+      { k: 'claim', role: 'police', res: [[2, true], [3, false]] },
+      { k: 'claim', role: 'police', res: [] },
+      { k: 'claim', role: 'doctor' },
+      { k: 'claim', role: 'citizen' },
+      { k: 'defend' },
+      { k: 'defend', x: 2 },
+      { k: 'defend', x: 2, counter: true },
+      { k: 'agree', t: 2, x: 3 },
+      { k: 'doubt', t: 2, x: 3 },
+      { k: 'ask', t: 2 },
+      { k: 'react', ev: 'died', t: 2 },
+      { k: 'react', ev: 'saved' },
+      { k: 'react', ev: 'calm' },
+      { k: 'vote', t: 2 },
+      { k: 'vote', t: null },
+      { k: 'last', role: 'citizen', t: 2 },
+      { k: 'last', role: 'police' },
+      { k: 'last', role: 'mafia' },
+      { k: 'idle' },
+    ];
+    for (const lang of ['ko', 'en'] as const)
+      for (const by of [1, 2, 3, 4, 5, 6, 7])
+        for (const act of acts) {
+          const text = lineFor(g, { day: 1, by, act }, lang);
+          expect(text.length, JSON.stringify(act)).toBeGreaterThan(3);
+          expect(text).not.toMatch(/[{}]|undefined/);
+        }
+  });
+
+  it('사람이 친 말에서 의심·믿음·역할 주장을 읽는다', () => {
+    const g = newGame({ count: 8, me: 'moka', seed: 9 });
+    const id = (c: string): number => g.players.find((p) => p.character === c)?.id ?? -1;
+    const hwigi = id('hwigi');
+    const ginini = id('ginini');
+    const pponi = id('pponi');
+    expect(parseHuman(g, '휘기가 마피아 같아').acts).toEqual([{ k: 'accuse', t: hwigi, why: 'gut' }]);
+    expect(parseHuman(g, '기니니는 마피아 아닌 것 같아').acts).toEqual([{ k: 'trust', t: ginini, why: 'gut' }]);
+    expect(parseHuman(g, '휘기 말고 기니니가 수상해').acts).toEqual([{ k: 'accuse', t: ginini, why: 'gut' }]);
+    expect(parseHuman(g, '나 경찰인데 뽀니 조사했더니 마피아였어').acts).toEqual([{ k: 'claim', role: 'police', res: [[pponi, true]] }]);
+    expect(parseHuman(g, 'Hwigi is sus').acts).toEqual([{ k: 'accuse', t: hwigi, why: 'gut' }]);
+    expect(parseHuman(g, '휘기 왜 그렇게 생각해?')).toMatchObject({ acts: [], why: hwigi });
+    expect(parseHuman(g, '다들 누가 수상해?')).toMatchObject({ acts: [], ask: true });
+  });
+
+  it('사람이 누구를 의심하면 그 친구가 해명하고 다른 친구가 거든다', () => {
+    const g = newGame({ count: 7, me: 'moka', seed: 21, myRole: 'citizen' });
+    resolveNight(g, aiNight(g));
+    const t = living(g).find((p) => !p.human)?.id ?? 1;
+    const act: Act = { k: 'accuse', t, why: 'gut' };
+    record(g, 0, act);
+    const said = plan(g, { k: 'human', acts: [act], ask: false, why: null });
+    expect(said[0]?.by).toBe(t);
+    expect(said.length).toBeGreaterThanOrEqual(2);
+    expect(['agree', 'doubt']).toContain(said[1]?.act.k);
+  });
+});
