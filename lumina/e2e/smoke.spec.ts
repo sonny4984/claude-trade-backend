@@ -53,12 +53,14 @@ async function settle(page: Page): Promise<void> {
   );
 }
 
-/** 타일을 집어 보드의 칸 위까지 끌고 간다 (놓지는 않는다) */
-async function dragOverCell(page: Page, tile: Locator, row: number, col: number): Promise<void> {
+/** 타일을 집어 보드의 칸 위까지 끌고 간다 (놓지는 않는다). dx: 칸 한가운데에서 오른쪽으로 얼마나(칸 너비 단위) — 0.3이면 오른쪽 절반 */
+async function dragOverCell(page: Page, tile: Locator, row: number, col: number, dx = 0): Promise<void> {
   await settle(page);
   const from = await tile.boundingBox();
   if (!from) throw new Error('레이아웃을 찾지 못했습니다');
-  const to = await cellCenter(page, row, col);
+  const c = await cellCenter(page, row, col);
+  const sx = await page.evaluate(() => Number((document.querySelector('[data-board]') as HTMLElement).dataset.sx));
+  const to = { x: c.x + dx * sx, y: c.y };
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(from.x + from.width / 2, from.y - 40, { steps: 5 });
@@ -67,8 +69,8 @@ async function dragOverCell(page: Page, tile: Locator, row: number, col: number)
 }
 
 /** 타일을 보드의 칸으로 끌어 놓는다 */
-async function dragToCell(page: Page, tile: Locator, row: number, col: number): Promise<void> {
-  await dragOverCell(page, tile, row, col);
+async function dragToCell(page: Page, tile: Locator, row: number, col: number, dx = 0): Promise<void> {
+  await dragOverCell(page, tile, row, col, dx);
   await page.mouse.up();
 }
 
@@ -180,14 +182,15 @@ test('타일을 보드의 칸에 끌어 놓고, 붙여 놓으면 한 세트가 �
   await dragToCell(page, page.locator('.rack .tile').first(), 3, 7);
   await expect(page.locator('.rack .tile')).toHaveCount(11);
   await expect(page.locator('.felt .set')).toHaveCount(2);
-  // 이미 타일이 있는 칸에는 놓이지 않는다
+  // 이미 타일이 있는 칸에 놓으면 거절하지 않고 그 세트에 끼워 넣는다
   await dragToCell(page, page.locator('.rack .tile').first(), 3, 3);
-  await expect(page.locator('.rack .tile')).toHaveCount(11);
-  await expect(page.locator('.toast').last()).toContainText('이미 타일이 있는 칸');
+  await expect(page.locator('.rack .tile')).toHaveCount(10);
+  await expect(page.locator('.felt .set[style*="--row: 3"][style*="--col: 3"] .tile')).toHaveCount(3);
+  await expect(page.locator('.felt .set')).toHaveCount(2);
   await page.locator('.tool').nth(0).click(); // 되돌리기
-  await expect(page.locator('.rack .tile')).toHaveCount(12);
-  await page.locator('.tool').nth(1).click(); // 다시
   await expect(page.locator('.rack .tile')).toHaveCount(11);
+  await page.locator('.tool').nth(1).click(); // 다시
+  await expect(page.locator('.rack .tile')).toHaveCount(10);
   await page.locator('.tool').nth(2).click(); // 처음으로
   await expect(page.locator('.rack .tile')).toHaveCount(14);
   await expect(page.locator('.felt .set')).toHaveCount(0);
@@ -208,6 +211,28 @@ test('타일을 보드의 칸에 끌어 놓고, 붙여 놓으면 한 세트가 �
   await expect(page.locator('.felt .set[style*="--row: 3"]')).toHaveCount(1);
   await page.getByRole('button', { name: '정리' }).click();
   await expect(page.locator('.felt .set[style*="--row: 3"]')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('판 오른쪽 끝에 닿은 세트에도 타일을 이어 붙일 수 있다 (세트가 알아서 비켜 앉는다)', async ({ page }) => {
+  const errors = await open(page, {}, '/?seed=1');
+  await startSolo(page);
+  await myTurn(page);
+  // 오른쪽 끝(10·11·12칸)에 세 장을 붙여 놓는다
+  await dragToCell(page, page.locator('.rack .tile').first(), 1, 12);
+  await dragToCell(page, page.locator('.rack .tile').first(), 1, 11);
+  await dragToCell(page, page.locator('.rack .tile').first(), 1, 10);
+  await expect(page.locator('.felt .set')).toHaveCount(1);
+  await expect(page.locator('.felt .set[style*="--col: 10"] .tile')).toHaveCount(3);
+  // 가장 오른쪽 타일의 오른쪽 절반으로 한 장 더 — 놓을 칸이 없는데도 이어 붙는다
+  await dragToCell(page, page.locator('.rack .tile').first(), 1, 12, 0.3);
+  await expect(page.locator('.rack .tile')).toHaveCount(10);
+  await expect(page.locator('.felt .set')).toHaveCount(1);
+  await expect(page.locator('.felt .set[style*="--row: 1"][style*="--col: 9"] .tile')).toHaveCount(4);
+  // 왼쪽 끝도 마찬가지 — 0칸에 닿은 세트의 앞에 끼워 넣는다
+  await dragToCell(page, page.locator('.rack .tile').first(), 3, 0);
+  await dragToCell(page, page.locator('.rack .tile').first(), 3, 0, -0.3);
+  await expect(page.locator('.felt .set[style*="--row: 3"][style*="--col: 0"] .tile')).toHaveCount(2);
   expect(errors).toEqual([]);
 });
 

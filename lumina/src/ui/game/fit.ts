@@ -42,8 +42,8 @@ export function useRackFit(ref: RefObject<HTMLElement | null>, count: number): {
       if (W <= 0) return;
       const max = (W < 520 ? 48 : 58) * sizeFactor(size);
       const n = Math.max(1, count);
-      // 가로 폰처럼 낮은 화면에서는 랙이 화면 높이의 30%를 넘지 않게
-      const hMax = window.innerHeight < 521 ? window.innerHeight * 0.3 : Infinity;
+      // 낮은 화면에서는 랙이 판의 자리를 먹지 않게: 가로 폰은 화면 높이의 30%, 세로로 짧은 폰은 19%
+      const hMax = window.innerHeight < 521 ? window.innerHeight * 0.3 : W < 520 && window.innerHeight < 780 ? window.innerHeight * 0.19 : Infinity;
       let best = 28;
       let bestRows = 2;
       for (let w = Math.floor(max); w >= 26; w--) {

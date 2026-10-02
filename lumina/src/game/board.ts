@@ -138,7 +138,8 @@ export function findSpot(taken: ReadonlySet<number>, n: number, near?: Pos): Pos
     for (let col = 0; col <= maxCol; col++) {
       if (!fitsAt(taken, row, col, n)) continue;
       if (!near) return { row, col };
-      const cost = Math.abs(row - near.row) * (BOARD_COLS + 2) + Math.abs(col - near.col);
+      // 같은 거리면 아래 줄이 먼저 (위쪽은 이미 빽빽한 경우가 많다)
+      const cost = Math.abs(row - near.row) * (BOARD_COLS + 2) + Math.abs(col - near.col) + (row < near.row ? 0.5 : 0);
       if (!best || cost < best.cost) best = { p: { row, col }, cost };
     }
   }
@@ -268,24 +269,69 @@ export function reconcile(prev: readonly Loose[], next: readonly { readonly id: 
 
 // ─────────────────────────────── 칸에 놓기 ───────────────────────────────
 
-export type PlaceError = 'off-board' | 'occupied';
+export type PlaceError = 'off-board' | 'no-room';
+
+/** 놓을 칸 — after: 그 칸이 막혀 있을 때 그 타일 "뒤"(오른쪽)에 끼운다 (칸의 오른쪽 절반을 가리켰을 때) */
+export interface PlaceAt extends Pos {
+  readonly after?: boolean;
+}
 
 /**
  * 타일들을 (at.row, at.col)부터 오른쪽으로 한 칸씩 놓는다. 먼저 있던 자리에서 빠지고,
  * 놓은 뒤 가로로 붙은 줄이 세트가 된다 (옆 세트에 붙으면 합쳐지고, 빠진 자리 때문에 줄이 갈라지기도 한다).
+ *
+ * 놓을 칸이 막혀 있으면 거절하지 않고 그 세트에 끼워 넣는다 — 막힌 타일 앞에(오른쪽 절반을 가리켰으면 뒤에).
+ * 세트가 길어진 만큼의 자리는 그 세트 하나만 움직여서 만든다: 제자리에서 자라고, 이웃에 걸리면 빈 칸 쪽으로 밀리고,
+ * 그래도 안 되면 가장 가까운 빈 자리로 옮겨 앉는다. 다른 세트는 건드리지 않는다.
  */
 export function placeOnBoard(
   sets: readonly TableSet[],
   moving: readonly TileId[],
-  at: Pos,
+  at: PlaceAt,
   nextSetId: number,
 ): { ok: true; sets: TableSet[]; nextSetId: number } | { ok: false; error: PlaceError } {
+  const n = moving.length;
+  if (at.row < 0 || at.col < 0 || n < 1 || n > BOARD_COLS) return { ok: false, error: 'off-board' };
   const occ = occupancy(sets);
   const mv = new Set(moving);
   for (const [k, t] of occ) if (mv.has(t)) occ.delete(k);
-  if (at.row < 0 || at.col < 0 || at.col + moving.length > BOARD_COLS) return { ok: false, error: 'off-board' };
-  for (let i = 0; i < moving.length; i++) if (occ.has(cellKey(at.row, at.col + i))) return { ok: false, error: 'occupied' };
-  moving.forEach((t, i) => occ.set(cellKey(at.row, at.col + i), t));
+  // 오른쪽 끝이 판을 넘지 않게 (끌어 놓는 쪽에서 이미 맞추지만 누르고 놓기 등에서도 안전하게)
+  const col = Math.min(at.col, BOARD_COLS - n);
+  let hit = -1;
+  for (let i = 0; i < n; i++) {
+    if (occ.has(cellKey(at.row, col + i))) {
+      hit = col + i;
+      break;
+    }
+  }
+  if (hit < 0) {
+    moving.forEach((t, i) => occ.set(cellKey(at.row, col + i), t));
+    return { ok: true, ...withIds(sets, segments(occ), nextSetId) };
+  }
+
+  // 막힌 칸: 그 줄(세트)에 끼워 넣는다
+  const row = segments(occ).filter((sg) => sg.row === at.row);
+  const hostIdx = row.findIndex((sg) => hit >= sg.col && hit < sg.col + sg.tiles.length);
+  const host = row[hostIdx] as { row: number; col: number; tiles: TileId[] };
+  const k = hit - host.col + (at.after && hit === col ? 1 : 0);
+  const grown = [...host.tiles.slice(0, k), ...moving, ...host.tiles.slice(k)];
+  if (grown.length > BOARD_COLS) return { ok: false, error: 'no-room' };
+  // 이웃 세트 사이에 남은 빈 자리 (양옆 한 칸씩은 비워 둔다)
+  const left = row[hostIdx - 1];
+  const right = row[hostIdx + 1];
+  const lo = left ? left.col + left.tiles.length + 1 : 0;
+  const maxStart = (right ? right.col - 2 : BOARD_COLS - 1) - grown.length + 1;
+  let start: number;
+  if (maxStart >= lo) start = Math.max(lo, Math.min(host.col, maxStart));
+  else start = -1;
+  for (let i = 0; i < host.tiles.length; i++) occ.delete(cellKey(at.row, host.col + i));
+  if (start < 0) {
+    // 이 줄에는 자리가 없다 — 가장 가까운 빈 자리로
+    const spot = findSpot(new Set(occ.keys()), grown.length, { row: at.row, col: host.col });
+    grown.forEach((t, i) => occ.set(cellKey(spot.row, spot.col + i), t));
+  } else {
+    grown.forEach((t, i) => occ.set(cellKey(at.row, start + i), t));
+  }
   return { ok: true, ...withIds(sets, segments(occ), nextSetId) };
 }
 

@@ -6,11 +6,11 @@ import { BOARD_COLS } from '../../game';
 
 /**
  * 보드 크기. 보드는 가로 13칸 고정이라 (온라인에서 폰·컴퓨터가 같은 판을 본다) 타일 너비는 화면 크기로만 정해진다.
- * 칸 간격은 CSS(table.css)와 같은 비율: 타일 사이 .06, 줄 사이 .30 (타일 높이 1.36 별도).
+ * 칸 간격은 CSS(table.css)와 같은 비율: 타일 사이 .06, 줄 사이 .26 (타일 높이 1.36 별도).
  */
 export const TILE_RATIO = 1.36;
 export const CELL_GAP = 0.06;
-export const ROW_GAP = 0.3;
+export const ROW_GAP = 0.26;
 /** 한 칸·한 줄의 간격(px) — 끌어 놓을 칸을 계산할 때 쓴다 */
 export const strideX = (tw: number): number => tw * (1 + CELL_GAP);
 export const strideY = (tw: number): number => tw * (TILE_RATIO + ROW_GAP);
@@ -35,13 +35,15 @@ export function fitBoard(W: number, H: number, factor = 1): { tw: number; viewRo
 export interface Cell {
   readonly row: number;
   readonly col: number;
+  /** 칸의 오른쪽 절반(판 오른쪽 밖 포함)을 가리켰다 — 막힌 칸이면 그 타일 "뒤"에 끼운다 */
+  readonly after?: boolean;
 }
 
 export function boardElement(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-board]');
 }
 
-/** 화면 좌표(x, y)가 놓인 칸 (보드 밖이어도 가장 가까운 칸으로 — 줄은 0~마지막 줄, 칸은 0~12) */
+/** 화면 좌표(x, y)가 놓인 칸 (보드 밖이어도 가장 가까운 칸으로 — 줄은 0~마지막 줄, 칸은 0~12) + 그 칸의 어느 쪽 절반인가 */
 export function cellAt(x: number, y: number): Cell | null {
   const board = boardElement();
   if (!board) return null;
@@ -50,10 +52,16 @@ export function cellAt(x: number, y: number): Cell | null {
   if (!(sx > 0) || !(sy > 0)) return null;
   const rows = Math.max(1, Number(board.dataset.rows) || 1);
   const r = board.getBoundingClientRect();
-  return { row: Math.max(0, Math.min(rows - 1, Math.floor((y - r.top) / sy))), col: Math.max(0, Math.min(BOARD_COLS - 1, Math.floor((x - r.left) / sx))) };
+  return cellFromOffset((x - r.left) / sx, (y - r.top) / sy, rows);
+}
+
+/** 보드 왼쪽 위를 (0, 0)으로 한 칸 단위 좌표(소수)가 놓인 칸 — 보드 밖이면 가장 가까운 칸, after는 그 칸의 오른쪽 절반 */
+export function cellFromOffset(fx: number, fy: number, rows: number): Cell {
+  const col = Math.max(0, Math.min(BOARD_COLS - 1, Math.floor(fx)));
+  return { row: Math.max(0, Math.min(rows - 1, Math.floor(fy))), col, after: fx > col + 0.5 };
 }
 
 /** 타일 k장을 첫 타일이 anchor 칸에 오도록 놓을 때의 시작 칸 (오른쪽 끝이 판을 넘지 않게) */
 export function startCell(c: Cell, anchorIndex: number, count: number): Cell {
-  return { row: c.row, col: Math.max(0, Math.min(BOARD_COLS - count, c.col - anchorIndex)) };
+  return { row: c.row, col: Math.max(0, Math.min(BOARD_COLS - count, c.col - anchorIndex)), after: c.after };
 }

@@ -890,8 +890,8 @@ export const useGame = create<State & Actions>((set, get) => {
       const cells = quickCells(s.match.game.turn, id);
       if (cells.length === 1) {
         flip.capture();
-        const c = cells[0] as Pos;
-        if (get().act({ type: 'move', tiles: [id], to: { kind: 'cell', row: c.row, col: c.col } }, { noCapture: true })) {
+        const c = cells[0] as Pos & { after?: boolean };
+        if (get().act({ type: 'move', tiles: [id], to: { kind: 'cell', row: c.row, col: c.col, after: c.after } }, { noCapture: true })) {
           sfx('place');
           buzz('place');
           set({ selection: [] });

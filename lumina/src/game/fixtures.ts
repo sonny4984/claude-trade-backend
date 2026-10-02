@@ -35,8 +35,8 @@ export function tableOf(sets: readonly string[], layout?: readonly (Pos | undefi
   return layoutSets(sets.map((s, i) => ({ id: `s${i + 1}`, tiles: TS(s), ...(layout?.[i] ?? {}) })));
 }
 
-export function turnOf(o: { table?: readonly string[]; rack: string; melded?: boolean; player?: number }): Turn {
-  const table = tableOf(o.table ?? []);
+export function turnOf(o: { table?: readonly string[]; layout?: readonly (Pos | undefined)[]; rack: string; melded?: boolean; player?: number }): Turn {
+  const table = tableOf(o.table ?? [], o.layout);
   return beginTurn(o.player ?? 0, table, TS(o.rack), o.melded ?? true, table.length + 1);
 }
 

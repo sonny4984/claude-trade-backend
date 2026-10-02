@@ -18,6 +18,7 @@ export function TableArea() {
   const dragActive = useDrag((s) => s.active);
   const dragCount = useDrag((s) => s.tiles.length);
   const cellTarget = useDrag((s) => (s.target?.kind === 'cell' ? s.target : null));
+  const landing = useDrag((s) => (s.target?.kind === 'cell' ? s.landing : null));
   const cellPreview = useDrag((s) => (s.target?.kind === 'cell' ? s.preview : null));
   const ref = useRef<HTMLDivElement>(null);
   const g = session?.match.game;
@@ -60,7 +61,10 @@ export function TableArea() {
 
   const style = { ['--tw' as string]: `${tw}px` } as CSSProperties;
   const boardStyle = { ['--cols' as string]: BOARD_COLS, ['--rows' as string]: rows } as CSSProperties;
-  const ghost = cellTarget ? { row: cellTarget.row, col: cellTarget.col, n: dragCount } : null;
+  // 놓으면 실제로 앉을 칸 (끼워 넣거나 세트가 비켜 앉으면 가리킨 칸과 다르다). 놓을 수 없는 곳이면 가리킨 칸 그대로
+  const ghost = landing ?? (cellTarget ? { row: cellTarget.row, col: cellTarget.col, n: dragCount } : null);
+  // 끼워 넣거나 이웃에 붙어 세트가 커지면, 그 세트가 앉을 자리도 테두리로 보여 준다
+  const span = landing && (landing.span.n !== landing.n || landing.span.col !== landing.col || landing.span.row !== landing.row) ? landing.span : null;
 
   return (
     <main className="felt" data-assist={assist} aria-label={t('table.label')} style={style}>
@@ -80,7 +84,7 @@ export function TableArea() {
             const c = cellAt(e.clientX, e.clientY);
             if (!c) return;
             const at = startCell(c, 0, selection.length);
-            useGame.getState().moveSelectionTo({ kind: 'cell', row: at.row, col: at.col });
+            useGame.getState().moveSelectionTo({ kind: 'cell', row: at.row, col: at.col, after: at.after });
           }}
         >
           {work.sets.map((s) => {
@@ -98,6 +102,7 @@ export function TableArea() {
               />
             );
           })}
+          {span && dragActive && <i className="cell-ghost" data-span data-preview={cellPreview ?? undefined} style={{ ['--row' as string]: span.row, ['--col' as string]: span.col, ['--n' as string]: span.n } as CSSProperties} aria-hidden="true" />}
           {ghost && dragActive && <i className="cell-ghost" data-preview={cellPreview ?? undefined} style={{ ['--row' as string]: ghost.row, ['--col' as string]: ghost.col, ['--n' as string]: ghost.n } as CSSProperties} aria-hidden="true" />}
           {hintSpot && <i className="cell-ghost" data-hint style={{ ['--row' as string]: hintSpot.row, ['--col' as string]: hintSpot.col, ['--n' as string]: hintSpot.n } as CSSProperties} aria-hidden="true" />}
         </div>

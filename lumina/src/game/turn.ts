@@ -9,7 +9,7 @@ import type { RuleSet } from './rules';
 import { analyzeSet, runValues, type JokerRole, type SetIssue } from './sets';
 import { containsAll, sameMembers, tilesOf } from './table';
 import { isJoker, tile } from './tiles';
-import { BOARD_COLS, cellKey, layoutSets, occupancy, placeOnBoard, reconcile, removeFromBoard, segments, tidySets, withIds, type Pos } from './board';
+import { BOARD_COLS, cellKey, layoutSets, occupancy, placeOnBoard, reconcile, removeFromBoard, segments, tidySets, withIds, type PlaceAt, type Pos } from './board';
 
 export interface Work {
   readonly sets: readonly TableSet[];
@@ -36,8 +36,8 @@ export interface Turn {
 }
 
 export type MoveTarget =
-  /** 보드의 칸 — 타일들이 이 칸부터 오른쪽으로 한 칸씩 놓인다 (화면의 끌어 놓기·누르고 놓기) */
-  | { readonly kind: 'cell'; readonly row: number; readonly col: number }
+  /** 보드의 칸 — 타일들이 이 칸부터 오른쪽으로 한 칸씩 놓인다 (화면의 끌어 놓기·누르고 놓기). 칸이 막혀 있으면 그 세트에 끼워 넣고, after면 막힌 타일 뒤에 */
+  | { readonly kind: 'cell'; readonly row: number; readonly col: number; readonly after?: boolean }
   /** 세트 단위 이동 — 시험·옛 방식용. 놓인 자리는 board.reconcile이 이어 준다 */
   | { readonly kind: 'set'; readonly setId: string; readonly index?: number }
   | { readonly kind: 'new'; readonly before?: string }
@@ -53,7 +53,7 @@ export type MoveError =
   | 'not-a-joker'
   | 'bad-split'
   | 'off-board'
-  | 'occupied';
+  | 'no-room';
 
 export type MoveResult = { readonly ok: true; readonly turn: Turn } | { readonly ok: false; readonly error: MoveError };
 
@@ -168,7 +168,7 @@ function splitOnDuplicate(base: readonly TileId[], incoming: readonly TileId[]):
 
 export function moveTiles(turn: Turn, tiles: readonly TileId[], to: MoveTarget): MoveResult {
   if (!tiles.length) return { ok: false, error: 'empty' };
-  if (to.kind === 'cell') return placeTiles(turn, tiles, { row: to.row, col: to.col });
+  if (to.kind === 'cell') return placeTiles(turn, tiles, { row: to.row, col: to.col, after: to.after });
   const w = turn.work;
   const moving = new Set(tiles);
   const table = startTableTiles(turn);
@@ -483,10 +483,11 @@ export function proposeTable(turn: Turn, proposal: readonly (readonly TileId[])[
 // ─────────────────────────────── 칸에 놓기 · 정리 ───────────────────────────────
 
 /**
- * 타일들을 보드의 칸에 놓는다 (끌어 놓기·누르고 놓기). 칸은 at부터 오른쪽으로 한 칸씩, 비어 있어야 한다.
+ * 타일들을 보드의 칸에 놓는다 (끌어 놓기·누르고 놓기). at부터 오른쪽으로 한 칸씩.
  * 옆 세트에 붙여 놓으면 한 세트가 되고, 가운데를 뺀 자리는 그대로 비어 줄이 갈라진다 — 실제 테이블처럼.
+ * 칸이 막혀 있으면 그 세트에 끼워 넣는다 (board.placeOnBoard).
  */
-export function placeTiles(turn: Turn, tiles: readonly TileId[], at: Pos): MoveResult {
+export function placeTiles(turn: Turn, tiles: readonly TileId[], at: PlaceAt): MoveResult {
   if (!tiles.length) return { ok: false, error: 'empty' };
   const w = turn.work;
   const moving = new Set(tiles);
@@ -537,11 +538,12 @@ export function previewMove(
 }
 
 /**
- * 두 번 탭 자동 배치: 이 타일을 합법 세트 바로 곁(오른쪽 끝 또는 왼쪽 끝 칸)에 놓으면 합법이 되는 칸들.
- * 런은 숫자가 맞는 쪽에만, 그룹은 어느 쪽이든. 놓았을 때 다른 세트와 또 붙게 되는 칸은 뺀다.
+ * 두 번 탭 자동 배치: 이 타일을 합법 세트 바로 곁(오른쪽 끝 또는 왼쪽 끝)에 놓으면 합법이 되는 자리들.
+ * 런은 숫자가 맞는 쪽에만, 그룹은 어느 쪽이든. 곁의 칸이 판 끝이라 없으면 끝 타일에 끼워 넣는 자리로 (세트가 비켜 준다).
+ * 놓았을 때 다른 세트와 또 붙게 되는 자리는 뺀다.
  */
-export function quickCells(turn: Turn, id: TileId): Pos[] {
-  const out: Pos[] = [];
+export function quickCells(turn: Turn, id: TileId): PlaceAt[] {
+  const out: PlaceAt[] = [];
   const table = startTableTiles(turn);
   const manip = canManipulate(turn);
   const occ = occupancy(turn.work.sets);
@@ -550,15 +552,26 @@ export function quickCells(turn: Turn, id: TileId): Pos[] {
     if (s.tiles.includes(id)) continue;
     if (!manip && s.tiles.some((t) => table.has(t))) continue;
     if (!analyzeSet(s.tiles).ok) continue;
-    const sides = [
-      { col: s.col + s.tiles.length, next: s.col + s.tiles.length + 1, tiles: [...s.tiles, id] },
-      { col: s.col - 1, next: s.col - 2, tiles: [id, ...s.tiles] },
+    const last = s.col + s.tiles.length - 1;
+    const sides: { at: PlaceAt; edge: boolean; beyond: number; tiles: TileId[] }[] = [
+      // 오른쪽 끝에 붙이기 — 끝 칸이 판 끝이면 끝 타일 뒤에 끼워 넣기
+      last + 1 < BOARD_COLS
+        ? { at: { row: s.row, col: last + 1 }, edge: false, beyond: last + 2, tiles: [...s.tiles, id] }
+        : { at: { row: s.row, col: last, after: true }, edge: true, beyond: -1, tiles: [...s.tiles, id] },
+      // 왼쪽 끝에 붙이기
+      s.col - 1 >= 0
+        ? { at: { row: s.row, col: s.col - 1 }, edge: false, beyond: s.col - 2, tiles: [id, ...s.tiles] }
+        : { at: { row: s.row, col: s.col }, edge: true, beyond: -1, tiles: [id, ...s.tiles] },
     ];
     for (const side of sides) {
-      if (side.col < 0 || side.col >= BOARD_COLS) continue;
-      if (occ.has(cellKey(s.row, side.col)) || (side.next >= 0 && occ.has(cellKey(s.row, side.next)))) continue;
+      if (!side.edge && (occ.has(cellKey(s.row, side.at.col)) || (side.beyond >= 0 && occ.has(cellKey(s.row, side.beyond))))) continue;
       const a = analyzeSet(side.tiles);
-      if (a.ok && (a.kind === 'group' || a.order.every((t, i) => t === side.tiles[i]))) out.push({ row: s.row, col: side.col });
+      if (!(a.ok && (a.kind === 'group' || a.order.every((t, i) => t === side.tiles[i])))) continue;
+      // 실제로 놓아 보아서, 이 세트에 붙은 모양 그대로 나오는 자리만
+      const r = placeTiles(turn, [id], side.at);
+      if (!r.ok) continue;
+      const home = r.turn.work.sets.find((x) => x.tiles.includes(id));
+      if (home && home.tiles.length === side.tiles.length && sameMembers(home.tiles, side.tiles)) out.push(side.at);
     }
   }
   return out;

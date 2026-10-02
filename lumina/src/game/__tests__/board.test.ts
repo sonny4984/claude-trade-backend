@@ -111,15 +111,13 @@ describe('보드 — 칸에 놓기', () => {
     clean(t);
   });
 
-  it('이미 타일이 있는 칸·판 밖에는 놓을 수 없다', () => {
+  it('판 밖(위·왼쪽)에는 놓을 수 없고, 오른쪽이 모자라면 판 안으로 맞춰 놓는다', () => {
     const t = turnOf({ table: ['r3 r4 r5'], rack: 'r6 r7' });
-    const a = t.work.sets[0] as TableSet;
-    const full = placeTiles(t, TS('r6'), { row: a.row, col: a.col + 1 });
-    expect(full).toEqual({ ok: false, error: 'occupied' });
-    // 여러 장은 한 장이라도 막히면 놓이지 않는다
-    expect(placeTiles(t, TS('r6 r7'), { row: a.row, col: a.col + 2 })).toEqual({ ok: false, error: 'occupied' });
-    expect(placeTiles(t, TS('r6 r7'), { row: 0, col: BOARD_COLS - 1 })).toEqual({ ok: false, error: 'off-board' });
     expect(placeTiles(t, TS('r6'), { row: -1, col: 0 })).toEqual({ ok: false, error: 'off-board' });
+    expect(placeTiles(t, TS('r6'), { row: 0, col: -1 })).toEqual({ ok: false, error: 'off-board' });
+    const r = placeTiles(t, TS('r6 r7'), { row: 4, col: BOARD_COLS - 1 });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(at(r.turn, 'r6')).toEqual({ row: 4, col: BOARD_COLS - 2 });
   });
 
   it('세트 가운데 타일을 빼면 칸이 빈 채로 줄이 갈라지고, 빈 칸에 다시 놓으면 이어진다', () => {
@@ -403,10 +401,11 @@ describe('보드 — 한 판 통째로', () => {
 });
 
 describe('보드 — 놓기 계산', () => {
-  it('placeOnBoard는 놓을 칸이 막히면 아무것도 바꾸지 않는다', () => {
+  it('placeOnBoard는 놓을 칸이 막히면 그 세트에 끼워 넣는다', () => {
     const sets = tableOf(['r1 r2 r3']);
     const r = placeOnBoard(sets, TS('b1'), { row: sets[0]?.row ?? 0, col: (sets[0]?.col ?? 0) + 1 }, 9);
-    expect(r).toEqual({ ok: false, error: 'occupied' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.sets.map((x) => x.tiles)).toEqual([TS('r1 b1 r2 r3')]);
   });
 
   it('정리: 고정한 세트는 자리를 지킨다', () => {
@@ -417,5 +416,132 @@ describe('보드 — 놓기 계산', () => {
     const out = tidySets(sets, new Set(['a']));
     expect(out.find((s) => s.id === 'a')).toMatchObject({ row: 4, col: 4 });
     expect(out.find((s) => s.id === 'b')).toMatchObject({ row: 0, col: 0 });
+  });
+});
+
+describe('보드 — 막힌 칸에 끼워 넣기', () => {
+  const only = (t: Turn, code: string): TableSet => {
+    const s = t.work.sets.find((x) => x.tiles.includes(T(code)));
+    if (!s) throw new Error(`${code} is not on the board`);
+    return s;
+  };
+  const drop = (t: Turn, tiles: string, row: number, col: number, after?: boolean): Turn => {
+    const r = placeTiles(t, TS(tiles), { row, col, after });
+    if (!r.ok) throw new Error(`drop ${tiles} failed: ${r.error}`);
+    clean(r.turn);
+    return r.turn;
+  };
+
+  it('막힌 타일 위에 놓으면 그 앞에, 오른쪽 절반(after)이면 그 뒤에 들어간다', () => {
+    const t = turnOf({ table: ['r3 r4 r5'], rack: 'r6 r7', layout: [{ row: 2, col: 4 }] });
+    const front = drop(t, 'r6', 2, 5);
+    expect(codes(front.work.sets)).toEqual([TS('r3 r6 r4 r5')]);
+    expect(front.work.sets[0]).toMatchObject({ row: 2, col: 4 });
+    const back = drop(t, 'r6', 2, 5, true);
+    expect(codes(back.work.sets)).toEqual([TS('r3 r4 r6 r5')]);
+    // 끝 타일의 뒤 = 이어 붙이기
+    const end = drop(t, 'r6', 2, 6, true);
+    expect(codes(end.work.sets)).toEqual([TS('r3 r4 r5 r6')]);
+    expect(at(end, 'r6')).toEqual({ row: 2, col: 7 });
+  });
+
+  it('판 오른쪽 끝에 닿은 런에도 이어 붙는다 — 그 세트가 한 칸 왼쪽으로 비켜 준다', () => {
+    const t = turnOf({ table: ['r4 r5 r6 r7 r8'], rack: 'r9', layout: [{ row: 1, col: 8 }] });
+    expect(at(t, 'r8')).toEqual({ row: 1, col: BOARD_COLS - 1 });
+    const n = drop(t, 'r9', 1, BOARD_COLS - 1, true);
+    expect(codes(n.work.sets)).toEqual([TS('r4 r5 r6 r7 r8 r9')]);
+    expect(at(n, 'r9')).toEqual({ row: 1, col: BOARD_COLS - 1 });
+    expect(n.work.sets[0]).toMatchObject({ row: 1, col: 7 });
+    expect(checkCommit(n, CLASSIC_RULES).ok).toBe(true);
+  });
+
+  it('판 왼쪽 끝에 닿은 세트 앞에도 끼워 넣을 수 있다', () => {
+    const t = turnOf({ table: ['r5 r6 r7'], rack: 'r4', layout: [{ row: 0, col: 0 }] });
+    const n = drop(t, 'r4', 0, 0);
+    expect(codes(n.work.sets)).toEqual([TS('r4 r5 r6 r7')]);
+    expect(n.work.sets[0]).toMatchObject({ row: 0, col: 0 });
+  });
+
+  it('가운데에 끼워 넣어 런을 잇고, 여러 장도 한꺼번에 끼운다', () => {
+    const t = turnOf({ table: ['r4 r5 r7 r8'], rack: 'r6 k1', layout: [{ row: 0, col: 3 }] });
+    const one = drop(t, 'r6', 0, 5);
+    expect(codes(one.work.sets)).toEqual([TS('r4 r5 r6 r7 r8')]);
+    const many = turnOf({ table: ['r1 r2 r7 r8'], rack: 'r3 r4 r5 r6', layout: [{ row: 0, col: 0 }] });
+    const n = drop(many, 'r3 r4 r5 r6', 0, 2);
+    expect(codes(n.work.sets)).toEqual([TS('r1 r2 r3 r4 r5 r6 r7 r8')]);
+  });
+
+  it('이웃 세트는 건드리지 않는다 — 세트가 커질 자리가 모자라면 그 세트만 빈 쪽으로 밀린다', () => {
+    const t = turnOf({ table: ['b4 b5 b6', 'k1 k2 k3'], rack: 'b7', layout: [{ row: 0, col: 3 }, { row: 0, col: 7 }] });
+    const n = drop(t, 'b7', 0, 5, true);
+    expect(only(n, 'b7').tiles).toEqual(TS('b4 b5 b6 b7'));
+    expect(only(n, 'b7')).toMatchObject({ row: 0, col: 2 });
+    expect(only(n, 'k1')).toMatchObject({ row: 0, col: 7 });
+  });
+
+  it('그 줄에 자리가 아예 없으면 그 세트가 가장 가까운 빈 자리로 옮겨 앉는다 (다른 세트는 그대로)', () => {
+    // 한 줄이 꽉 찼다: 3 + 1 + 3 + 1 + 5 = 13칸
+    const t = turnOf({
+      table: ['k9 o9 b9', 'r6 b6 k6', 'o4 o5 o6 o7 o8'],
+      rack: "o9'",
+      layout: [{ row: 0, col: 0 }, { row: 0, col: 4 }, { row: 0, col: 8 }],
+    });
+    const n = drop(t, "o9'", 0, BOARD_COLS - 1, true);
+    expect(only(n, "o9'").tiles).toEqual(TS("o4 o5 o6 o7 o8 o9'"));
+    expect(only(n, "o9'").row).toBe(1);
+    expect(only(n, 'k9')).toMatchObject({ row: 0, col: 0 });
+    expect(only(n, 'r6')).toMatchObject({ row: 0, col: 4 });
+    expect(n.work.sets).toHaveLength(3);
+  });
+
+  it('한 줄(13칸)이 넘는 세트는 만들 수 없다', () => {
+    const run = 'r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13';
+    const t = turnOf({ table: [run], rack: 'k1', layout: [{ row: 0, col: 0 }] });
+    expect(placeTiles(t, TS('k1'), { row: 0, col: 3 })).toEqual({ ok: false, error: 'no-room' });
+  });
+
+  it('등록 전에는 기존 세트에 끼워 넣을 수 없지만, 이번 차례에 만든 세트에는 된다', () => {
+    const t = turnOf({ table: ['r3 r4 r5'], rack: 'r6 b1 b2', melded: false, layout: [{ row: 0, col: 0 }] });
+    expect(placeTiles(t, TS('r6'), { row: 0, col: 1 })).toEqual({ ok: false, error: 'locked-before-meld' });
+    let m = drop(t, 'b1', 4, 2);
+    m = drop(m, 'b2', 4, 2);
+    expect(only(m, 'b1').tiles).toEqual(TS('b2 b1'));
+  });
+
+  it('두 번 톡 자동 배치는 판 끝에 닿은 세트도 찾는다', () => {
+    const right = turnOf({ table: ['b4 b5 b6 b7 b8'], rack: 'b9', layout: [{ row: 1, col: 8 }] });
+    expect(quickCells(right, T('b9'))).toEqual([{ row: 1, col: BOARD_COLS - 1, after: true }]);
+    const left = turnOf({ table: ['r5 r6 r7'], rack: 'r4', layout: [{ row: 0, col: 0 }] });
+    expect(quickCells(left, T('r4'))).toEqual([{ row: 0, col: 0 }]);
+    for (const [turn, tile] of [[right, 'b9'], [left, 'r4']] as const) {
+      const [c] = quickCells(turn, T(tile)) as { row: number; col: number; after?: boolean }[];
+      const r = placeTiles(turn, [T(tile)], c as { row: number; col: number; after?: boolean });
+      expect(r.ok && checkCommit(r.turn, CLASSIC_RULES).ok).toBe(true);
+    }
+  });
+
+  it('아무 칸에나 마구 놓아도 보드는 늘 규칙을 지킨다 (겹침 없음·붙은 세트는 하나·타일 보존)', () => {
+    const rng = createRng(77);
+    let t = turnOf({ table: ['r1 r2 r3', 'b4 b5 b6 b7', 'k9 k10 k11', 'o2 o3 o4 o5 o6'], rack: "r9 b9 k9' o9 r10 b10 k10' o10 r11 b11 k11' o11 r12 b12", layout: [{ row: 0, col: 0 }, { row: 0, col: 4 }, { row: 1, col: 1 }, { row: 2, col: 5 }] });
+    const all = [...t.work.rack, ...t.work.sets.flatMap((s) => s.tiles)];
+    let placed = 0;
+    for (let step = 0; step < 600; step++) {
+      const pool = [...t.work.rack, ...t.work.sets.flatMap((s) => s.tiles)];
+      const n = 1 + Math.floor(rng.next() * 3);
+      const picked = new Set<TileId>();
+      while (picked.size < n) picked.add(pool[Math.floor(rng.next() * pool.length)] as TileId);
+      const tiles = [...picked];
+      // 한 세트에서 한꺼번에 집는 건 아니어도 상관없다 — 어떤 칸이든 놓아 본다
+      const r = placeTiles(t, tiles, { row: Math.floor(rng.next() * 6), col: Math.floor(rng.next() * BOARD_COLS), after: rng.next() < 0.5 });
+      if (!r.ok) {
+        expect(['no-room', 'locked-before-meld', 'off-board']).toContain(r.error);
+        continue;
+      }
+      t = r.turn;
+      placed++;
+      clean(t);
+      conserved(t, all);
+    }
+    expect(placed).toBeGreaterThan(300);
   });
 });

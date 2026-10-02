@@ -423,7 +423,7 @@
 /* ── 보드: 가로 13칸 격자. 세트는 칸 위치(--row, --col)에 놓이고, 가로로 붙은 타일 줄이 한 세트다 ── */
 .board {
   --cw: calc(var(--tw) + var(--gap)); /* 한 칸의 가로 간격 */
-  --rh: calc(var(--tw) * 1.66); /* 한 줄의 세로 간격 (타일 높이 1.36 + 줄 사이 .30) */
+  --rh: calc(var(--tw) * 1.62); /* 한 줄의 세로 간격 (타일 높이 1.36 + 줄 사이 .26) */
   position: relative;
   width: calc(var(--cols) * var(--cw));
   height: calc(var(--rows) * var(--rh));
@@ -561,6 +561,19 @@
 }
 .cell-ghost[data-preview='refuse'] {
   border-style: dashed;
+}
+/* 놓으면 세트가 앉을 자리 — 안은 비우고 테두리만 (타일 칸은 위의 .cell-ghost가 채운다) */
+.cell-ghost[data-span] {
+  /* 세트 바깥으로 3px 감싼다 */
+  translate: -3px -3px;
+  width: calc(var(--n) * var(--cw) - var(--gap) + 6px);
+  height: calc(var(--tw) * 1.36 + 6px);
+  background: none;
+  border-width: 1.5px;
+  border-style: dashed;
+  box-shadow: none;
+  outline: none;
+  z-index: 2;
 }
 .cell-ghost[data-hint] {
   border-style: dashed;
@@ -1300,5 +1313,22 @@
   .moves .btn {
     flex: 1 1 0;
     padding: 0 10px;
+    min-height: 46px;
+  }
+  /* 판이 한눈에 들어오도록 무대·여백을 아낀다 (판은 줄마다 타일 하나 높이가 들어서 세로가 넉넉해야 한다) */
+  .game {
+    gap: 4px;
+  }
+  .hud {
+    min-height: 42px;
+  }
+  .stage {
+    height: clamp(112px, 21dvh, 250px);
+  }
+  .felt {
+    margin-top: 8px;
+  }
+  .felt-scroll {
+    padding: 10px 10px 12px;
   }
 }
