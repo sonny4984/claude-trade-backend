@@ -296,10 +296,18 @@ function initialOrders(m: MatchState): TileId[][] {
   return m.game.players.map((p) => (mode === 'off' ? p.rack.slice() : sortIds(p.rack, mode)));
 }
 
+/** 루미큐브 도움 정도 — 튜토리얼은 늘 "많이" */
+export type Assist = 'self' | 'some' | 'lots';
+export function assistOf(mode: Session['mode'] | undefined, setting: Assist = useSettings.getState().rkAssist): Assist {
+  return mode === 'lesson' ? 'lots' : setting;
+}
+
+/** 힌트를 어디까지 보여 주나: 1 = 쓸 타일, 2 = 놓을 자리, 3 = 완성된 테이블(대신 놓기) */
+const HINT_DEPTH: Readonly<Record<Assist, 1 | 2 | 3>> = { self: 1, some: 2, lots: 3 };
+
 function hintBudget(mode: Session['mode']): number {
-  const h = useSettings.getState().hints;
-  if (mode === 'lesson' || h === 'unlimited') return Infinity;
-  return h === 'off' ? 0 : 3;
+  const a = assistOf(mode);
+  return a === 'lots' ? Infinity : a === 'some' ? 3 : 1;
 }
 
 export function meldProgress(g: GameState): { points: number; need: number } | null {
@@ -842,6 +850,8 @@ export const useGame = create<State & Actions>((set, get) => {
     quickPlay: (id) => {
       const s = get().session;
       if (!s) return;
+      // 스스로 모드: 두 번 톡은 그냥 고르기 (들어갈 곳을 대신 찾아 주지 않는다)
+      if (assistOf(s.mode) === 'self') return;
       const targets = quickTargets(s.match.game.turn, id);
       if (targets.length === 1) {
         flip.capture();
@@ -882,7 +892,8 @@ export const useGame = create<State & Actions>((set, get) => {
         get().act({ type: 'commit' });
         return;
       }
-      if (!force && useSettings.getState().confirmDraw && g.pool.length > 0) {
+      // "낼 수 있는데 뽑을까요?"는 낼 수 있다는 걸 알려 주는 셈이라 스스로 모드에서는 묻지 않는다
+      if (!force && useSettings.getState().confirmDraw && g.pool.length > 0 && assistOf(s.mode) !== 'self') {
         const h = computeHint(g);
         if (h.kind === 'play' || h.kind === 'meld') {
           set({ overlay: 'confirm-draw' });
@@ -898,19 +909,26 @@ export const useGame = create<State & Actions>((set, get) => {
       // 온라인 판에서는 힌트 없음 (서로 공정하게)
       if (!s || s.online || !currentSeatIsHuman(s) || get().curtain) return;
       const h = get().hint;
+      const assist = assistOf(s.mode);
       if (h.level === 0) {
         if (s.hintsLeft <= 0) {
-          toast(t(useSettings.getState().hints === 'off' ? 'hint.out' : 'hint.out'), 'warn');
+          toast(t('hint.out'), 'warn');
           return;
         }
+        // "낼 게 없다"는 답도 알려 주는 것이니 한 번으로 친다 (무제한이면 상관없음)
         const data = computeHint(s.match.game);
         if (data.kind === 'draw' || data.kind === 'end') {
+          put({ ...s, hintsLeft: s.hintsLeft - 1 }, {});
           toast(t(data.kind === 'draw' ? 'hint.none' : 'hint.end'), 'info');
           return;
         }
         put({ ...s, hintsLeft: s.hintsLeft - 1 }, { hint: { level: 1, data } });
         sfx('hint');
-        toast(data.kind === 'meld' ? t('hint.meld', { points: data.points }) : t('hint.l1'), 'good');
+        toast(data.kind === 'meld' && assist !== 'self' ? t('hint.meld', { points: data.points }) : t('hint.l1'), 'good');
+        return;
+      }
+      if (h.level >= HINT_DEPTH[assist]) {
+        toast(t(assist === 'self' ? 'hint.depthSelf' : 'hint.depthSome'), 'info');
         return;
       }
       if (h.level === 1) {
@@ -1175,4 +1193,11 @@ if (typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.lo
       return !!data?.proposal.length && useGame.getState().act({ type: 'propose', sets: data.proposal.map((x) => x.slice()) });
     },
   };
+}
+
+/** 화면에서 쓰는 루미큐브 도움 정도 (설정을 바꾸면 바로 다시 그린다) */
+export function useAssist(): Assist {
+  const mode = useGame((s) => s.session?.mode);
+  const setting = useSettings((s) => s.rkAssist);
+  return assistOf(mode, setting);
 }

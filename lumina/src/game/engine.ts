@@ -111,6 +111,22 @@ export interface GameState {
   readonly result: GameResult | null;
 }
 
+/**
+ * 이 자리가 마지막으로 무언가 한(내기·뽑기·넘기기) 뒤로 다른 사람들이 테이블에 낸 타일 → 낸 자리.
+ * 테이블을 따라가기 쉽게 표시하려고 쓴다 (낸 타일은 테이블을 떠나지 않으니 지금도 테이블 어딘가에 있다).
+ */
+export function playedSince(state: GameState, seat: number): Map<TileId, number> {
+  const out = new Map<TileId, number>();
+  for (let i = state.log.length - 1; i >= 0; i--) {
+    const e = state.log[i];
+    if (!e || e.t === 'start') break;
+    if (e.t === 'end') continue;
+    if (e.p === seat) break;
+    if (e.t === 'play') for (const id of e.tiles) if (!out.has(id)) out.set(id, e.p);
+  }
+  return out;
+}
+
 export type GameAction =
   | { readonly type: 'move'; readonly tiles: readonly TileId[]; readonly to: MoveTarget }
   | { readonly type: 'swap'; readonly tile: TileId; readonly joker: TileId }

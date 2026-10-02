@@ -2,7 +2,7 @@ import { Fragment, memo } from 'react';
 import { analyzeSet, type TableSet, type TileId } from '../../game';
 import { Tile } from './Tile';
 import { useDrag } from '../dnd';
-import { useGame } from '../../store/game';
+import { useAssist, useGame } from '../../store/game';
 import { setIssueText, useLang, useT } from '../../i18n';
 
 interface Props {
@@ -12,9 +12,11 @@ interface Props {
   touched: boolean;
   hintTarget: boolean;
   hintTile: TileId | null;
+  /** 다른 사람이 최근에 낸 타일 → 그 사람 색·이름 */
+  recent?: ReadonlyMap<TileId, { readonly color: string; readonly name: string }>;
 }
 
-export const SetView = memo(function SetView({ set, fresh, locked, touched, hintTarget, hintTile }: Props) {
+export const SetView = memo(function SetView({ set, fresh, locked, touched, hintTarget, hintTile, recent }: Props) {
   const t = useT();
   const lang = useLang();
   const a = analyzeSet(set.tiles);
@@ -23,6 +25,7 @@ export const SetView = memo(function SetView({ set, fresh, locked, touched, hint
   const selection = useGame((s) => s.selection);
   const splitSet = useGame((s) => s.splitSet);
   const shake = useGame((s) => s.shake);
+  const assist = useAssist();
   const hasSelection = selection.length > 0;
   const caret = drag && drag.target?.kind === 'set' ? drag.target.index : -1;
   const swapJoker = drag && drag.target?.kind === 'swap' ? drag.target.joker : null;
@@ -83,6 +86,7 @@ export const SetView = memo(function SetView({ set, fresh, locked, touched, hint
                 shaking={!!shake && shake.tiles.includes(id)}
                 locked={locked}
                 role={a.jokers.get(id) ?? null}
+                by={fresh.has(id) ? null : (recent?.get(id) ?? null)}
               />
               {swapJoker === id && <i className="swap-ring" aria-hidden="true" />}
             </Fragment>
@@ -97,7 +101,8 @@ export const SetView = memo(function SetView({ set, fresh, locked, touched, hint
       </div>
       {state !== 'valid' && a.issue && touched && (
         <p className="set-note" data-state={state}>
-          {state === 'incomplete' ? t('set.too-short') : setIssueText(lang, a.issue)}
+          {/* 스스로 모드: 무엇이 틀렸는지(빠진 타일 등)는 알려 주지 않는다 */}
+          {state === 'incomplete' ? t('set.too-short') : assist === 'self' ? t('set.wrong') : setIssueText(lang, a.issue)}
         </p>
       )}
     </div>

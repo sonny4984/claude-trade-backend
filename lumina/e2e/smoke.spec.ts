@@ -17,7 +17,7 @@ async function open(page: Page, settings: Record<string, unknown> = {}, path = '
     } catch {
       /* 저장소가 막힌 환경 */
     }
-  }, { aiSpeed: 'fast', hints: 'unlimited', ...settings });
+  }, { aiSpeed: 'fast', hints: 'unlimited', rkAssist: 'lots', ...settings });
   await page.goto(path);
   await expect(page.locator('.wordmark')).toHaveText('LUMINA');
   return errors;
@@ -70,6 +70,58 @@ test('힌트로 첫 등록을 하면 테이블에 세트가 생기고 차례가 
   await expect(page.locator('.draw-btn')).toBeDisabled();
   await expect.poll(() => page.locator('.felt .set .tile').count()).toBeGreaterThan(0);
   expect(await page.locator('.rack .tile').count()).toBeLessThan(before);
+  expect(errors).toEqual([]);
+});
+
+test('도움 "스스로"(기본): 힌트는 판마다 1번·타일 하나만, 끌 때 맞는지 안 알려 주고, 뽑기 전에 묻지 않는다', async ({ page }) => {
+  // 시드 1: 첫 차례에 30점 이상 등록할 수 있는 판 — 그래도 힌트는 타일 하나까지만
+  const errors = await open(page, { rkAssist: 'self', confirmDraw: true }, '/?seed=1');
+  await startSolo(page);
+  await myTurn(page);
+  const hint = page.locator('.tool').nth(3);
+  await expect(hint).toContainText('힌트 1');
+  await hint.click();
+  await expect(page.locator('.tile.is-hint')).toHaveCount(1);
+  await expect(hint).toContainText('힌트 0');
+  await hint.click();
+  await expect(page.locator('.toast').last()).toContainText('타일 하나까지만');
+  await expect(page.locator('.set[data-hint], .new-set[data-hint]')).toHaveCount(0);
+  await expect(page.locator('.sheet')).toHaveCount(0);
+  // 끌어 보기: 놓을 자리는 보이지만 맞는지(초록·빨강)는 알려 주지 않는다
+  const tile = page.locator('.rack .tile').first();
+  const from = await tile.boundingBox();
+  if (!from) throw new Error('레이아웃을 찾지 못했습니다');
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, from.y - 40, { steps: 6 });
+  const slot = await page.locator('.new-set').boundingBox();
+  if (!slot) throw new Error('새 세트 자리가 보이지 않습니다');
+  await page.mouse.move(slot.x + slot.width / 2, slot.y + slot.height / 2, { steps: 12 });
+  await expect(page.locator('.new-set')).toHaveAttribute('data-preview', 'neutral');
+  await page.mouse.up();
+  // 한 장짜리 세트: 틀렸다는 표시와 "3장 이상"만 (무엇이 빠졌는지는 말하지 않음)
+  await expect(page.locator('.felt .set[data-state="incomplete"]')).toHaveCount(1);
+  await page.locator('.tool').nth(2).click(); // 처음으로
+  // 낼 수 있는 수가 있어도 "그래도 뽑을까요?"를 묻지 않는다 (물으면 낼 수 있다는 걸 알려 주는 셈)
+  await page.locator('.draw-btn').click();
+  await expect(page.locator('.sheet')).toHaveCount(0);
+  await expect(page.locator('.draw-btn')).toBeDisabled();
+  expect(errors).toEqual([]);
+});
+
+test('도움 "조금": 힌트 3번, 타일 → 놓을 자리까지 (완성된 테이블은 안 보여 줌)', async ({ page }) => {
+  const errors = await open(page, { rkAssist: 'some' }, '/?seed=1');
+  await startSolo(page);
+  await myTurn(page);
+  const hint = page.locator('.tool').nth(3);
+  await expect(hint).toContainText('힌트 3');
+  await hint.click();
+  await expect(page.locator('.tile.is-hint')).toHaveCount(1);
+  await hint.click();
+  await expect(page.locator('.set[data-hint], .new-set[data-hint]')).toHaveCount(1);
+  await hint.click();
+  await expect(page.locator('.toast').last()).toContainText('놓을 자리까지만');
+  await expect(page.locator('.sheet')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

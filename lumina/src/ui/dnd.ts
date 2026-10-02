@@ -7,7 +7,7 @@
  */
 import { create } from 'zustand';
 import { analyzeSet, canMoveTile, previewMove, isJoker, type MoveTarget, type TileId } from '../game';
-import { useGame, visibleRack, currentSeatIsHuman } from '../store/game';
+import { assistOf, useGame, visibleRack, currentSeatIsHuman } from '../store/game';
 import * as flip from './flip';
 import { sfx, unlockAudio } from '../audio/sfx';
 import { buzz } from './haptics';
@@ -19,7 +19,8 @@ export type DropTarget =
   | { kind: 'rack'; index: number }
   | { kind: 'swap'; setId: string; joker: TileId };
 
-export type PreviewState = 'valid' | 'incomplete' | 'invalid' | 'refuse';
+/** neutral: 놓을 수는 있지만 맞는지는 알려 주지 않음 (루미큐브 "스스로" 모드) */
+export type PreviewState = 'valid' | 'incomplete' | 'invalid' | 'refuse' | 'neutral';
 
 interface DragState {
   active: boolean;
@@ -168,9 +169,11 @@ function previewOf(t: DropTarget, tiles: readonly TileId[]): PreviewState {
     // 랙에는 이번 차례에 랙에서 나간 타일만 돌아올 수 있다
     return tiles.every((id) => turn.start.rack.includes(id)) ? 'valid' : 'refuse';
   }
+  const blind = assistOf(s.mode) === 'self';
   if (t.kind === 'swap') {
     const holder = turn.work.sets.find((x) => x.id === t.setId);
     if (!holder) return 'refuse';
+    if (blind) return 'neutral';
     const swapped = holder.tiles.map((id) => (id === t.joker ? (tiles[0] as TileId) : id));
     const a = analyzeSet(swapped);
     return a.state === 'valid' ? 'valid' : a.state;
@@ -180,6 +183,8 @@ function previewOf(t: DropTarget, tiles: readonly TileId[]): PreviewState {
   const r = previewMove(turn, tiles, mt);
   if (!r.ok) return 'refuse';
   if (t.kind === 'staging') return 'incomplete';
+  // 규칙상 놓을 수는 있다 — 맞는 세트가 되는지는 스스로 판단
+  if (blind) return 'neutral';
   // 새로 생기거나 바뀐 세트 중 가장 나쁜 상태
   let worst: PreviewState = 'valid';
   for (const id of r.affected) {

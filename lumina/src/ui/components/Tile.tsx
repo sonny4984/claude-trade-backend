@@ -1,10 +1,10 @@
-import { memo, useCallback, type KeyboardEvent, type PointerEvent } from 'react';
+import { memo, useCallback, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { tile, type JokerRole, type TileId } from '../../game';
 import { registerTile } from '../flip';
 import { tilePointerDown } from '../dnd';
 import { useGame } from '../../store/game';
 import { useSettings } from '../../store/settings';
-import { tileLabel, useLang, translate } from '../../i18n';
+import { subj, tileLabel, useLang, translate } from '../../i18n';
 
 export type TileWhere = 'table' | 'rack' | 'staging' | 'ghost' | 'deco';
 
@@ -20,6 +20,8 @@ interface Props {
   locked?: boolean;
   role?: JokerRole | null;
   faceDown?: boolean;
+  /** 내가 지난번에 둔 뒤 다른 사람이 낸 타일: 그 사람 색과 이름 */
+  by?: { readonly color: string; readonly name: string } | null;
 }
 
 const SHAPE = { red: 'circle', blue: 'diamond', orange: 'triangle', black: 'square' } as const;
@@ -40,7 +42,7 @@ export function JokerMark() {
   );
 }
 
-export const Tile = memo(function Tile({ id, where, selected, fresh, drawn, hint, lifted, shaking, locked, role, faceDown }: Props) {
+export const Tile = memo(function Tile({ id, where, selected, fresh, drawn, hint, lifted, shaking, locked, role, faceDown, by }: Props) {
   const lang = useLang();
   const marks = useSettings((s) => s.colorMarks);
   const t = tile(id);
@@ -80,6 +82,7 @@ export const Tile = memo(function Tile({ id, where, selected, fresh, drawn, hint
   }
   if (selected) label += `, ${translate(lang, 'tile.selected')}`;
   if (fresh) label += `, ${translate(lang, 'tile.fresh')}`;
+  if (by) label += `, ${translate(lang, 'tile.playedBy', { name: by.name, subj: subj(lang, by.name) })}`;
 
   const cls = [
     'tile',
@@ -107,9 +110,11 @@ export const Tile = memo(function Tile({ id, where, selected, fresh, drawn, hint
       tabIndex={interactive ? 0 : undefined}
       aria-label={label}
       aria-pressed={interactive ? !!selected : undefined}
+      style={by ? ({ ['--by' as string]: by.color } as CSSProperties) : undefined}
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
     >
+      {by && <i className="tile-by" aria-hidden="true" />}
       {t.kind === 'number' ? (
         <span className="tile-face">
           <span className={t.value >= 10 ? 'tile-num is-wide' : 'tile-num'}>{t.value}</span>

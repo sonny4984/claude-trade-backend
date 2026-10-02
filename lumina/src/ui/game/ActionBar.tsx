@@ -26,7 +26,6 @@ export function ActionBar() {
   const curtain = useGame((s) => s.curtain);
   const ai = useGame((s) => s.ai);
   const hint = useGame((s) => s.hint);
-  const hintsSetting = useSettings((s) => s.hints);
   if (!session) return null;
   const g = session.match.game;
   const store = useGame.getState();
@@ -37,7 +36,7 @@ export function ActionBar() {
   const commitLabel = turn.meldedNow && !changed ? t('action.endTurn') : check.kind === 'meld' ? t('action.meld') : t('action.commit');
   const drawLabel = turn.meldedNow ? t('action.endTurn') : g.pool.length === 0 ? t('action.pass') : changed ? t('action.resetDraw') : t('action.draw');
   const hintsLeft = session.hintsLeft;
-  const hintDisabled = !human || hintsSetting === 'off' || (hint.level === 0 && hintsLeft <= 0);
+  const hintDisabled = !human || (hint.level === 0 && hintsLeft <= 0);
 
   return (
     <nav className="actions" aria-label="actions">
@@ -59,7 +58,7 @@ export function ActionBar() {
           <Icon name="hint" />
           <span>
             {t('action.hint')}
-            {hintsSetting === 'limited' && Number.isFinite(hintsLeft) ? ` ${hintsLeft}` : ''}
+            {Number.isFinite(hintsLeft) ? ` ${hintsLeft}` : ''}
           </span>
         </button>
         )}

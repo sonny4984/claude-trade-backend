@@ -1,4 +1,5 @@
-import { useGame, turnSummary, currentSeatIsHuman } from '../../store/game';
+import { useAssist, useGame, turnSummary, currentSeatIsHuman } from '../../store/game';
+import type { CommitIssue } from '../../game';
 import { commitIssueText, subj, useLang, useT } from '../../i18n';
 
 export function StatusLine() {
@@ -10,6 +11,9 @@ export function StatusLine() {
   const ai = useGame((s) => s.ai);
   const lastEvent = useGame((s) => s.lastEventText);
   const waiting = useGame((s) => s.waiting);
+  const assist = useAssist();
+  // 스스로 모드: 세트가 왜 틀렸는지(빠진 타일 등)는 말하지 않는다
+  const issueText = (issue: CommitIssue): string => (assist === 'self' && issue.code === 'invalid-set' ? t('status.someWrong') : commitIssueText(lang, issue));
   if (!session || curtain) return <p className="status" aria-live="polite" />;
   const g = session.match.game;
   if (g.phase !== 'playing') return <p className="status" aria-live="polite" />;
@@ -37,14 +41,14 @@ export function StatusLine() {
       tone = 'good';
     } else if (meld) {
       meter = meld;
-      text = check.ok ? t('status.meldReady', { points: meld.points }) : changed && check.issues[0] && check.issues[0].code !== 'meld-too-low' ? commitIssueText(lang, check.issues[0]) : t('status.meld', { need: meld.need });
+      text = check.ok ? t('status.meldReady', { points: meld.points }) : changed && check.issues[0] && check.issues[0].code !== 'meld-too-low' ? issueText(check.issues[0]) : t('status.meld', { need: meld.need });
       tone = check.ok ? 'good' : changed ? 'warn' : 'dim';
     } else if (changed) {
       if (check.ok) {
         text = t('status.ready');
         tone = 'good';
       } else {
-        text = check.issues[0] ? commitIssueText(lang, check.issues[0]) : t('status.incomplete');
+        text = check.issues[0] ? issueText(check.issues[0]) : t('status.incomplete');
         tone = 'warn';
       }
     } else {

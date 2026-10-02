@@ -58,6 +58,7 @@ export function Setup({ mode }: { mode: 'solo' | 'local' }) {
   const t = useT();
   const lang = useLang();
   const last = useSettings((s) => (mode === 'solo' ? s.lastSolo : s.lastLocal));
+  const assist = useSettings((s) => s.rkAssist);
   const [cfg, setCfg] = useState<SetupConfig>(() => last ?? defaults(mode, lang));
   const [openRules, setOpenRules] = useState(false);
   const store = useGame.getState();
@@ -182,6 +183,14 @@ export function Setup({ mode }: { mode: 'solo' | 'local' }) {
         </section>
 
         <section className="card">
+          <h2 className="card-title">{t('settings.rkAssist')}</h2>
+          <Seg<'self' | 'some' | 'lots'>
+            label={t('settings.rkAssist')}
+            value={assist}
+            options={(['self', 'some', 'lots'] as const).map((v) => ({ v, label: t(`settings.rkAssistOpt.${v}`) }))}
+            onChange={(v) => useSettings.getState().set({ rkAssist: v })}
+          />
+          <p className="note setup-note">{t(`settings.rkAssistSub.${assist}`)}</p>
           <h2 className="card-title">{t('setup.timer')}</h2>
           <Seg<number | null>
             label={t('setup.timer')}

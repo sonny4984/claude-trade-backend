@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react';
-import { canManipulate, playedTiles, sameMembers, tilesOf, type TileId } from '../../game';
-import { useGame, currentSeatIsHuman } from '../../store/game';
+import { canManipulate, playedSince, playedTiles, sameMembers, tilesOf, type TileId } from '../../game';
+import { CHARACTERS } from '../../characters/roster';
+import { useGame, currentSeatIsHuman, mySeatOf } from '../../store/game';
 import { useDrag } from '../dnd';
 import { SetView } from '../components/SetView';
 import { useTableFit } from './fit';
@@ -24,6 +25,19 @@ export function TableArea() {
   }, [work?.sets, showNew]);
   const tw = useTableFit(ref, lens, dragActive);
   const fresh = useMemo(() => new Set<TileId>(turn ? playedTiles(turn) : []), [turn]);
+  // 내가 지난번에 둔 뒤 다른 사람들이 낸 타일 (함께 두기면 지금 차례인 사람 기준)
+  const viewer = session && g ? (session.mode === 'local' ? g.current : mySeatOf(session)) : -1;
+  const recent = useMemo(() => {
+    const out = new Map<TileId, { color: string; name: string }>();
+    if (!session || !g || viewer < 0) return out;
+    for (const [id, p] of playedSince(g, viewer)) {
+      const meta = session.seatsMeta[p];
+      if (meta) out.set(id, { color: CHARACTERS[meta.character].accent, name: session.match.seats[p]?.name ?? '' });
+    }
+    return out;
+    // 기록(log)과 보는 자리가 바뀔 때만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [g?.log, viewer, session?.seatsMeta]);
   if (!g || !turn || !work) return null;
   const manip = canManipulate(turn);
   const startTiles = new Set(tilesOf(turn.start.sets));
@@ -56,6 +70,7 @@ export function TableArea() {
                 touched={!before || !sameMembers(before, s.tiles)}
                 hintTarget={hintSet === s.id}
                 hintTile={hintTile}
+                recent={recent}
               />
             );
           })}

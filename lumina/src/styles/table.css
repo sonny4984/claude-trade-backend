@@ -315,6 +315,17 @@
   display: grid;
   min-width: 0;
 }
+/* 자리 이름 앞의 색 점 — 테이블 타일의 점과 같은 색 */
+.seat-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  box-shadow: 0 0 0 1.5px rgba(42, 29, 23, 0.25);
+}
 .seat-name {
   font-size: 14px;
   overflow: hidden;
@@ -455,6 +466,9 @@
   box-shadow: 0 0 0 1px var(--invalid);
   opacity: 0.8;
 }
+.set[data-preview='neutral'] {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 22px -4px var(--accent-soft);
+}
 .set[data-hint] {
   animation: set-hint 1.5s var(--ease-in-out) infinite;
 }
@@ -533,6 +547,9 @@
 .new-set[data-preview] {
   border-style: solid;
   box-shadow: 0 0 0 2px var(--valid), 0 0 24px -2px var(--valid-glow);
+}
+.new-set[data-preview='neutral'] {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 22px -4px var(--accent-soft);
 }
 .new-set[data-hint] {
   animation: set-hint 1.5s var(--ease-in-out) infinite;

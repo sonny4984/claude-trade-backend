@@ -1,6 +1,6 @@
 import { useGame, mySeatOf, currentSeatIsHuman, type Session } from '../../store/game';
 import type { Expression } from '../../characters/draw2d';
-import type { CharacterId } from '../../characters/roster';
+import { CHARACTERS, type CharacterId } from '../../characters/roster';
 import { usePortrait } from '../../characters/portrait3d';
 import { useT } from '../../i18n';
 import { TimerRing } from './Hud';
@@ -36,7 +36,10 @@ export function SeatStrip({ session }: { session: Session }) {
           <div key={i} className="seat" data-current={current || undefined} data-seat-origin={i}>
             <SeatPortrait id={meta.character} ex={exprOf(i)} />
             <div className="seat-info">
-              <b className="seat-name">{session.match.seats[i]?.name}</b>
+              <b className="seat-name">
+                <i className="seat-dot" style={{ background: CHARACTERS[meta.character].accent }} aria-hidden="true" />
+                {session.match.seats[i]?.name}
+              </b>
               <span className="seat-meta">
                 {t('hud.tiles', { n: p.rack.length })}
                 {p.melded ? ` · ${t('hud.melded')}` : ''}

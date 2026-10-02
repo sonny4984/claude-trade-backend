@@ -236,3 +236,39 @@ describe('점수 (공식 Scoring)', () => {
     expect(T('r1')).toBeTypeOf('number');
   });
 });
+
+describe('지난번 뒤로 남이 낸 타일 (테이블 따라가기 표시)', () => {
+  it('내가 마지막으로 둔 뒤 다른 사람들이 낸 타일만, 낸 사람과 함께', async () => {
+    const { playedSince } = await import('../engine');
+    const { playAiTurn } = await import('../ai');
+    const { createRng } = await import('../rng');
+    let s = newGame({ players: [{ name: 'A', seat: 'ai', ai: 'expert' }, { name: 'B', seat: 'ai', ai: 'expert' }, { name: 'C', seat: 'ai', ai: 'expert' }], rules: CLASSIC_RULES, seed: 7 });
+    const rng = createRng(7);
+    // 누군가 낼 때까지 몇 차례
+    for (let k = 0; k < 60 && !s.log.some((e) => e.t === 'play'); k++) s = playAiTurn(s, rng).state;
+    for (let k = 0; k < 6 && s.phase === 'playing'; k++) s = playAiTurn(s, rng).state;
+    for (const seat of [0, 1, 2]) {
+      const got = playedSince(s, seat);
+      // 기대값: 기록을 거꾸로 읽다가 그 자리의 기록을 만나면 멈춘다
+      const want = new Map<TileId, number>();
+      for (let i = s.log.length - 1; i >= 0; i--) {
+        const e = s.log[i];
+        if (!e || e.t === 'start') break;
+        if (e.t === 'end') continue;
+        if (e.p === seat) break;
+        if (e.t === 'play') for (const id of e.tiles) if (!want.has(id)) want.set(id, e.p);
+      }
+      expect([...got]).toEqual([...want]);
+      for (const [id, p] of got) {
+        expect(p).not.toBe(seat);
+        expect(s.table.some((x) => x.tiles.includes(id))).toBe(true);
+      }
+    }
+    // 바로 앞 사람이 방금 낸 타일은 다음 차례인 사람에게 모두 그 사람 것으로 보인다
+    const lastPlay = [...s.log].reverse().find((e) => e.t === 'play');
+    if (lastPlay && lastPlay.t === 'play' && lastPlay.p !== s.current) {
+      const mine = playedSince(s, s.current);
+      for (const id of lastPlay.tiles) expect(mine.get(id)).toBe(lastPlay.p);
+    }
+  });
+});

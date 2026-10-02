@@ -184,6 +184,19 @@
   background: var(--fresh);
   box-shadow: 0 0 0 2px var(--rack-well);
 }
+/* 다른 사람이 지난번에 낸 타일: 왼쪽 위에 그 사람 색 점 */
+.tile-by {
+  position: absolute;
+  top: calc(var(--w) * 0.07);
+  left: calc(var(--w) * 0.08);
+  z-index: 1;
+  width: max(6px, calc(var(--w) * 0.15));
+  height: max(6px, calc(var(--w) * 0.15));
+  border-radius: 50%;
+  background: var(--by);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--by) 55%, #2a1d17);
+  pointer-events: none;
+}
 .tile.is-hint {
   animation: hint-glow 1.5s var(--ease-in-out) infinite;
 }

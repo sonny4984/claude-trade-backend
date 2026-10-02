@@ -5,7 +5,7 @@
  * LUMINA(ui/game/Stage.tsx)와 다빈치 코드(coda/ui/CodaStage.tsx)가 각자 어댑터로 연결한다.
  */
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CharacterId } from '../characters/roster';
+import { CHARACTERS, type CharacterId } from '../characters/roster';
 import type { ReactionKind } from '../store/game';
 import { useSettings, prefersReducedMotion } from '../store/settings';
 import { translateList, useLang } from '../i18n';
@@ -226,6 +226,7 @@ export default function Stage3D({ plates, current, thinking, moving, roundKey, s
             <Fragment key={p.seat}>
               <div className="stage-tag" ref={ref(`tag:${p.seat}`)} data-current={current === p.seat || undefined} data-out={p.out || undefined} aria-label={p.aria}>
                 {p.dot && <i className="meld-dot" aria-hidden="true" />}
+                <i className="seat-dot" style={{ background: CHARACTERS[p.character].accent }} aria-hidden="true" />
                 <span className="tag-name">{p.name}</span>
                 <span className="tag-count" aria-hidden="true">
                   {p.count}
