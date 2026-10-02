@@ -1,20 +1,21 @@
 /**
  * 드래그 앤 드롭 — 포인터 이벤트 하나로 마우스·터치·펜을 모두 다룬다.
- *  · 6px 이상 움직이면 드래그, 그 전에 떼면 탭, 0.42초 가만히 누르면 길게 누르기
+ *  · 6px 이상 움직이면 드래그, 그 전에 떼면 탭 (두 번 탭 = 들어갈 곳이 하나뿐이면 자동 배치)
  *  · 터치에서는 고스트 타일이 손가락 위쪽에 떠서, 놓일 자리가 손가락에 가리지 않는다
- *  · 놓을 곳은 [data-drop] 요소로 찾고, 타일 사이 삽입 위치를 얇은 선으로 보여 준다
+ *  · 보드에서는 고스트 아래의 칸이 놓일 자리(칸 하나씩 맞춰 놓는다), 랙·작업대는 [data-drop] 요소로 찾는다
  *  · 규칙 판정은 하지 않는다 — 미리보기도 커널의 previewMove를 그대로 부른다
  */
 import { create } from 'zustand';
-import { analyzeSet, canMoveTile, previewMove, isJoker, type MoveTarget, type TileId } from '../game';
+import { analyzeSet, canMoveTile, cellKey, occupancy, previewMove, isJoker, type MoveTarget, type TileId } from '../game';
 import { assistOf, useGame, visibleRack, currentSeatIsHuman } from '../store/game';
+import { boardElement, cellAt, startCell } from './game/boardGeometry';
 import * as flip from './flip';
 import { sfx, unlockAudio } from '../audio/sfx';
 import { buzz } from './haptics';
 
 export type DropTarget =
-  | { kind: 'set'; setId: string; index: number }
-  | { kind: 'new'; before?: string }
+  /** 보드의 칸 — 첫 타일이 이 칸에 놓이고 나머지는 오른쪽 칸들에 */
+  | { kind: 'cell'; row: number; col: number }
   | { kind: 'staging'; index: number }
   | { kind: 'rack'; index: number }
   | { kind: 'swap'; setId: string; joker: TileId };
@@ -27,10 +28,14 @@ interface DragState {
   tiles: TileId[];
   target: DropTarget | null;
   preview: PreviewState | null;
+  /** 놓을 수 없을 때의 이유 코드 (err.* 문구 키) */
+  error: string | null;
   touch: boolean;
+  /** 고스트 타일 너비(px) — 집은 타일의 크기 그대로 */
+  ghostW: number;
 }
 
-export const useDrag = create<DragState>(() => ({ active: false, tiles: [], target: null, preview: null, touch: false }));
+export const useDrag = create<DragState>(() => ({ active: false, tiles: [], target: null, preview: null, error: null, touch: false, ghostW: 44 }));
 
 let ghostEl: HTMLElement | null = null;
 export function registerGhost(el: HTMLElement | null): void {
@@ -48,10 +53,12 @@ interface Gesture {
   grabDY: number;
   tileW: number;
   tileH: number;
+  /** 지금 고스트 타일 너비 — 보드 위에서는 칸 크기로 줄어든다 */
+  gw: number;
+  /** 터치에서 고스트 중심이 손가락보다 얼마나 위에 뜨는가(px) */
+  lift: number;
   dragging: boolean;
   refused: boolean;
-  longTimer: ReturnType<typeof setTimeout> | null;
-  longFired: boolean;
   lastX: number;
   lastY: number;
 }
@@ -59,29 +66,36 @@ interface Gesture {
 let g: Gesture | null = null;
 let raf = 0;
 let lastTap: { id: TileId; at: number } | null = null;
-let scrollVel = 0;
+let edgeDir = 0;
+let edgeSince = 0;
 let scrollRaf = 0;
 
 const DRAG_START = 6;
-const LONG_PRESS = 420;
 const DOUBLE_TAP = 300;
 
 function scrollArea(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-scroll="felt"]');
 }
 
+/** 놓을 자리를 가리키는 점: 마우스는 포인터, 터치는 손가락 위에 뜬 고스트 중심 */
 function hotPoint(x: number, y: number): { x: number; y: number } {
   if (!g) return { x, y };
-  // 터치: 고스트 중심을 기준으로 (손가락보다 위)
-  if (g.touch) return { x, y: y - g.tileH * 0.85 };
-  return { x: x - g.grabDX + g.tileW / 2, y: y - g.grabDY + g.tileH / 2 };
+  return g.touch ? { x, y: y - g.lift } : { x, y };
 }
 
 function moveGhost(x: number, y: number): void {
   if (!ghostEl || !g) return;
-  const left = g.touch ? x - g.tileW / 2 : x - g.grabDX;
-  const top = g.touch ? y - g.tileH * 1.35 : y - g.grabDY;
+  const gh = g.gw * 1.36;
+  const k = g.gw / g.tileW;
+  const left = g.touch ? x - g.gw / 2 : x - g.grabDX * k;
+  const top = g.touch ? y - g.lift - gh / 2 : y - g.grabDY * k;
   ghostEl.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+}
+
+/** 보드의 타일 너비 (보드가 화면에 있을 때) */
+function boardTileWidth(): number | null {
+  const w = Number(boardElement()?.dataset.tw);
+  return w > 0 ? w : null;
 }
 
 function childTiles(zone: Element, exclude: ReadonlySet<TileId>): { id: TileId; rect: DOMRect }[] {
@@ -110,15 +124,21 @@ function insertIndex(children: { rect: DOMRect }[], x: number, y: number): numbe
   return idx;
 }
 
-/** 세트 바로 곁(가로세로 28px 안)에 놓았으면 그 세트로 — 손가락이 조금 빗나가도 */
-function nearSet(x: number, y: number): DropTarget | null {
-  let best: { id: string; d: number; n: number } | null = null;
-  for (const el of document.querySelectorAll<HTMLElement>('[data-drop="set"]')) {
-    const r = el.getBoundingClientRect();
-    const d = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
-    if (d < 28 && (!best || d < best.d)) best = { id: el.dataset.setId as string, d, n: el.querySelectorAll('[data-tile-id]').length };
+/** 보드 위 (x, y)에 첫 타일이 오도록 한 목표 — 조커 위면 바꾸기 */
+function boardTarget(x: number, y: number, tiles: readonly TileId[]): DropTarget | null {
+  const c = cellAt(x, y);
+  if (!c) return null;
+  if (tiles.length === 1 && !isJoker(tiles[0] as TileId)) {
+    const session = useGame.getState().session;
+    const sets = session?.match.game.turn.work.sets ?? [];
+    const there = occupancy(sets).get(cellKey(c.row, c.col));
+    if (there !== undefined && isJoker(there) && there !== tiles[0]) {
+      const holder = sets.find((st) => st.tiles.includes(there));
+      if (holder) return { kind: 'swap', setId: holder.id, joker: there };
+    }
   }
-  return best ? { kind: 'set', setId: best.id, index: best.n } : null;
+  const at = startCell(c, g && !g.touch ? Math.max(0, tiles.indexOf(g.id)) : 0, tiles.length);
+  return { kind: 'cell', row: at.row, col: at.col };
 }
 
 function computeTarget(x: number, y: number, tiles: readonly TileId[]): DropTarget | null {
@@ -127,22 +147,7 @@ function computeTarget(x: number, y: number, tiles: readonly TileId[]): DropTarg
   if (!zoneEl) return null;
   const kind = zoneEl.dataset.drop;
   const exclude = new Set(tiles);
-  if (kind === 'set') {
-    const setId = zoneEl.dataset.setId as string;
-    const kids = childTiles(zoneEl, exclude);
-    if (tiles.length === 1 && !isJoker(tiles[0] as TileId)) {
-      for (const k of kids) {
-        if (!isJoker(k.id)) continue;
-        const r = k.rect;
-        if (x > r.left + r.width * 0.2 && x < r.right - r.width * 0.2 && y > r.top && y < r.bottom) {
-          return { kind: 'swap', setId, joker: k.id };
-        }
-      }
-    }
-    return { kind: 'set', setId, index: insertIndex(kids, x, y) };
-  }
-  if (kind === 'felt') return nearSet(x, y) ?? { kind: 'new' };
-  if (kind === 'new') return { kind: 'new', ...(zoneEl.dataset.before ? { before: zoneEl.dataset.before } : {}) };
+  if (kind === 'felt' || kind === 'set') return boardTarget(x, y, tiles);
   if (kind === 'staging') return { kind: 'staging', index: insertIndex(childTiles(zoneEl, exclude), x, y) };
   if (kind === 'rack') return { kind: 'rack', index: insertIndex(childTiles(zoneEl, exclude), x, y) };
   return null;
@@ -150,10 +155,8 @@ function computeTarget(x: number, y: number, tiles: readonly TileId[]): DropTarg
 
 function toMove(t: DropTarget): MoveTarget | null {
   switch (t.kind) {
-    case 'set':
-      return { kind: 'set', setId: t.setId, index: t.index };
-    case 'new':
-      return t.before ? { kind: 'new', before: t.before } : { kind: 'new' };
+    case 'cell':
+      return { kind: 'cell', row: t.row, col: t.col };
     case 'staging':
       return { kind: 'staging', index: t.index };
     default:
@@ -161,72 +164,100 @@ function toMove(t: DropTarget): MoveTarget | null {
   }
 }
 
-function previewOf(t: DropTarget, tiles: readonly TileId[]): PreviewState {
+function previewOf(t: DropTarget, tiles: readonly TileId[]): { state: PreviewState; error: string | null } {
   const s = useGame.getState().session;
-  if (!s) return 'refuse';
+  if (!s) return { state: 'refuse', error: null };
   const turn = s.match.game.turn;
   if (t.kind === 'rack') {
     // 랙에는 이번 차례에 랙에서 나간 타일만 돌아올 수 있다
-    return tiles.every((id) => turn.start.rack.includes(id)) ? 'valid' : 'refuse';
+    return tiles.every((id) => turn.start.rack.includes(id)) ? { state: 'valid', error: null } : { state: 'refuse', error: 'table-to-rack' };
   }
   const blind = assistOf(s.mode) === 'self';
   if (t.kind === 'swap') {
     const holder = turn.work.sets.find((x) => x.id === t.setId);
-    if (!holder) return 'refuse';
-    if (blind) return 'neutral';
+    if (!holder) return { state: 'refuse', error: null };
+    if (blind) return { state: 'neutral', error: null };
     const swapped = holder.tiles.map((id) => (id === t.joker ? (tiles[0] as TileId) : id));
     const a = analyzeSet(swapped);
-    return a.state === 'valid' ? 'valid' : a.state;
+    return { state: a.state === 'valid' ? 'valid' : a.state, error: null };
   }
   const mt = toMove(t);
-  if (!mt) return 'refuse';
+  if (!mt) return { state: 'refuse', error: null };
   const r = previewMove(turn, tiles, mt);
-  if (!r.ok) return 'refuse';
-  if (t.kind === 'staging') return 'incomplete';
+  if (!r.ok) return { state: 'refuse', error: r.error };
+  if (t.kind === 'staging') return { state: 'incomplete', error: null };
   // 규칙상 놓을 수는 있다 — 맞는 세트가 되는지는 스스로 판단
-  if (blind) return 'neutral';
-  // 새로 생기거나 바뀐 세트 중 가장 나쁜 상태
-  let worst: PreviewState = 'valid';
-  for (const id of r.affected) {
-    const set = r.turn.work.sets.find((x) => x.id === id);
-    if (!set || !set.tiles.some((x) => tiles.includes(x))) continue;
-    const a = analyzeSet(set.tiles);
-    if (a.state === 'invalid') worst = 'invalid';
-    else if (a.state === 'incomplete' && worst === 'valid') worst = 'incomplete';
-  }
-  return worst;
+  if (blind) return { state: 'neutral', error: null };
+  // 놓은 타일이 속하게 되는 세트의 상태
+  const holder = r.turn.work.sets.find((x) => x.tiles.includes(tiles[0] as TileId));
+  return { state: holder ? analyzeSet(holder.tiles).state : 'valid', error: null };
 }
 
 function sameTarget(a: DropTarget | null, b: DropTarget | null): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/** 고스트 아래의 놓을 자리를 다시 계산한다 (움직일 때, 그리고 자동 스크롤로 보드가 밀릴 때) */
+function updateTarget(): void {
+  if (!g || !g.dragging) return;
+  const hp = hotPoint(g.lastX, g.lastY);
+  const tiles = useDrag.getState().tiles;
+  // 타일(손가락 위) 자리에서 못 찾으면 손가락 자리로 한 번 더
+  const target = computeTarget(hp.x, hp.y, tiles) ?? (g.touch ? computeTarget(g.lastX, g.lastY, tiles) : null);
+  const prev = useDrag.getState().target;
+  if (sameTarget(prev, target)) return;
+  const pv = target ? previewOf(target, tiles) : null;
+  useDrag.setState({ target, preview: pv ? pv.state : null, error: pv ? pv.error : null });
+  if (target && pv && pv.state !== 'refuse') buzz('tap');
+  // 보드 위에서는 고스트가 칸 크기로 줄어든다 — 놓일 칸이 가려지지 않게
+  const over = !!target && (target.kind === 'cell' || target.kind === 'swap');
+  const w = over ? (boardTileWidth() ?? g.tileW) : g.tileW;
+  if (Math.abs(w - g.gw) > 0.5) {
+    g.gw = w;
+    useDrag.setState({ ghostW: w });
+    moveGhost(g.lastX, g.lastY);
+  }
+}
+
+/** 가장자리에서 이만큼 머물러야 판이 밀린다 — 랙에서 판으로 끌고 올라오며 스쳐 지나갈 때는 밀리지 않게 */
+const EDGE_DWELL = 320;
+const EDGE = 32;
+
 function autoScroll(y: number): void {
   const area = scrollArea();
   if (!area) return;
   const r = area.getBoundingClientRect();
-  const edge = 44;
-  scrollVel = y < r.top + edge && y > r.top - 60 ? -8 : y > r.bottom - edge && y < r.bottom + 20 ? 8 : 0;
-  if (scrollVel && !scrollRaf) {
-    const step = (): void => {
-      if (!scrollVel || !g?.dragging) {
-        scrollRaf = 0;
-        return;
-      }
-      area.scrollTop += scrollVel;
-      scrollRaf = requestAnimationFrame(step);
-    };
-    scrollRaf = requestAnimationFrame(step);
+  // 더 내려갈(올라갈) 곳이 있을 때만 — 판이 화면에 다 들어오면 가장자리에서도 밀리지 않는다
+  const canUp = area.scrollTop > 0;
+  const canDown = area.scrollTop + area.clientHeight < area.scrollHeight - 1;
+  const dir = canUp && y > r.top - 40 && y < r.top + EDGE ? -1 : canDown && y > r.bottom - EDGE && y < r.bottom + 12 ? 1 : 0;
+  if (dir !== edgeDir) {
+    edgeDir = dir;
+    edgeSince = performance.now();
   }
+  if (dir && !scrollRaf) scrollRaf = requestAnimationFrame(scrollStep);
+}
+
+function scrollStep(): void {
+  scrollRaf = 0;
+  const area = scrollArea();
+  if (!area || !g?.dragging || !edgeDir) return;
+  if (performance.now() - edgeSince >= EDGE_DWELL) {
+    const before = area.scrollTop;
+    area.scrollTop += edgeDir * 8;
+    if (area.scrollTop !== before) updateTarget();
+  }
+  scrollRaf = requestAnimationFrame(scrollStep);
 }
 
 function orderedDragTiles(id: TileId): TileId[] {
   const { selection, session } = useGame.getState();
   if (!selection.includes(id) || !session) return [id];
-  // 화면 순서대로 (랙 → 테이블 → 작업대)
+  // 커널이 놓는 순서와 같게: 보드의 타일은 읽는 순서(위→아래, 왼쪽→오른쪽), 그다음 작업대, 마지막에 랙
   const rack = visibleRack(session);
   const w = session.match.game.turn.work;
-  const order = [...rack, ...w.sets.flatMap((s) => s.tiles), ...w.staging];
+  const board = w.sets.slice().sort((a, b) => a.row - b.row || a.col - b.col).flatMap((s) => s.tiles);
+  const order = [...board, ...w.staging, ...rack];
   return selection.slice().sort((a, b) => order.indexOf(a) - order.indexOf(b));
 }
 
@@ -247,8 +278,7 @@ function startDrag(): void {
     }
   }
   g.dragging = true;
-  useDrag.setState({ active: true, tiles, target: null, preview: null, touch: g.touch });
-  useGame.getState().setSplit(null);
+  useDrag.setState({ active: true, tiles, target: null, preview: null, error: null, touch: g.touch, ghostW: g.tileW });
   sfx('pick');
   buzz('pick');
   document.body.classList.add('is-dragging');
@@ -266,10 +296,7 @@ function onMove(e: PointerEvent): void {
   g.lastY = e.clientY;
   if (!g.dragging && !g.refused) {
     const d = Math.hypot(e.clientX - g.x0, e.clientY - g.y0);
-    if (d > DRAG_START && !g.longFired) {
-      if (g.longTimer) clearTimeout(g.longTimer);
-      startDrag();
-    }
+    if (d > DRAG_START) startDrag();
     return;
   }
   if (!g.dragging) return;
@@ -279,17 +306,8 @@ function onMove(e: PointerEvent): void {
     raf = 0;
     if (!g) return;
     moveGhost(g.lastX, g.lastY);
-    const hp = hotPoint(g.lastX, g.lastY);
-    autoScroll(hp.y);
-    const tiles = useDrag.getState().tiles;
-    // 타일(손가락 위) 자리에서 못 찾으면 손가락 자리로 한 번 더
-    const target = computeTarget(hp.x, hp.y, tiles) ?? (g.touch ? computeTarget(g.lastX, g.lastY, tiles) : null);
-    const prev = useDrag.getState().target;
-    if (!sameTarget(prev, target)) {
-      const preview = target ? previewOf(target, tiles) : null;
-      useDrag.setState({ target, preview });
-      if (target && preview !== 'refuse') buzz('tap');
-    }
+    autoScroll(hotPoint(g.lastX, g.lastY).y);
+    updateTarget();
   });
 }
 
@@ -300,22 +318,13 @@ function finish(e: PointerEvent, cancelled: boolean): void {
   window.removeEventListener('pointermove', onMove);
   window.removeEventListener('pointerup', onUp);
   window.removeEventListener('pointercancel', onCancel);
-  if (gest.longTimer) clearTimeout(gest.longTimer);
-  scrollVel = 0;
+  edgeDir = 0;
   document.body.classList.remove('is-dragging');
   if (!gest.dragging) {
-    if (gest.refused || gest.longFired || cancelled) return;
+    if (gest.refused || cancelled) return;
     // 탭
     const now = performance.now();
     const store = useGame.getState();
-    // 고른 타일이 있고 다른 세트의 타일을 눌렀으면: 그 세트에 넣기 (작은 + 단추를 겨누지 않아도)
-    const sel = store.selection;
-    const holder = store.session?.match.game.turn.work.sets.find((x) => x.tiles.includes(gest.id));
-    if (sel.length && holder && !sel.includes(gest.id) && !holder.tiles.some((x) => sel.includes(x))) {
-      lastTap = null;
-      store.moveSelectionTo({ kind: 'set', setId: holder.id });
-      return;
-    }
     if (lastTap && lastTap.id === gest.id && now - lastTap.at < DOUBLE_TAP) {
       lastTap = null;
       store.quickPlay(gest.id);
@@ -325,7 +334,7 @@ function finish(e: PointerEvent, cancelled: boolean): void {
     store.select(gest.id);
     return;
   }
-  const { tiles, target, preview } = useDrag.getState();
+  const { tiles, target, preview, error } = useDrag.getState();
   // 고스트의 각 타일 위치에서 제자리로 / 새 자리로 날아가게
   flip.capture();
   if (ghostEl) {
@@ -333,7 +342,7 @@ function finish(e: PointerEvent, cancelled: boolean): void {
       flip.from(Number(el.dataset.ghostId), el.getBoundingClientRect(), 0, 200);
     });
   }
-  useDrag.setState({ active: false, tiles: [], target: null, preview: null });
+  useDrag.setState({ active: false, tiles: [], target: null, preview: null, error: null });
   const store = useGame.getState();
   let ok = false;
   if (!cancelled && target && preview !== 'refuse') {
@@ -344,7 +353,7 @@ function finish(e: PointerEvent, cancelled: boolean): void {
       if (mt) ok = store.dropTiles(tiles, mt);
     }
   } else if (!cancelled && target && preview === 'refuse') {
-    store.toastMsg(errorText(target.kind === 'rack' ? 'table-to-rack' : 'locked-before-meld'), 'bad');
+    store.toastMsg(errorText(error ?? (target.kind === 'rack' ? 'table-to-rack' : 'locked-before-meld')), 'bad');
     sfx('invalid');
     buzz('error');
   }
@@ -381,23 +390,13 @@ export function tilePointerDown(e: React.PointerEvent<HTMLElement>, id: TileId):
     grabDY: e.clientY - r.top,
     tileW: r.width,
     tileH: r.height,
+    gw: r.width,
+    lift: Math.max(r.height * 0.85, 46),
     dragging: false,
     refused: false,
-    longTimer: null,
-    longFired: false,
     lastX: e.clientX,
     lastY: e.clientY,
   };
-  const setEl = el.closest<HTMLElement>('[data-drop="set"]');
-  if (setEl) {
-    g.longTimer = setTimeout(() => {
-      if (!g || g.dragging) return;
-      g.longFired = true;
-      useGame.getState().setSplit(setEl.dataset.setId ?? null);
-      sfx('split');
-      buzz('warn');
-    }, LONG_PRESS);
-  }
   window.addEventListener('pointermove', onMove, { passive: false });
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onCancel);

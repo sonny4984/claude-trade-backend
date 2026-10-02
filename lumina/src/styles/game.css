@@ -1,5 +1,5 @@
 
-/* 777 / 789 정렬 단추, 세트 아무 데나 눌러 넣기 */
+/* 777 / 789 정렬 단추 */
 .tool-sort b {
   font-family: var(--font-num, inherit);
   font-size: 15px;
@@ -11,9 +11,4 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-}
-.set[data-can-place] {
-  cursor: pointer;
-  outline: 2px dashed color-mix(in srgb, var(--accent, #f2a007) 55%, transparent);
-  outline-offset: 3px;
 }

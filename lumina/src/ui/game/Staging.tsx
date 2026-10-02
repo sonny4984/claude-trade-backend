@@ -8,14 +8,14 @@ export function Staging() {
   const t = useT();
   const session = useGame((s) => s.session);
   const selection = useGame((s) => s.selection);
-  const dragActive = useDrag((s) => s.active);
   const dragTiles = useDrag((s) => s.tiles);
   const target = useDrag((s) => (s.target?.kind === 'staging' ? s.target : null));
   if (!session) return null;
   const g = session.match.game;
   const staging = g.turn.work.staging;
   const humanTurn = currentSeatIsHuman(session);
-  const open = humanTurn && (staging.length > 0 || dragActive);
+  // 보드에 아무 데나 놓을 수 있으니 작업대는 쓸 일이 있을 때만 (풀려난 조커가 올라온다)
+  const open = humanTurn && staging.length > 0;
   if (!open) return null;
   const visible = staging.filter((id) => !dragTiles.includes(id));
   const caret = target ? target.index : -1;

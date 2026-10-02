@@ -44,7 +44,7 @@ export function Rack() {
     return m;
   }, [tiles]);
   const backs = session && owner === null ? session.match.game.players[session.match.game.current]?.rack.length ?? 0 : 0;
-  const rw = useRackFit(wellRef, owner === null ? Math.min(backs, 20) : tiles.length);
+  const { rw, rows } = useRackFit(wellRef, owner === null ? Math.min(backs, 20) : tiles.length);
   if (!session) return null;
   const g = session.match.game;
   const active = owner !== null && owner === g.current && !curtain && !waiting;
@@ -56,7 +56,7 @@ export function Rack() {
   return (
     <section className="rack" aria-label={t('table.rack')} data-active={active || undefined} style={{ ['--rw' as string]: `${rw}px` }}>
       <div className="rack-tray">
-        <div className="rack-well" data-drop={active ? 'rack' : undefined} data-refuse={refuse || undefined} ref={wellRef}>
+        <div className="rack-well" data-drop={active ? 'rack' : undefined} data-refuse={refuse || undefined} data-rows={rows <= 1 ? 1 : undefined} ref={wellRef}>
           {owner === null
             ? Array.from({ length: Math.min(backs, 20) }, (_, i) => <Tile key={i} id={0} where="deco" faceDown />)
             : tiles.map((id, i) => {

@@ -5,6 +5,7 @@ export * from './rng';
 export * from './rules';
 export * from './sets';
 export * from './table';
+export * from './board';
 export * from './turn';
 export * from './scoring';
 export * from './engine';

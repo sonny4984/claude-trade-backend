@@ -1,7 +1,7 @@
 /**
  * AI 대 AI 시뮬레이션 — 테스트·밸런스 확인용. 매 수마다 불변식을 검사한다.
  *  · 106장이 더미·랙·테이블에 정확히 한 번씩
- *  · 확정된 테이블의 모든 세트가 합법
+ *  · 확정된 테이블의 모든 세트가 합법, 보드 위 칸이 겹치거나 붙은 세트가 없다
  *  · AI 결정이 엔진에서 거절된 횟수(fallback) — 0이어야 정상
  */
 import type { AiLevel, TileId } from './types';
@@ -9,6 +9,7 @@ import { createRng } from './rng';
 import { newGame, type GameState, type PlayerSetup } from './engine';
 import { AI_PROFILES, playAiTurn } from './ai';
 import { analyzeSet } from './sets';
+import { checkLayout } from './board';
 import { CLASSIC_RULES, type RuleSet } from './rules';
 
 export interface SimResult {
@@ -25,6 +26,9 @@ export function checkInvariants(s: GameState): string[] {
   if (all.length !== 106) out.push(`tile count ${all.length}`);
   if (new Set(all).size !== all.length) out.push('duplicate tile');
   for (const set of s.table) if (!analyzeSet(set.tiles).ok) out.push(`invalid set ${set.id}`);
+  // 보드: 칸이 겹치거나 서로 다른 세트가 붙어 있으면 안 된다
+  out.push(...checkLayout(s.table).map((x) => `board: ${x}`));
+  out.push(...checkLayout(s.turn.work.sets).map((x) => `work board: ${x}`));
   return out;
 }
 

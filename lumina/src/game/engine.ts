@@ -8,6 +8,7 @@ import { createRng, shuffle } from './rng';
 import { TILES, isJoker, tile } from './tiles';
 import { analyzeSet } from './sets';
 import { canonicalTable, containsAll } from './table';
+import { normalizeOrder, type Pos } from './board';
 import {
   beginTurn,
   checkCommit,
@@ -19,6 +20,7 @@ import {
   resetTurn,
   splitSet,
   swapJoker,
+  tidyTurn,
   undo,
   type CommitCheck,
   type MoveError,
@@ -131,7 +133,10 @@ export type GameAction =
   | { readonly type: 'move'; readonly tiles: readonly TileId[]; readonly to: MoveTarget }
   | { readonly type: 'swap'; readonly tile: TileId; readonly joker: TileId }
   | { readonly type: 'split'; readonly setId: string; readonly at: number }
-  | { readonly type: 'propose'; readonly sets: readonly (readonly TileId[])[] }
+  /** layout: 세트마다 보드 칸 (친구가 놓은 배치를 방장이 그대로 받을 때). 없으면 이전 배치를 이어 자리를 준다 */
+  | { readonly type: 'propose'; readonly sets: readonly (readonly TileId[])[]; readonly layout?: readonly (Pos | null)[] }
+  /** 정리하기: 세트는 그대로, 보드 위에서 위쪽부터 빈틈없이 다시 놓는다 */
+  | { readonly type: 'tidy' }
   | { readonly type: 'undo' }
   | { readonly type: 'redo' }
   | { readonly type: 'reset' }
@@ -314,7 +319,7 @@ function applyCommit(state: GameState, check: CommitCheck, endTurn: boolean, eve
     longestRun: Math.max(st.longestRun, longestRunWith(w.sets, played)),
     turns: st.turns + (endTurn ? 1 : 0),
   });
-  let next: GameState = { ...state, players, stats, table: canonicalTable(w.sets), nextSetId: w.nextSetId, passes: 0 };
+  let next: GameState = { ...state, players, stats, table: normalizeOrder(canonicalTable(w.sets)), nextSetId: w.nextSetId, passes: 0 };
 
   if (check.kind === 'meld') {
     events.push({ type: 'melded', p, points: check.meldPoints, continues: !endTurn && w.rack.length > 0 });
@@ -415,7 +420,9 @@ export function reduce(state: GameState, action: GameAction): Reduction {
     case 'split':
       return withTurn(state, splitSet(turn, action.setId, action.at));
     case 'propose':
-      return withTurn(state, proposeTable(turn, action.sets));
+      return withTurn(state, proposeTable(turn, action.sets, action.layout));
+    case 'tidy':
+      return withTurn(state, tidyTurn(turn));
     case 'undo': {
       const t = undo(turn);
       return t ? { ok: true, state: { ...state, turn: t }, events: [{ type: 'changed' }] } : { ok: false, error: 'nothing-to-undo' };

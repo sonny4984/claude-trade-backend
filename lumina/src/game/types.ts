@@ -30,10 +30,15 @@ export interface JokerTile {
 
 export type Tile = NumberTile | JokerTile;
 
-/** 테이블 위 세트 하나. tiles 순서가 곧 화면 순서다. */
+/**
+ * 테이블 위 세트 하나 = 보드에서 가로로 붙은 타일 줄. tiles는 왼쪽 → 오른쪽 순서이고,
+ * (row, col)은 맨 왼쪽 타일이 놓인 칸이다 (board.ts가 칸 계산을 맡는다).
+ */
 export interface TableSet {
   readonly id: string;
   readonly tiles: readonly TileId[];
+  readonly row: number;
+  readonly col: number;
 }
 
 export type Seat = 'human' | 'ai';

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /** 설정을 심고 앱을 연다. 외부 글꼴은 막아 오프라인에서도 같은 결과가 나오게 한다. */
 async function open(page: Page, settings: Record<string, unknown> = {}, path = '/'): Promise<string[]> {
@@ -27,6 +27,49 @@ async function startSolo(page: Page): Promise<void> {
   await page.locator('.plate-btn', { hasText: '혼자' }).click();
   await page.locator('.screen-foot .btn-primary').click();
   await expect(page.locator('.game')).toBeVisible();
+}
+
+/** 보드의 칸 (row, col) 한가운데의 화면 좌표 */
+async function cellCenter(page: Page, row: number, col: number): Promise<{ x: number; y: number }> {
+  return page.evaluate(
+    ([r, c]) => {
+      const b = document.querySelector('[data-board]') as HTMLElement;
+      const rect = b.getBoundingClientRect();
+      return { x: rect.left + ((c as number) + 0.5) * Number(b.dataset.sx), y: rect.top + ((r as number) + 0.5) * Number(b.dataset.sy) };
+    },
+    [row, col] as const,
+  );
+}
+
+/** 타일이 미끄러져 가는 애니메이션이 끝나길 기다린다 (3D가 느린 환경에서는 한참 걸린다) */
+async function settle(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ).then(() => undefined),
+  );
+}
+
+/** 타일을 집어 보드의 칸 위까지 끌고 간다 (놓지는 않는다) */
+async function dragOverCell(page: Page, tile: Locator, row: number, col: number): Promise<void> {
+  await settle(page);
+  const from = await tile.boundingBox();
+  if (!from) throw new Error('레이아웃을 찾지 못했습니다');
+  const to = await cellCenter(page, row, col);
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, from.y - 40, { steps: 5 });
+  // 판 가장자리(자동 스크롤 구간)를 오래 스치지 않게 한 번에 건너간다 — 3D가 느린 환경에서는 거치는 걸음마다 한참 걸린다
+  await page.mouse.move(to.x, to.y);
+}
+
+/** 타일을 보드의 칸으로 끌어 놓는다 */
+async function dragToCell(page: Page, tile: Locator, row: number, col: number): Promise<void> {
+  await dragOverCell(page, tile, row, col);
+  await page.mouse.up();
 }
 
 /** 내 차례(뽑기 버튼이 켜질 때)까지 기다린다 */
@@ -85,19 +128,11 @@ test('도움 "스스로"(기본): 힌트는 판마다 1번·타일 하나만, �
   await expect(hint).toContainText('힌트 0');
   await hint.click();
   await expect(page.locator('.toast').last()).toContainText('타일 하나까지만');
-  await expect(page.locator('.set[data-hint], .new-set[data-hint]')).toHaveCount(0);
+  await expect(page.locator('.set[data-hint], .cell-ghost[data-hint]')).toHaveCount(0);
   await expect(page.locator('.sheet')).toHaveCount(0);
-  // 끌어 보기: 놓을 자리는 보이지만 맞는지(초록·빨강)는 알려 주지 않는다
-  const tile = page.locator('.rack .tile').first();
-  const from = await tile.boundingBox();
-  if (!from) throw new Error('레이아웃을 찾지 못했습니다');
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(from.x + from.width / 2, from.y - 40, { steps: 6 });
-  const slot = await page.locator('.new-set').boundingBox();
-  if (!slot) throw new Error('새 세트 자리가 보이지 않습니다');
-  await page.mouse.move(slot.x + slot.width / 2, slot.y + slot.height / 2, { steps: 12 });
-  await expect(page.locator('.new-set')).toHaveAttribute('data-preview', 'neutral');
+  // 끌어 보기: 놓을 칸은 보이지만 맞는지(초록·빨강)는 알려 주지 않는다
+  await dragOverCell(page, page.locator('.rack .tile').first(), 3, 4);
+  await expect(page.locator('.cell-ghost')).toHaveAttribute('data-preview', 'neutral');
   await page.mouse.up();
   // 한 장짜리 세트: 틀렸다는 표시와 "3장 이상"만 (무엇이 빠졌는지는 말하지 않음)
   await expect(page.locator('.felt .set[data-state="incomplete"]')).toHaveCount(1);
@@ -118,47 +153,61 @@ test('도움 "조금": 힌트 3번, 타일 → 놓을 자리까지 (완성된 �
   await hint.click();
   await expect(page.locator('.tile.is-hint')).toHaveCount(1);
   await hint.click();
-  await expect(page.locator('.set[data-hint], .new-set[data-hint]')).toHaveCount(1);
+  await expect(page.locator('.set[data-hint], .cell-ghost[data-hint]')).toHaveCount(1);
   await hint.click();
   await expect(page.locator('.toast').last()).toContainText('놓을 자리까지만');
   await expect(page.locator('.sheet')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
-test('타일을 테이블로 끌어 놓고 되돌리기·처음으로가 동작한다', async ({ page }) => {
-  const errors = await open(page);
+test('타일을 보드의 칸에 끌어 놓고, 붙여 놓으면 한 세트가 되고, 되돌리기·처음으로가 동작한다', async ({ page }) => {
+  // 시드 1: 사람이 먼저 두는 판 — 테이블이 비어 있어 칸 좌표가 늘 같다
+  const errors = await open(page, {}, '/?seed=1');
   await startSolo(page);
   await myTurn(page);
-  const tile = page.locator('.rack .tile').first();
-  const from = await tile.boundingBox();
-  if (!from) throw new Error('레이아웃을 찾지 못했습니다');
-  const sets0 = await page.locator('.felt .set').count();
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  // 끌기 시작하면 테이블에 "새 세트" 자리가 생긴다 — 거기에 놓는다
-  await page.mouse.move(from.x + from.width / 2, from.y - 40, { steps: 6 });
-  const slot = await page.locator('.new-set').boundingBox();
-  if (!slot) throw new Error('새 세트 자리가 보이지 않습니다');
-  await page.mouse.move(slot.x + slot.width / 2, slot.y + slot.height / 2, { steps: 12 });
-  await page.mouse.up();
+  await expect(page.locator('.felt .set')).toHaveCount(0);
+  // 빈 칸에 놓기
+  await dragToCell(page, page.locator('.rack .tile').first(), 3, 3);
   await expect(page.locator('.rack .tile')).toHaveCount(13);
-  await expect(page.locator('.felt .set')).toHaveCount(sets0 + 1);
+  await expect(page.locator('.felt .set')).toHaveCount(1);
+  await expect(page.locator('.felt .set[style*="--row: 3"][style*="--col: 3"]')).toHaveCount(1);
+  // 바로 옆 칸에 놓으면 같은 세트에 붙는다
+  await dragToCell(page, page.locator('.rack .tile').first(), 3, 4);
+  await expect(page.locator('.rack .tile')).toHaveCount(12);
+  await expect(page.locator('.felt .set')).toHaveCount(1);
+  await expect(page.locator('.felt .set .tile')).toHaveCount(2);
+  // 한 칸 띄우면 따로 놓인다
+  await dragToCell(page, page.locator('.rack .tile').first(), 3, 7);
+  await expect(page.locator('.rack .tile')).toHaveCount(11);
+  await expect(page.locator('.felt .set')).toHaveCount(2);
+  // 이미 타일이 있는 칸에는 놓이지 않는다
+  await dragToCell(page, page.locator('.rack .tile').first(), 3, 3);
+  await expect(page.locator('.rack .tile')).toHaveCount(11);
+  await expect(page.locator('.toast').last()).toContainText('이미 타일이 있는 칸');
   await page.locator('.tool').nth(0).click(); // 되돌리기
-  await expect(page.locator('.rack .tile')).toHaveCount(14);
+  await expect(page.locator('.rack .tile')).toHaveCount(12);
   await page.locator('.tool').nth(1).click(); // 다시
-  await expect(page.locator('.rack .tile')).toHaveCount(13);
+  await expect(page.locator('.rack .tile')).toHaveCount(11);
   await page.locator('.tool').nth(2).click(); // 처음으로
   await expect(page.locator('.rack .tile')).toHaveCount(14);
+  await expect(page.locator('.felt .set')).toHaveCount(0);
   // 한 장짜리 세트로는 등록할 수 없다
   await expect(page.locator('.commit-btn')).toBeDisabled();
-  // 누르고 놓기: 랙 타일을 누르고 빈 탁자를 누르면 새 세트, 다른 타일을 고르고 그 세트를 누르면 그 세트에
+  // 누르고 놓기: 랙 타일을 누르고 빈 칸을 누르면 그 칸에, 다른 타일을 누르고 옆 칸을 누르면 붙는다
+  const at = await cellCenter(page, 1, 5);
   await page.locator('.rack .tile').first().click();
-  await page.locator('.felt-scroll').click({ position: { x: 8, y: 8 } });
-  await expect(page.locator('.felt .set')).toHaveCount(sets0 + 1);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.locator('.felt .set')).toHaveCount(1);
   await page.locator('.rack .tile').first().click();
-  await page.locator('.felt .set').last().locator('.tile').first().click();
+  const next = await cellCenter(page, 1, 6);
+  await page.mouse.click(next.x, next.y);
   await expect(page.locator('.rack .tile')).toHaveCount(12);
-  await expect(page.locator('.felt .set')).toHaveCount(sets0 + 1);
+  await expect(page.locator('.felt .set')).toHaveCount(1);
+  // 정리하기: 흩어진 세트를 위쪽부터 모은다
+  await dragToCell(page, page.locator('.rack .tile').first(), 3, 9);
+  await expect(page.locator('.felt .set[style*="--row: 3"]')).toHaveCount(1);
+  await page.getByRole('button', { name: '정리' }).click();
+  await expect(page.locator('.felt .set[style*="--row: 3"]')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

@@ -15,7 +15,10 @@ import {
   createRng,
   computeHint,
   canMoveTile,
-  quickTargets,
+  quickCells,
+  layoutSets,
+  reconcile,
+  BOARD_COLS,
   isChanged,
   checkCommit,
   compareByColor,
@@ -32,6 +35,10 @@ import {
   type MatchState,
   type MoveTarget,
   type TileId,
+  type TableSet,
+  type Pos,
+  type Turn,
+  type Work,
   type PlayerSetup,
   type CommitCheck,
 } from '../game';
@@ -196,7 +203,9 @@ function payloadOf(s: Session): Session {
 }
 
 /** 방장에게 보낼 수 (참가자 → 방장) */
-type RemoteMove = { readonly type: 'commit'; readonly sets: readonly (readonly TileId[])[] } | { readonly type: 'draw' };
+type RemoteMove =
+  | { readonly type: 'commit'; readonly sets: readonly (readonly TileId[])[]; readonly layout?: readonly (Pos | null)[] }
+  | { readonly type: 'draw' };
 
 function isRemoteMove(x: unknown): x is RemoteMove {
   if (!x || typeof x !== 'object') return false;
@@ -204,6 +213,29 @@ function isRemoteMove(x: unknown): x is RemoteMove {
   if (a.type === 'draw') return true;
   if (a.type !== 'commit' || !Array.isArray(a.sets) || a.sets.length > 60) return false;
   return a.sets.every((st) => Array.isArray(st) && st.length <= 13 && st.every((id) => Number.isInteger(id) && id >= 0 && id < TILE_COUNT));
+}
+
+/** 친구가 보낸 보드 배치 (잘못된 값은 빼고 방장이 다시 놓는다) */
+function layoutOf(x: unknown, count: number): (Pos | null)[] | undefined {
+  if (!x || typeof x !== 'object' || !Array.isArray((x as { layout?: unknown }).layout)) return undefined;
+  const raw = (x as { layout: unknown[] }).layout;
+  if (raw.length !== count) return undefined;
+  return raw.map((p) => {
+    const q = p as { row?: unknown; col?: unknown } | null;
+    return q && Number.isInteger(q.row) && Number.isInteger(q.col) && (q.row as number) >= 0 && (q.row as number) < 60 && (q.col as number) >= 0 && (q.col as number) < BOARD_COLS ? { row: q.row as number, col: q.col as number } : null;
+  });
+}
+
+/** 칸 위치가 없는 옛 저장본·옛 방 문서에 보드 자리를 준다 (이미 있으면 그대로) */
+export function withBoard(s: Session): Session {
+  const g = s.match.game;
+  const t = g.turn;
+  const lacking = (sets: readonly TableSet[]): boolean => sets.some((x) => !Number.isInteger(x.row) || !Number.isInteger(x.col));
+  if (![g.table, t.start.sets, t.work.sets, t.tableAtTurnStart, ...t.past.map((w) => w.sets), ...t.future.map((w) => w.sets)].some(lacking)) return s;
+  const start = layoutSets(t.start.sets);
+  const work = (w: Work): Work => ({ ...w, sets: reconcile(start, w.sets) });
+  const turn: Turn = { ...t, start: { ...t.start, sets: start }, work: work(t.work), past: t.past.map(work), future: t.future.map(work), tableAtTurnStart: reconcile(start, t.tableAtTurnStart) };
+  return { ...s, match: { ...s.match, game: { ...g, table: reconcile(start, g.table), turn } } };
 }
 
 /** 방에 알릴 만한 변화인지 (차례 안의 타일 옮기기는 올리지 않는다) */
@@ -740,7 +772,7 @@ export const useGame = create<State & Actions>((set, get) => {
         toast(t('misc.corrupted'), 'warn');
         return false;
       }
-      const s: Session = { ...raw, hintsLeft: raw.hintsLeft ?? hintBudget(raw.mode) };
+      const s: Session = withBoard({ ...raw, hintsLeft: raw.hintsLeft ?? hintBudget(raw.mode) });
       aiToken++;
       set({ session: s, screen: 'game', overlay: s.match.game.phase === 'over' ? (s.mode === 'lesson' ? 'lesson-done' : 'gameover') : null, ai: null, reactions: [] });
       if (s.match.game.phase === 'playing') {
@@ -777,7 +809,10 @@ export const useGame = create<State & Actions>((set, get) => {
       }
       if (s.online?.role === 'guest' && (action.type === 'commit' || action.type === 'draw' || action.type === 'timeout')) {
         // 참가자: 차례를 끝내는 수는 방장이 판정한다 (여기서는 미리 확인만)
-        const move: RemoteMove = action.type === 'commit' ? { type: 'commit', sets: g.turn.work.sets.map((x) => x.tiles.slice()) } : { type: 'draw' };
+        const move: RemoteMove =
+          action.type === 'commit'
+            ? { type: 'commit', sets: g.turn.work.sets.map((x) => x.tiles.slice()), layout: g.turn.work.sets.map((x) => ({ row: x.row, col: x.col })) }
+            : { type: 'draw' };
         set({ waiting: true, selection: [] });
         bridge.send?.('lumina', move);
         sfx('button');
@@ -852,15 +887,16 @@ export const useGame = create<State & Actions>((set, get) => {
       if (!s) return;
       // 스스로 모드: 두 번 톡은 그냥 고르기 (들어갈 곳을 대신 찾아 주지 않는다)
       if (assistOf(s.mode) === 'self') return;
-      const targets = quickTargets(s.match.game.turn, id);
-      if (targets.length === 1) {
+      const cells = quickCells(s.match.game.turn, id);
+      if (cells.length === 1) {
         flip.capture();
-        if (get().act({ type: 'move', tiles: [id], to: { kind: 'set', setId: targets[0] as string } }, { noCapture: true })) {
+        const c = cells[0] as Pos;
+        if (get().act({ type: 'move', tiles: [id], to: { kind: 'cell', row: c.row, col: c.col } }, { noCapture: true })) {
           sfx('place');
           buzz('place');
           set({ selection: [] });
         }
-      } else if (targets.length > 1) {
+      } else if (cells.length > 1) {
         set({ selection: [id] });
         toast(t('hint.l2'), 'info');
       }
@@ -1051,7 +1087,8 @@ export const useGame = create<State & Actions>((set, get) => {
         const r = reduce(g, g.turn.meldedNow ? { type: 'commit' } : { type: 'draw' });
         if (r.ok) result = { state: r.state, events: [...r.events] };
       } else {
-        const p = reduce(g, { type: 'propose', sets: payload.sets });
+        const layout = layoutOf(payload, payload.sets.length);
+        const p = reduce(g, { type: 'propose', sets: payload.sets, ...(layout ? { layout } : {}) });
         const c = p.ok ? reduce(p.state, { type: 'commit' }) : null;
         if (c?.ok) result = { state: c.state, events: [...c.events] };
       }
@@ -1068,8 +1105,9 @@ export const useGame = create<State & Actions>((set, get) => {
     },
 
     adoptRemote: (payload, events, info) => {
-      const raw = payload as Session | null;
-      if (!raw || typeof raw !== 'object' || !validSession(raw) || raw.match.game.players.length <= info.mySeat) return;
+      const got = payload as Session | null;
+      if (!got || typeof got !== 'object' || !validSession(got) || got.match.game.players.length <= info.mySeat) return;
+      const raw = withBoard(got);
       const prev = get().session;
       const pg = prev?.online ? prev.match.game : null;
       const ng = raw.match.game;

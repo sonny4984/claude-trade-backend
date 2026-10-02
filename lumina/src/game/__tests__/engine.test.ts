@@ -183,7 +183,7 @@ describe('시간 제한 (공식 Time Limit / Incomplete Runs)', () => {
   it('수를 완성하지 못했으면 되돌리고 3장을 벌칙으로 뽑는다', () => {
     const g = gameOf({ players: [{ rack: 'r1 r2 k9' }, { rack: 'b2' }], table: ['o5 o6 o7'], pool: 'k1 k2 k3 k4', rules: timed });
     const s = run(g, { type: 'move', tiles: TS('r1 r2'), to: { kind: 'new' } }, { type: 'timeout' });
-    expect(s.table).toEqual([{ id: 's1', tiles: TS('o5 o6 o7') }]);
+    expect(s.table.map((x) => x.tiles)).toEqual([TS('o5 o6 o7')]);
     expect(s.players[0]?.rack.length).toBe(3 + 3);
     expect(s.log[s.log.length - 1]).toMatchObject({ t: 'timeout', drew: 3 });
   });

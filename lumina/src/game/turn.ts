@@ -9,6 +9,7 @@ import type { RuleSet } from './rules';
 import { analyzeSet, runValues, type JokerRole, type SetIssue } from './sets';
 import { containsAll, sameMembers, tilesOf } from './table';
 import { isJoker, tile } from './tiles';
+import { BOARD_COLS, cellKey, layoutSets, occupancy, placeOnBoard, reconcile, removeFromBoard, segments, tidySets, withIds, type Pos } from './board';
 
 export interface Work {
   readonly sets: readonly TableSet[];
@@ -35,6 +36,9 @@ export interface Turn {
 }
 
 export type MoveTarget =
+  /** 보드의 칸 — 타일들이 이 칸부터 오른쪽으로 한 칸씩 놓인다 (화면의 끌어 놓기·누르고 놓기) */
+  | { readonly kind: 'cell'; readonly row: number; readonly col: number }
+  /** 세트 단위 이동 — 시험·옛 방식용. 놓인 자리는 board.reconcile이 이어 준다 */
   | { readonly kind: 'set'; readonly setId: string; readonly index?: number }
   | { readonly kind: 'new'; readonly before?: string }
   | { readonly kind: 'staging'; readonly index?: number }
@@ -47,7 +51,9 @@ export type MoveError =
   | 'table-to-rack'
   | 'no-such-set'
   | 'not-a-joker'
-  | 'bad-split';
+  | 'bad-split'
+  | 'off-board'
+  | 'occupied';
 
 export type MoveResult = { readonly ok: true; readonly turn: Turn } | { readonly ok: false; readonly error: MoveError };
 
@@ -60,7 +66,9 @@ export function beginTurn(
   melded: boolean,
   nextSetId: number,
 ): Turn {
-  const start: Work = { sets: table, rack, staging: [], nextSetId };
+  // 보드 위치가 없는 테이블(옛 저장본·시험용 표기)에는 자리를 준다 — 이미 놓인 세트는 그대로
+  const placed = layoutSets(table);
+  const start: Work = { sets: placed, rack, staging: [], nextSetId };
   return {
     player,
     start,
@@ -71,7 +79,7 @@ export function beginTurn(
     meldedNow: false,
     meldPoints: 0,
     rackAtTurnStart: rack,
-    tableAtTurnStart: table,
+    tableAtTurnStart: placed,
   };
 }
 
@@ -117,36 +125,11 @@ function newId(n: number): string {
 }
 
 /**
- * 타일을 세트에서 뺀다. 합법 런의 가운데를 빼면 실제 테이블처럼 그 자리에서 두 줄로 갈라진다.
- * (예: 4-5-6-7-8-9에서 6을 빼면 4-5 / 7-8-9)
+ * 타일을 보드에서 뺀다. 가운데를 빼면 실제 테이블처럼 그 자리에서 두 줄로 갈라진다
+ * (예: 4-5-6-7-8-9에서 6을 빼면 4-5 / 7-8-9, 칸은 그대로).
  */
-function removeFromSets(
-  sets: readonly TableSet[],
-  moving: ReadonlySet<TileId>,
-  nextSetId: number,
-): { sets: TableSet[]; nextSetId: number } {
-  const out: TableSet[] = [];
-  let next = nextSetId;
-  for (const s of sets) {
-    if (!s.tiles.some((t) => moving.has(t))) {
-      out.push(s);
-      continue;
-    }
-    const wasRun = analyzeSet(s.tiles);
-    if (wasRun.ok && wasRun.kind === 'run') {
-      const parts: TileId[][] = [[]];
-      for (const t of s.tiles) {
-        if (moving.has(t)) parts.push([]);
-        else (parts[parts.length - 1] as TileId[]).push(t);
-      }
-      const kept = parts.filter((p) => p.length > 0);
-      kept.forEach((p, i) => out.push({ id: i === 0 ? s.id : newId(next++), tiles: p }));
-    } else {
-      const rest = s.tiles.filter((t) => !moving.has(t));
-      if (rest.length) out.push({ id: s.id, tiles: rest });
-    }
-  }
-  return { sets: out, nextSetId: next };
+function removeFromSets(sets: readonly TableSet[], moving: ReadonlySet<TileId>, nextSetId: number): { sets: TableSet[]; nextSetId: number } {
+  return removeFromBoard(sets, moving, nextSetId);
 }
 
 /**
@@ -185,6 +168,7 @@ function splitOnDuplicate(base: readonly TileId[], incoming: readonly TileId[]):
 
 export function moveTiles(turn: Turn, tiles: readonly TileId[], to: MoveTarget): MoveResult {
   if (!tiles.length) return { ok: false, error: 'empty' };
+  if (to.kind === 'cell') return placeTiles(turn, tiles, { row: to.row, col: to.col });
   const w = turn.work;
   const moving = new Set(tiles);
   const table = startTableTiles(turn);
@@ -214,18 +198,17 @@ export function moveTiles(turn: Turn, tiles: readonly TileId[], to: MoveTarget):
       const i = sets.findIndex((s) => s.id === to.setId);
       if (i < 0) {
         // 대상 세트가 통째로 옮겨지는 타일로만 이루어졌던 경우 — 새 세트로 취급
-        sets = [...sets, { id: newId(nextSetId++), tiles: insertIntoSet([], ordered)[0] as TileId[] }];
+        sets = reconcile(sets, [...sets, { id: newId(nextSetId++), tiles: insertIntoSet([], ordered)[0] as TileId[] }]);
         break;
       }
       const parts = insertIntoSet((sets[i] as TableSet).tiles, ordered, to.index);
-      const replaced: TableSet[] = parts.map((p, k) => ({ id: k === 0 ? to.setId : newId(nextSetId++), tiles: p }));
-      sets = [...sets.slice(0, i), ...replaced, ...sets.slice(i + 1)];
+      const replaced = parts.map((p, k) => ({ id: k === 0 ? to.setId : newId(nextSetId++), tiles: p }));
+      sets = reconcile(sets, [...sets.slice(0, i), ...replaced, ...sets.slice(i + 1)]);
       break;
     }
     case 'new': {
-      const fresh: TableSet = { id: newId(nextSetId++), tiles: insertIntoSet([], ordered)[0] as TileId[] };
-      const i = to.before ? sets.findIndex((s) => s.id === to.before) : -1;
-      sets = i >= 0 ? [...sets.slice(0, i), fresh, ...sets.slice(i)] : [...sets, fresh];
+      // 새 세트는 보드의 처음 비어 있는 자리에 (위치를 고르려면 'cell')
+      sets = reconcile(sets, [...sets, { id: newId(nextSetId++), tiles: insertIntoSet([], ordered)[0] as TileId[] }]);
       break;
     }
     case 'staging': {
@@ -244,7 +227,8 @@ export function moveTiles(turn: Turn, tiles: readonly TileId[], to: MoveTarget):
 function orderByPlacement(w: Work, tiles: readonly TileId[]): TileId[] {
   const rank = new Map<TileId, number>();
   let r = 0;
-  for (const s of w.sets) for (const t of s.tiles) rank.set(t, r++);
+  // 보드의 타일은 읽는 순서(위→아래, 왼쪽→오른쪽)로
+  for (const s of w.sets.slice().sort((a, b) => a.row - b.row || a.col - b.col)) for (const t of s.tiles) rank.set(t, r++);
   for (const t of w.staging) rank.set(t, r++);
   // 랙에서 온 타일은 고른 순서 그대로 (랙 표시 순서는 UI가 관리)
   return tiles.slice().sort((a, b) => (rank.get(a) ?? 1e6 + tiles.indexOf(a)) - (rank.get(b) ?? 1e6 + tiles.indexOf(b)));
@@ -259,9 +243,10 @@ export function splitSet(turn: Turn, setId: string, at: number): MoveResult {
   if (at <= 0 || at >= s.tiles.length) return { ok: false, error: 'bad-split' };
   if (!canManipulate(turn) && !isFreshSet(turn, s)) return { ok: false, error: 'locked-before-meld' };
   let nextSetId = w.nextSetId;
-  const a: TableSet = { id: s.id, tiles: s.tiles.slice(0, at) };
-  const b: TableSet = { id: newId(nextSetId++), tiles: s.tiles.slice(at) };
-  const sets = [...w.sets.slice(0, i), a, b, ...w.sets.slice(i + 1)];
+  const a = { id: s.id, tiles: s.tiles.slice(0, at) };
+  const b = { id: newId(nextSetId++), tiles: s.tiles.slice(at) };
+  // 갈라진 두 줄은 한 칸 떨어져야 한다 — 오른쪽 줄이 비켜 간다
+  const sets = reconcile(w.sets, [...w.sets.slice(0, i), a, b, ...w.sets.slice(i + 1)]);
   return { ok: true, turn: push(turn, { ...w, sets, nextSetId }) };
 }
 
@@ -282,21 +267,18 @@ export function swapJoker(turn: Turn, incoming: TileId, joker: TileId): MoveResu
   if (table.has(incoming) && !canManipulate(turn)) return { ok: false, error: 'locked-before-meld' };
   if (incoming === joker) return { ok: false, error: 'empty' };
 
-  // 들어올 타일을 먼저 원래 자리에서 빼고 (런 가운데였다면 갈라짐), 조커 자리에 넣는다
-  const moving = new Set([incoming]);
-  const removed = removeFromSets(w.sets, moving, w.nextSetId);
-  let sets = removed.sets;
+  // 들어올 타일은 원래 칸에서 빠지고 (가운데였다면 그 줄이 갈라짐), 조커가 있던 칸에 들어간다. 풀려난 조커는 작업대로.
+  const occ = occupancy(w.sets);
+  for (const [k, t] of occ) {
+    if (t === incoming) occ.delete(k);
+    else if (t === joker) occ.set(k, incoming);
+  }
+  const after = withIds(w.sets, segments(occ), w.nextSetId);
   const rack = w.rack.filter((t) => t !== incoming);
   const staging = w.staging.filter((t) => t !== incoming);
-  const hi = sets.findIndex((s) => s.tiles.includes(joker));
-  if (hi < 0) return { ok: false, error: 'not-a-joker' };
-  const h = sets[hi] as TableSet;
-  const swapped = h.tiles.map((t) => (t === joker ? incoming : t));
-  const a = analyzeSet(swapped);
-  sets = [...sets.slice(0, hi), { id: h.id, tiles: a.ok ? a.order.slice() : swapped }, ...sets.slice(hi + 1)];
   return {
     ok: true,
-    turn: push(turn, { sets, rack, staging: [...staging, joker], nextSetId: removed.nextSetId }),
+    turn: push(turn, { sets: after.sets, rack, staging: [...staging, joker], nextSetId: after.nextSetId }),
   };
 }
 
@@ -442,7 +424,7 @@ export function checkCommit(turn: Turn, rules: RuleSet): CommitCheck {
  * AI·힌트용: 완성된 테이블(세트 목록)을 통째로 작업본으로 만든다.
  * 기존 세트와 가장 많이 겹치는 세트는 같은 id를 물려받아 화면이 덜 흔들린다.
  */
-export function proposeTable(turn: Turn, proposal: readonly (readonly TileId[])[]): MoveResult {
+export function proposeTable(turn: Turn, proposal: readonly (readonly TileId[])[], layout?: readonly (Pos | null | undefined)[]): MoveResult {
   const table = startTableTiles(turn);
   const rack = new Set(turn.start.rack);
   const seen = new Set<TileId>();
@@ -462,7 +444,6 @@ export function proposeTable(turn: Turn, proposal: readonly (readonly TileId[])[
   }
   const used = new Set<string>();
   let nextSetId = turn.work.nextSetId;
-  const sets: TableSet[] = [];
   const order = proposal.map((p, i) => ({ p, i }));
   const assigned = new Map<number, string>();
   // 겹침이 큰 순서로 기존 id 배정
@@ -481,20 +462,63 @@ export function proposeTable(turn: Turn, proposal: readonly (readonly TileId[])[
   }
   // 기존 세트 순서를 최대한 유지하고, 새 세트는 뒤에
   const startOrder = new Map(turn.start.sets.map((s, k) => [s.id, k] as const));
-  const withIds = order.map(({ p, i }) => ({
+  const named = order.map(({ p, i }) => ({
+    i,
     id: assigned.get(i) ?? newId(nextSetId++),
     tiles: analyzeSet(p).ok ? analyzeSet(p).order.slice() : p.slice(),
     rank: assigned.has(i) ? (startOrder.get(assigned.get(i) as string) as number) : 1e6 + i,
   }));
-  withIds.sort((a, b) => a.rank - b.rank);
-  for (const s of withIds) sets.push({ id: s.id, tiles: s.tiles });
+  named.sort((a, b) => a.rank - b.rank);
+  // 자리: 친구가 보낸 배치가 있으면 그대로 (겹치거나 붙어 있으면 board가 다시 놓는다), 없으면 이전 배치를 이어서
+  const sets: TableSet[] = layout
+    ? layoutSets(named.map((x) => (layout[x.i] ? { id: x.id, tiles: x.tiles, row: (layout[x.i] as Pos).row, col: (layout[x.i] as Pos).col } : { id: x.id, tiles: x.tiles })))
+    : reconcile(
+        turn.start.sets,
+        named.map((x) => ({ id: x.id, tiles: x.tiles })),
+      );
   const rackLeft = turn.start.rack.filter((t) => !seen.has(t));
   return { ok: true, turn: push(turn, { sets, rack: rackLeft, staging: [], nextSetId }) };
 }
 
+// ─────────────────────────────── 칸에 놓기 · 정리 ───────────────────────────────
+
+/**
+ * 타일들을 보드의 칸에 놓는다 (끌어 놓기·누르고 놓기). 칸은 at부터 오른쪽으로 한 칸씩, 비어 있어야 한다.
+ * 옆 세트에 붙여 놓으면 한 세트가 되고, 가운데를 뺀 자리는 그대로 비어 줄이 갈라진다 — 실제 테이블처럼.
+ */
+export function placeTiles(turn: Turn, tiles: readonly TileId[], at: Pos): MoveResult {
+  if (!tiles.length) return { ok: false, error: 'empty' };
+  const w = turn.work;
+  const moving = new Set(tiles);
+  const table = startTableTiles(turn);
+  const manip = canManipulate(turn);
+  for (const id of tiles) {
+    if (!locate(w, id)) return { ok: false, error: 'not-yours' };
+    if (table.has(id) && !manip) return { ok: false, error: 'locked-before-meld' };
+  }
+  const r = placeOnBoard(w.sets, orderByPlacement(w, tiles), at, w.nextSetId);
+  if (!r.ok) return { ok: false, error: r.error };
+  if (!manip) {
+    // 등록 전에는 기존 세트에 붙여 놓을 수 없다 (붙으면 기존 세트가 바뀐다)
+    for (const s0 of turn.start.sets) if (!r.sets.some((s) => sameMembers(s.tiles, s0.tiles))) return { ok: false, error: 'locked-before-meld' };
+  }
+  const rack = w.rack.filter((t) => !moving.has(t));
+  const staging = w.staging.filter((t) => !moving.has(t));
+  return { ok: true, turn: push(turn, { sets: r.sets, rack, staging, nextSetId: r.nextSetId }) };
+}
+
+/** 정리하기: 세트는 그대로 두고 보드 위에서 위쪽부터 빈틈없이 다시 놓는다 (등록 전에는 기존 세트는 제자리) */
+export function tidyTurn(turn: Turn): MoveResult {
+  const w = turn.work;
+  const fixed = new Set(canManipulate(turn) ? [] : w.sets.filter((s) => !isFreshSet(turn, s)).map((s) => s.id));
+  const sets = tidySets(w.sets, fixed);
+  if (sets.every((s, i) => s.row === (w.sets[i] as TableSet).row && s.col === (w.sets[i] as TableSet).col)) return { ok: true, turn };
+  return { ok: true, turn: push(turn, { ...w, sets }) };
+}
+
 // ─────────────────────────────── UI 도우미 (순수) ───────────────────────────────
 
-/** 드래그 미리보기: 이 이동을 하면 대상 세트가 어떻게 되는가 (상태는 바꾸지 않는다) */
+/** 드래그 미리보기: 이 이동을 하면 어떤 세트가 바뀌는가 (상태는 바꾸지 않는다) */
 export function previewMove(
   turn: Turn,
   tiles: readonly TileId[],
@@ -512,17 +536,30 @@ export function previewMove(
   return { ok: true, turn: r.turn, affected };
 }
 
-/** 두 번 탭 자동 배치: 이 타일을 넣어 바로 합법이 되는 세트들 */
-export function quickTargets(turn: Turn, id: TileId): string[] {
-  const out: string[] = [];
+/**
+ * 두 번 탭 자동 배치: 이 타일을 합법 세트 바로 곁(오른쪽 끝 또는 왼쪽 끝 칸)에 놓으면 합법이 되는 칸들.
+ * 런은 숫자가 맞는 쪽에만, 그룹은 어느 쪽이든. 놓았을 때 다른 세트와 또 붙게 되는 칸은 뺀다.
+ */
+export function quickCells(turn: Turn, id: TileId): Pos[] {
+  const out: Pos[] = [];
   const table = startTableTiles(turn);
   const manip = canManipulate(turn);
+  const occ = occupancy(turn.work.sets);
+  for (const [k, t] of occ) if (t === id) occ.delete(k);
   for (const s of turn.work.sets) {
     if (s.tiles.includes(id)) continue;
     if (!manip && s.tiles.some((t) => table.has(t))) continue;
     if (!analyzeSet(s.tiles).ok) continue;
-    const r = insertIntoSet(s.tiles, [id]);
-    if (r.length === 1 && analyzeSet(r[0] as TileId[]).ok) out.push(s.id);
+    const sides = [
+      { col: s.col + s.tiles.length, next: s.col + s.tiles.length + 1, tiles: [...s.tiles, id] },
+      { col: s.col - 1, next: s.col - 2, tiles: [id, ...s.tiles] },
+    ];
+    for (const side of sides) {
+      if (side.col < 0 || side.col >= BOARD_COLS) continue;
+      if (occ.has(cellKey(s.row, side.col)) || (side.next >= 0 && occ.has(cellKey(s.row, side.next)))) continue;
+      const a = analyzeSet(side.tiles);
+      if (a.ok && (a.kind === 'group' || a.order.every((t, i) => t === side.tiles[i]))) out.push({ row: s.row, col: side.col });
+    }
   }
   return out;
 }

@@ -51,6 +51,7 @@ export function GameScreen() {
       else if (k === 'd') st.draw();
       else if (k === 'h') st.requestHint();
       else if (k === 'n' && st.selection.length) st.moveSelectionTo({ kind: 'new' });
+      else if (k === 't') st.act({ type: 'tidy' });
       else if (k === 'm') st.openMenu();
       else if (k === 's') cycleSort();
       else if (k === ' ' && !(e.target instanceof HTMLButtonElement)) {

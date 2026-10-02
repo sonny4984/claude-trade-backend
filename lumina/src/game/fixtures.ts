@@ -5,6 +5,7 @@
  */
 import type { Color, TableSet, TileId } from './types';
 import { numberId } from './tiles';
+import { layoutSets, type Pos } from './board';
 import { beginTurn, type Turn } from './turn';
 import { CLASSIC_RULES, type RuleSet } from './rules';
 import type { GameState, Player, PlayerStats } from './engine';
@@ -29,8 +30,9 @@ export function TS(codes: string): TileId[] {
     .map(T);
 }
 
-export function tableOf(sets: readonly string[]): TableSet[] {
-  return sets.map((s, i) => ({ id: `s${i + 1}`, tiles: TS(s) }));
+/** 시험용 테이블: 세트마다 id를 붙이고, 칸을 정해 주지 않은 세트는 보드에 위에서부터 차례로 놓는다 */
+export function tableOf(sets: readonly string[], layout?: readonly (Pos | undefined)[]): TableSet[] {
+  return layoutSets(sets.map((s, i) => ({ id: `s${i + 1}`, tiles: TS(s), ...(layout?.[i] ?? {}) })));
 }
 
 export function turnOf(o: { table?: readonly string[]; rack: string; melded?: boolean; player?: number }): Turn {
@@ -54,12 +56,14 @@ const EMPTY: PlayerStats = {
 export function gameOf(o: {
   players: readonly { rack: string; melded?: boolean; name?: string }[];
   table?: readonly string[];
+  /** table의 세트마다 놓을 칸 (없으면 위에서부터 차례로) */
+  layout?: readonly (Pos | undefined)[];
   pool?: string;
   current?: number;
   rules?: Partial<RuleSet>;
 }): GameState {
   const rules = { ...CLASSIC_RULES, ...(o.rules ?? {}) };
-  const table = tableOf(o.table ?? []);
+  const table = tableOf(o.table ?? [], o.layout);
   const players: Player[] = o.players.map((p, i) => ({
     name: p.name ?? `P${i + 1}`,
     seat: 'human',

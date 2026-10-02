@@ -216,6 +216,10 @@ describe('공식 조작 예시 (Manipulation)', () => {
     const g = setOf(t, 'b1');
     t = mv(t, 'o1', { kind: 'set', setId: g });
     t = mv(t, 'r1', { kind: 'set', setId: g });
+    // 가운데 타일을 빼면 칸이 빈 채로 줄이 갈라진다 (실제 테이블처럼) — 빈 칸에 남은 타일을 놓아 다시 이어 붙인다
+    expect(checkCommit(t, rules).ok).toBe(false);
+    const k = t.work.sets.find((s) => s.tiles.includes(T('k1'))) as unknown as { row: number; col: number; tiles: TileId[] };
+    t = mv(t, "o1'", { kind: 'cell', row: k.row, col: k.col + k.tiles.length });
     expect(checkCommit(t, rules).ok).toBe(true);
   });
   it('⑤ 다중 분할: 검정 10·파랑 5로 세 그룹 + 한 런', () => {

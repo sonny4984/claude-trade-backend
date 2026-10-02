@@ -56,7 +56,16 @@ export const LESSONS: readonly Lesson[] = [
     aiPlays: false,
     build: () =>
       withOpponent(
-        gameOf({ players: [{ rack: 'b7 o9 k2 r13' }, { rack: 'o1 o2' }], table: ['b4 b5 b6', 'r9 b9 k9'], pool: 'k1 k2 k3' }),
+        gameOf({
+          players: [{ rack: 'b7 o9 k2 r13' }, { rack: 'o1 o2' }],
+          table: ['b4 b5 b6', 'r9 b9 k9'],
+          // 두 세트를 멀찍이 — 옆 칸에 놓은 타일이 다른 세트와 붙어 버리지 않게
+          layout: [
+            { row: 1, col: 1 },
+            { row: 3, col: 1 },
+          ],
+          pool: 'k1 k2 k3',
+        }),
       ),
     goal: (_g, e) => committed(e),
   },
@@ -65,7 +74,9 @@ export const LESSONS: readonly Lesson[] = [
     tip: 'lesson.tip4',
     aiPlays: false,
     build: () =>
-      withOpponent(gameOf({ players: [{ rack: "r6' k1 b13" }, { rack: 'o1 o2' }], table: ['r4 r5 r6 r7 r8'], pool: 'k1 k2 k3' })),
+      withOpponent(
+        gameOf({ players: [{ rack: "r6' k1 b13" }, { rack: 'o1 o2' }], table: ['r4 r5 r6 r7 r8'], layout: [{ row: 1, col: 1 }], pool: 'k1 k2 k3' }),
+      ),
     goal: (g, e) => committed(e) && g.table.filter((s) => analyzeSet(s.tiles).kind === 'run').length >= 2,
   },
   {
@@ -73,7 +84,9 @@ export const LESSONS: readonly Lesson[] = [
     tip: 'lesson.tip5',
     aiPlays: false,
     build: () =>
-      withOpponent(gameOf({ players: [{ rack: 'k3 o10 o11 b1' }, { rack: 'o1 o2' }], table: ['r3 b3 J'], pool: 'k1 k2 k3' })),
+      withOpponent(
+        gameOf({ players: [{ rack: 'k3 o10 o11 b1' }, { rack: 'o1 o2' }], table: ['r3 b3 J'], layout: [{ row: 1, col: 1 }], pool: 'k1 k2 k3' }),
+      ),
     goal: (g, e) => {
       if (!committed(e)) return false;
       const holder = g.table.find((s) => s.tiles.includes(104));

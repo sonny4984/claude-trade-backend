@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { useDrag, registerGhost } from '../dnd';
 import { Tile } from '../components/Tile';
 
@@ -7,10 +8,11 @@ export function DragLayer() {
   const tiles = useDrag((s) => s.tiles);
   const preview = useDrag((s) => s.preview);
   const touch = useDrag((s) => s.touch);
+  const width = useDrag((s) => s.ghostW);
   if (!active) return null;
   return (
     <div className="drag-layer" aria-hidden="true">
-      <div className="ghost" ref={registerGhost} data-preview={preview ?? undefined} data-touch={touch || undefined}>
+      <div className="ghost" ref={registerGhost} data-preview={preview ?? undefined} data-touch={touch || undefined} style={{ ['--tw' as string]: `${width}px` } as CSSProperties}>
         {tiles.map((id) => (
           <Tile key={id} id={id} where="ghost" />
         ))}
