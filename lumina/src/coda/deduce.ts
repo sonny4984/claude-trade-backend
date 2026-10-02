@@ -200,3 +200,20 @@ export function slotCandidates(s: CodaState, viewer: number, target: number, ind
   if (!belief) return [];
   return [...belief.entries()].map(([tile, p]) => ({ value: guessOf(tile), p })).sort((a, b2) => b2.p - a.p);
 }
+
+/**
+ * 가장 좁혀진 숨은 타일 (올 수 있는 값이 가장 적은 자리) — "스스로·조금" 힌트가 답 대신 실마리로 쓴다.
+ * 같으면 왼쪽 사람·왼쪽 자리부터.
+ */
+export function narrowest(s: CodaState, viewer: number, b: Beliefs = beliefs(s, viewer)): { target: number; index: number; values: CodaGuess[] } | null {
+  let best: { target: number; index: number; values: CodaGuess[] } | null = null;
+  s.players.forEach((pl, target) => {
+    if (target === viewer || pl.out) return;
+    (b.byPlayer[target] ?? []).forEach((belief, index) => {
+      if (!belief) return;
+      const values = [...belief.entries()].filter(([, p]) => p > 1e-9).map(([tile]) => guessOf(tile));
+      if (values.length && (!best || values.length < best.values.length)) best = { target, index, values };
+    });
+  });
+  return best;
+}

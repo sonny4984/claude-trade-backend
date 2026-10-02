@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { codaReduce, codaInvariants, hiddenCount, newCoda, type CodaAction, type CodaEvent, type CodaGuess, type CodaState } from './engine';
 import { codaDecide, codaThinkTime } from './ai';
-import { beliefs, guessOptions, slotCandidates } from './deduce';
+import { beliefs, guessOptions, narrowest, slotCandidates } from './deduce';
 import { useCodaStats } from './stats';
 import { createRng, randomSeed } from '../game/rng';
 import type { AiLevel } from '../game/types';
@@ -49,13 +49,23 @@ export interface CodaSession {
   readonly online?: OnlineInfo | null;
 }
 
+/**
+ * 힌트 — 도움 정도에 따라 보여 주는 만큼이 다르다.
+ *  스스로: 가장 좁혀진 타일(또는 고른 타일)과 올 수 있는 숫자 "개수"만
+ *  조금: 올 수 있는 숫자들 (확률 없이)
+ *  많이: 숫자마다 확률, 아무것도 안 고르면 가장 그럴듯한 추리
+ */
 export interface CodaHint {
   readonly target: number;
   readonly index: number;
-  /** 한 타일을 골라 물었을 때: 그 타일의 후보들 */
+  /** 많이 — 한 타일을 골라 물었을 때: 그 타일의 후보들과 확률 */
   readonly candidates?: readonly { value: CodaGuess; p: number }[];
-  /** 아무것도 안 고르고 물었을 때: 가장 그럴듯한 추리 */
+  /** 많이 — 아무것도 안 고르고 물었을 때: 가장 그럴듯한 추리 */
   readonly best?: { value: CodaGuess; p: number };
+  /** 조금 — 올 수 있는 숫자들 */
+  readonly possible?: readonly CodaGuess[];
+  /** 스스로 — 올 수 있는 숫자 개수 */
+  readonly count?: number;
 }
 
 interface CodaStore {
@@ -123,9 +133,10 @@ function urlSeed(): number | null {
   }
 }
 
+/** 도움 정도(루미큐브와 같은 설정): 스스로 1번 · 조금 3번 · 많이 무제한 */
 function hintBudget(): number {
-  const h = useSettings.getState().hints;
-  return h === 'unlimited' ? Infinity : h === 'off' ? 0 : 3;
+  const a = useSettings.getState().assist;
+  return a === 'lots' ? Infinity : a === 'some' ? 3 : 1;
 }
 
 export function valueText(v: CodaGuess): string {
@@ -573,19 +584,34 @@ export const useCoda = create<CodaStore>((set, get) => {
       const viewer = s.state.current;
       const b = beliefs(s.state, viewer);
       const sel = get().selected;
+      const assist = useSettings.getState().assist;
       let hint: CodaHint | null = null;
-      if (sel) {
-        hint = { target: sel.target, index: sel.index, candidates: slotCandidates(s.state, viewer, sel.target, sel.index, b) };
+      let say = '';
+      if (assist === 'lots') {
+        if (sel) {
+          hint = { target: sel.target, index: sel.index, candidates: slotCandidates(s.state, viewer, sel.target, sel.index, b) };
+        } else {
+          const best = guessOptions(s.state, viewer, b)[0];
+          if (best) {
+            hint = { target: best.target, index: best.index, best: { value: best.value, p: best.p } };
+            set({ selected: { target: best.target, index: best.index } });
+          }
+        }
       } else {
-        const best = guessOptions(s.state, viewer, b)[0];
-        if (best) {
-          hint = { target: best.target, index: best.index, best: { value: best.value, p: best.p } };
-          set({ selected: { target: best.target, index: best.index } });
+        // 답 대신 실마리: 고른 타일(없으면 가장 좁혀진 타일)에 올 수 있는 숫자 — 스스로는 개수만, 조금은 숫자들
+        const spot = sel
+          ? { target: sel.target, index: sel.index, values: slotCandidates(s.state, viewer, sel.target, sel.index, b).filter((c) => c.p > 1e-9).map((c) => c.value) }
+          : narrowest(s.state, viewer, b);
+        if (spot && spot.values.length) {
+          hint = assist === 'some' ? { target: spot.target, index: spot.index, possible: spot.values } : { target: spot.target, index: spot.index, count: spot.values.length };
+          if (!sel) set({ selected: { target: spot.target, index: spot.index } });
+          say = assist === 'some' ? tr('coda.hintPossible') : sel ? tr('coda.hintCount', { n: spot.values.length }) : tr('coda.hintNarrow', { n: spot.values.length });
         }
       }
       if (!hint) return;
       sfx('hint');
       put({ ...s, hintsLeft: s.hintsLeft - 1 }, { hint });
+      if (say) useGame.getState().toastMsg(say, 'good');
     },
 
     startOnline: (table, info) => {

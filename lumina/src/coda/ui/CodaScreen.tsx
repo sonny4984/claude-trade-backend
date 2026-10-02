@@ -3,6 +3,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../../store/game';
+import { useSettings } from '../../store/settings';
 import { useT, useLang, subj } from '../../i18n';
 import { Icon } from '../../ui/components/Icon';
 import { Sheet } from '../../ui/game/Overlays';
@@ -211,6 +212,8 @@ function NumberPad({ session }: { session: CodaSession }) {
   const lang = useLang();
   const selected = useCoda((s) => s.selected);
   const hint = useCoda((s) => s.hint);
+  // 도움 "스스로": 이미 보이는 숫자·틀렸던 숫자를 숫자판에서 지워 주지 않는다 (스스로 기억하고 지우기)
+  const assist = useSettings((s) => s.assist);
   const st = session.state;
   const viewer = st.current;
   const known = useMemo(() => knownTiles(st, viewer), [st, viewer]);
@@ -230,10 +233,11 @@ function NumberPad({ session }: { session: CodaSession }) {
       <div className="numpad" data-color={color} role="group" aria-label={t('coda.pickValue', { owner: ownerOf(lang, owner.name), color: colorWord(t, color) })}>
         {values.map((v) => {
           const id = v === 'joker' ? (color === 'black' ? 12 : 25) : (color === 'black' ? 0 : 13) + v;
-          const impossible = known.has(id) || slot.misses.includes(v);
+          const impossible = assist !== 'self' && (known.has(id) || slot.misses.includes(v));
           const p = hintHere?.candidates?.find((c) => c.value === v)?.p ?? (hintHere?.best?.value === v ? hintHere.best.p : undefined);
+          const possible = !!hintHere?.possible?.includes(v);
           return (
-            <button key={String(v)} type="button" disabled={impossible} data-hint={p !== undefined ? Math.round(p * 100) : undefined} onClick={() => store.guess(v)}>
+            <button key={String(v)} type="button" disabled={impossible} data-hint={p !== undefined ? Math.round(p * 100) : undefined} data-possible={possible || undefined} onClick={() => store.guess(v)}>
               {v === 'joker' ? '−' : v}
               {p !== undefined && <small>{Math.round(p * 100)}%</small>}
             </button>

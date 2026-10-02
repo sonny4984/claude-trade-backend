@@ -298,7 +298,7 @@ function initialOrders(m: MatchState): TileId[][] {
 
 /** 루미큐브 도움 정도 — 튜토리얼은 늘 "많이" */
 export type Assist = 'self' | 'some' | 'lots';
-export function assistOf(mode: Session['mode'] | undefined, setting: Assist = useSettings.getState().rkAssist): Assist {
+export function assistOf(mode: Session['mode'] | undefined, setting: Assist = useSettings.getState().assist): Assist {
   return mode === 'lesson' ? 'lots' : setting;
 }
 
@@ -1198,6 +1198,6 @@ if (typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.lo
 /** 화면에서 쓰는 루미큐브 도움 정도 (설정을 바꾸면 바로 다시 그린다) */
 export function useAssist(): Assist {
   const mode = useGame((s) => s.session?.mode);
-  const setting = useSettings((s) => s.rkAssist);
+  const setting = useSettings((s) => s.assist);
   return assistOf(mode, setting);
 }

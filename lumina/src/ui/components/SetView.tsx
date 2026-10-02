@@ -32,7 +32,8 @@ export const SetView = memo(function SetView({ set, fresh, locked, touched, hint
   const splitting = splitSet === set.id;
   const visible = set.tiles.filter((id) => !dragTiles.includes(id));
   const state = a.state;
-  const kindLabel = a.kind ? t(`table.${a.kind}`) : t('table.invalidLabel');
+  // 스스로 모드에서는 읽어 주는 이름으로도 맞는지 알려 주지 않는다
+  const kindLabel = assist === 'self' ? t('table.anyLabel') : a.kind ? t(`table.${a.kind}`) : t('table.invalidLabel');
 
   const place = (): void => {
     if (hasSelection) useGame.getState().moveSelectionTo({ kind: 'set', setId: set.id });
@@ -99,10 +100,10 @@ export const SetView = memo(function SetView({ set, fresh, locked, touched, hint
           </button>
         )}
       </div>
-      {state !== 'valid' && a.issue && touched && (
+      {/* 스스로 모드: 3장이 안 되는 세트만 알려 준다 (맞는지 틀렸는지는 스스로 확인) */}
+      {state !== 'valid' && a.issue && touched && (assist !== 'self' || state === 'incomplete') && (
         <p className="set-note" data-state={state}>
-          {/* 스스로 모드: 무엇이 틀렸는지(빠진 타일 등)는 알려 주지 않는다 */}
-          {state === 'incomplete' ? t('set.too-short') : assist === 'self' ? t('set.wrong') : setIssueText(lang, a.issue)}
+          {state === 'incomplete' ? t('set.too-short') : setIssueText(lang, a.issue)}
         </p>
       )}
     </div>

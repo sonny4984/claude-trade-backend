@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { canManipulate, playedSince, playedTiles, sameMembers, tilesOf, type TileId } from '../../game';
 import { CHARACTERS } from '../../characters/roster';
-import { useGame, currentSeatIsHuman, mySeatOf } from '../../store/game';
+import { useAssist, useGame, currentSeatIsHuman, mySeatOf } from '../../store/game';
 import { useDrag } from '../dnd';
 import { SetView } from '../components/SetView';
 import { useTableFit } from './fit';
@@ -15,6 +15,7 @@ export function TableArea() {
   const dragActive = useDrag((s) => s.active);
   const newTarget = useDrag((s) => (s.target?.kind === 'new' ? s.preview ?? 'valid' : null));
   const ref = useRef<HTMLDivElement>(null);
+  const assist = useAssist();
   const g = session?.match.game;
   const turn = g?.turn;
   const work = turn?.work;
@@ -47,7 +48,7 @@ export function TableArea() {
   const humanTurn = !!session && currentSeatIsHuman(session);
 
   return (
-    <main className="felt" aria-label={t('table.label')} style={{ ['--tw' as string]: `${tw}px` }}>
+    <main className="felt" data-assist={assist} aria-label={t('table.label')} style={{ ['--tw' as string]: `${tw}px` }}>
       <div
         className="felt-scroll"
         data-scroll="felt"

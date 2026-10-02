@@ -16,7 +16,7 @@ import {
   type CodaState,
   type CodaTileId,
 } from '../engine';
-import { beliefs, guessOptions } from '../deduce';
+import { beliefs, guessOptions, narrowest } from '../deduce';
 import { CODA_PROFILES, codaDecide } from '../ai';
 import { createRng } from '../../game/rng';
 import type { AiLevel } from '../../game/types';
@@ -258,6 +258,16 @@ describe('추리기', () => {
     const slot = b.byPlayer[1]?.[1];
     expect(slot && [...slot.keys()].sort((a, c) => a - c)).toEqual([W(3), W(4)]);
     expect(slot?.get(W(3))).toBeCloseTo(0.5);
+  });
+
+  it('가장 좁혀진 타일: 올 수 있는 값이 가장 적은 숨은 자리 (힌트 "스스로·조금"의 실마리)', () => {
+    // 하양 ?는 검정6과 하양8 사이라 하양6·하양7 둘뿐, 검정 ?는 검정1~5로 더 넓다
+    const s = board([[hid(B(0))], [hid(B(1)), open(B(6)), hid(W(7)), open(W(8))]], { drawn: null, jokers: false });
+    const n = narrowest(s, 0);
+    expect(n).toMatchObject({ target: 1, index: 2 });
+    expect([...(n?.values ?? [])].sort()).toEqual([6, 7]);
+    const counts = (beliefs(s, 0).byPlayer[1] ?? []).flatMap((x) => (x ? [[...x.values()].filter((p) => p > 0).length] : []));
+    expect(Math.min(...counts)).toBe(n?.values.length);
   });
 
   it('틀렸던 값은 후보에서 빠진다', () => {

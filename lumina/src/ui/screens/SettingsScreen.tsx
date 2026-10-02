@@ -103,8 +103,9 @@ export function SettingsScreen() {
         <section className="card">
           <h2 className="card-title">{t('settings.gameplay')}</h2>
           <Choice label={t('settings.aiSpeed')} value={s.aiSpeed} options={[{ v: 'fast', label: t('settings.fast') }, { v: 'normal', label: t('settings.normal') }, { v: 'slow', label: t('settings.slow') }]} onChange={(v) => s.set({ aiSpeed: v })} />
-          <Choice label={t('settings.rkAssist')} value={s.rkAssist} options={(['self', 'some', 'lots'] as const).map((v) => ({ v, label: t(`settings.rkAssistOpt.${v}`) }))} onChange={(v) => s.set({ rkAssist: v })} />
-          <p className="note">{t(`settings.rkAssistSub.${s.rkAssist}`)}</p>
+          <Choice label={t('settings.assist')} value={s.assist} options={(['self', 'some', 'lots'] as const).map((v) => ({ v, label: t(`settings.assistOpt.${v}`) }))} onChange={(v) => s.set({ assist: v })} />
+          <p className="note">{t(`settings.assistSub.${s.assist}`)}</p>
+          <p className="note">{t(`settings.assistCodaSub.${s.assist}`)}</p>
           <Choice label={t('settings.hints')} value={s.hints} options={[{ v: 'limited', label: t('settings.hintsLimited') }, { v: 'unlimited', label: t('settings.hintsUnlimited') }, { v: 'off', label: t('settings.hintsOff') }]} onChange={(v) => s.set({ hints: v })} />
           <Choice label={t('settings.autoSort')} value={s.autoSort} options={[{ v: 'color', label: t('action.sortColor') }, { v: 'number', label: t('action.sortNumber') }, { v: 'off', label: t('settings.off') }]} onChange={(v) => s.set({ autoSort: v })} />
           <Toggle label={t('settings.confirmDraw')} value={s.confirmDraw} onChange={(v) => s.set({ confirmDraw: v })} />

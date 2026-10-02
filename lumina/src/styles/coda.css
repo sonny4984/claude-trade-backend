@@ -390,6 +390,10 @@ button.ctile:hover:not([data-revealed]) {
   outline: 2px solid var(--accent-2);
   outline-offset: 1px;
 }
+/* 도움 "조금" 힌트: 올 수 있는 숫자 */
+.numpad button[data-possible] {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 14px -2px var(--accent-soft);
+}
 .numpad button small {
   position: absolute;
   bottom: 3px;

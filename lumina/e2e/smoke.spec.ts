@@ -17,7 +17,7 @@ async function open(page: Page, settings: Record<string, unknown> = {}, path = '
     } catch {
       /* 저장소가 막힌 환경 */
     }
-  }, { aiSpeed: 'fast', hints: 'unlimited', rkAssist: 'lots', ...settings });
+  }, { aiSpeed: 'fast', hints: 'unlimited', assist: 'lots', ...settings });
   await page.goto(path);
   await expect(page.locator('.wordmark')).toHaveText('LUMINA');
   return errors;
@@ -75,7 +75,7 @@ test('힌트로 첫 등록을 하면 테이블에 세트가 생기고 차례가 
 
 test('도움 "스스로"(기본): 힌트는 판마다 1번·타일 하나만, 끌 때 맞는지 안 알려 주고, 뽑기 전에 묻지 않는다', async ({ page }) => {
   // 시드 1: 첫 차례에 30점 이상 등록할 수 있는 판 — 그래도 힌트는 타일 하나까지만
-  const errors = await open(page, { rkAssist: 'self', confirmDraw: true }, '/?seed=1');
+  const errors = await open(page, { assist: 'self', confirmDraw: true }, '/?seed=1');
   await startSolo(page);
   await myTurn(page);
   const hint = page.locator('.tool').nth(3);
@@ -110,7 +110,7 @@ test('도움 "스스로"(기본): 힌트는 판마다 1번·타일 하나만, �
 });
 
 test('도움 "조금": 힌트 3번, 타일 → 놓을 자리까지 (완성된 테이블은 안 보여 줌)', async ({ page }) => {
-  const errors = await open(page, { rkAssist: 'some' }, '/?seed=1');
+  const errors = await open(page, { assist: 'some' }, '/?seed=1');
   await startSolo(page);
   await myTurn(page);
   const hint = page.locator('.tool').nth(3);
@@ -251,6 +251,49 @@ test('다빈치 코드 혼자 두기: 시작하면 내 코드가 보이고 추�
   await expect(page.locator('.status-text')).not.toHaveText('', { timeout: 10_000 });
   await page.locator('.hud .icon-btn.small').click();
   await expect(page.locator('.sheet')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+/** 다빈치 코드: 처음 4장을 가져오고, 내 차례에 한 장 뽑아 상대 타일 하나를 고른다 */
+async function codaPickTarget(page: Page): Promise<void> {
+  await page.locator('.plate-coda').click();
+  await page.locator('.screen-foot .btn-primary').click();
+  await expect(page.locator('.coda')).toBeVisible();
+  for (const color of ['black', 'white', 'black', 'white']) {
+    const heap = page.locator(`button.pile-heap[data-color="${color}"]`);
+    await expect(heap).toBeVisible({ timeout: 20_000 });
+    await heap.click();
+  }
+  await expect(page.locator('button.pile-heap').first()).toBeVisible({ timeout: 45_000 });
+  await page.locator('button.pile-heap').first().click();
+  const target = page.locator('.code-row button.ctile');
+  await expect(target.first()).toBeVisible({ timeout: 45_000 });
+  await target.first().click();
+  await expect(page.locator('.numpad')).toBeVisible();
+}
+
+test('다빈치 코드 도움 "스스로": 숫자판이 아무것도 지워 주지 않고, 힌트는 1번·남은 숫자 개수만', async ({ page }) => {
+  const errors = await open(page, { assist: 'self' }, '/?seed=3');
+  await codaPickTarget(page);
+  // 내 타일과 같은 숫자도 지워져 있지 않다 — 무엇이 불가능한지는 스스로
+  await expect(page.locator('.numpad button[disabled]')).toHaveCount(0);
+  await expect(page.locator('.coda-hint')).toContainText('1');
+  await page.locator('.coda-hint').click();
+  await expect(page.locator('.toast').last()).toContainText('개 남았어요');
+  await expect(page.locator('.numpad button small')).toHaveCount(0);
+  await expect(page.locator('.numpad button[data-possible]')).toHaveCount(0);
+  await expect(page.locator('.coda-hint')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('다빈치 코드 도움 "조금": 보이는 숫자는 지우고, 힌트는 올 수 있는 숫자만 (확률 없이)', async ({ page }) => {
+  const errors = await open(page, { assist: 'some' }, '/?seed=3');
+  await codaPickTarget(page);
+  await expect.poll(() => page.locator('.numpad button[disabled]').count()).toBeGreaterThan(0);
+  await expect(page.locator('.coda-hint')).toContainText('3');
+  await page.locator('.coda-hint').click();
+  await expect.poll(() => page.locator('.numpad button[data-possible]').count()).toBeGreaterThan(0);
+  await expect(page.locator('.numpad button small')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

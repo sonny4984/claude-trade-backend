@@ -453,6 +453,12 @@
   box-shadow: 0 0 0 1.5px var(--invalid), 0 0 18px -4px var(--invalid-glow);
   background: var(--invalid-glow);
 }
+/* 루미큐브 도움 "스스로": 고친 세트가 맞는지 틀렸는지 색으로 알려 주지 않는다 (3장이 안 되는 세트만 표시) */
+.felt[data-assist='self'] .set[data-touched][data-state='valid'],
+.felt[data-assist='self'] .set[data-touched][data-state='invalid'] {
+  box-shadow: 0 0 0 1.5px var(--touched-line, rgba(120, 90, 60, 0.45));
+  background: rgba(255, 255, 255, 0.04);
+}
 .set[data-preview='valid'] {
   box-shadow: 0 0 0 2px var(--valid), 0 0 26px -2px var(--valid-glow);
 }

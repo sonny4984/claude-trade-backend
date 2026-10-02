@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useGame } from '../../store/game';
+import { useSettings } from '../../store/settings';
 import type { AiLevel } from '../../game/types';
 import { CHARACTER_ORDER, type CharacterId } from '../../characters/roster';
 import { usePortrait } from '../../characters/portrait3d';
@@ -53,6 +54,25 @@ function Example() {
       <CodaTile id={20} faceUp={false} revealed={false} label="" size="sm" />
       <small>{t('coda.pick')}</small>
     </div>
+  );
+}
+
+/** 도움 정도 (루미큐브와 같은 설정) */
+function AssistPick() {
+  const t = useT();
+  const assist = useSettings((s) => s.assist);
+  return (
+    <>
+      <h2 className="card-title">{t('settings.assistShort')}</h2>
+      <div className="seg" role="radiogroup" aria-label={t('settings.assistShort')}>
+        {(['self', 'some', 'lots'] as const).map((v) => (
+          <button key={v} type="button" role="radio" aria-checked={assist === v} onClick={() => useSettings.getState().set({ assist: v })}>
+            {t(`settings.assistOpt.${v}`)}
+          </button>
+        ))}
+      </div>
+      <p className="note">{t(`settings.assistCodaSub.${assist}`)}</p>
+    </>
   );
 }
 
@@ -186,6 +206,7 @@ export function CodaSetup() {
             </span>
             <input type="checkbox" className="switch" checked={cfg.jokers} onChange={(e) => setCfg((c) => ({ ...c, jokers: e.target.checked }))} />
           </label>
+          <AssistPick />
         </section>
         <section className="card">
           <h2 className="card-title">{t('coda.howTitle')}</h2>

@@ -45,12 +45,12 @@ export interface SettingsState {
   /** 오목·다빈치 코드 힌트 */
   hints: 'limited' | 'unlimited' | 'off';
   /**
-   * 루미큐브 도움 정도.
-   * self(스스로): 힌트 판마다 1번·타일 하나만, 놓기 전 맞는지 미리 보기·틀린 이유·두 번 톡 놓기·"낼 수 있는데 뽑을까요" 없음
-   * some(조금): 힌트 3번(타일 → 자리), 미리 보기·틀린 이유·두 번 톡 놓기
-   * lots(많이): 연습용 — 힌트 무제한, 완성된 테이블까지 보여 주고 대신 놓기
+   * 루미큐브·다빈치 코드 도움 정도.
+   * self(스스로): 스스로 추리 — 힌트는 판마다 1번이고 답 대신 실마리만, 맞는지·틀렸는지·지울 숫자를 대신 알려 주지 않는다
+   * some(조금): 힌트 3번, 맞는지 미리 보기·틀린 이유·보이는 숫자 지우기
+   * lots(많이): 연습용 — 힌트 무제한, 완성된 테이블·숫자별 확률까지
    */
-  rkAssist: 'self' | 'some' | 'lots';
+  assist: 'self' | 'some' | 'lots';
   confirmDraw: boolean;
   autoSort: 'off' | 'color' | 'number';
   show3d: boolean;
@@ -77,7 +77,7 @@ const DEFAULTS: Omit<SettingsState, 'set'> = {
   cvd: false,
   aiSpeed: 'normal',
   hints: 'limited',
-  rkAssist: 'self',
+  assist: 'self',
   confirmDraw: true,
   autoSort: 'color',
   show3d: true,
@@ -127,7 +127,7 @@ function load(): Omit<SettingsState, 'set'> {
     cvd: !!raw.cvd,
     aiSpeed: pick(raw.aiSpeed, ['fast', 'normal', 'slow'] as const, 'normal'),
     hints: pick(raw.hints, ['limited', 'unlimited', 'off'] as const, 'limited'),
-    rkAssist: pick(raw.rkAssist, ['self', 'some', 'lots'] as const, 'self'),
+    assist: pick(raw.assist ?? (raw as { rkAssist?: unknown }).rkAssist, ['self', 'some', 'lots'] as const, 'self'),
     confirmDraw: typeof raw.confirmDraw === 'boolean' ? raw.confirmDraw : true,
     autoSort: pick(raw.autoSort, ['off', 'color', 'number'] as const, 'color'),
     show3d: typeof raw.show3d === 'boolean' ? raw.show3d : true,
