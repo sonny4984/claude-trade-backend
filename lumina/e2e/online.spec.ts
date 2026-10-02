@@ -169,9 +169,13 @@ async function codaStep(p: Page): Promise<string | null> {
     await key.first().click();
     return 'guess';
   }
+  // 틀린 뒤 공개할 내 타일: 눌러서 고르고 "공개하기"로 확정
   const own = p.locator('.my-code button.ctile, .mycode button.ctile');
   if (await own.count()) {
     await own.first().click();
+    const confirm = p.locator('.reveal-confirm');
+    await expect(confirm).toBeEnabled();
+    await confirm.click();
     return 'reveal';
   }
   return null;

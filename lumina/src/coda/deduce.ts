@@ -194,6 +194,19 @@ export function guessOptions(s: CodaState, viewer: number, b: Beliefs = beliefs(
   return out.sort((a, b2) => b2.p - a.p || a.options - b2.options);
 }
 
+/**
+ * 한 사람의 줄에서 숨은 타일마다 "공개된 정보만으로 상대가 이미 짐작할 수 있는 정도" (가장 높은 후보의 확률, 공개된 자리는 null).
+ * 틀린 뒤 공개할 타일을 고를 때의 참고 — 높을수록 내줘도 덜 아프다.
+ */
+export function exposure(s: CodaState, player: number): (number | null)[] {
+  const pub = beliefs(s, -1, true).byPlayer[player] ?? [];
+  return (s.players[player]?.row ?? []).map((_, i) => {
+    const b = pub[i];
+    if (!b || !b.size) return null;
+    return Math.max(...b.values());
+  });
+}
+
 /** 한 자리에서 가능한 값들 (UI의 추리 메모용) */
 export function slotCandidates(s: CodaState, viewer: number, target: number, index: number, b: Beliefs = beliefs(s, viewer)): { value: CodaGuess; p: number }[] {
   const belief = b.byPlayer[target]?.[index];

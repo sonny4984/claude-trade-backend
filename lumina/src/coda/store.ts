@@ -4,7 +4,7 @@
  * 함께 두기에서는 차례마다 가림막으로 패를 숨긴다.
  */
 import { create } from 'zustand';
-import { codaReduce, codaInvariants, hiddenCount, newCoda, type CodaAction, type CodaEvent, type CodaGuess, type CodaState } from './engine';
+import { codaReduce, codaInvariants, hiddenCount, newCoda, type CodaAction, type CodaEvent, type CodaGuess, type CodaPenalty, type CodaState } from './engine';
 import { codaDecide, codaThinkTime } from './ai';
 import { beliefs, guessOptions, narrowest, slotCandidates } from './deduce';
 import { useCodaStats } from './stats';
@@ -32,6 +32,8 @@ export interface CodaSetupConfig {
   readonly mode: 'solo' | 'local' | 'online';
   readonly seats: readonly CodaSeatConfig[];
   readonly jokers: boolean;
+  /** 틀렸을 때 공개하는 타일: 내가 고른 숨은 타일(choose, 기본) 또는 방금 뽑은 타일(drawn, 공식) */
+  readonly penalty: CodaPenalty;
 }
 
 export interface CodaSession {
@@ -74,6 +76,8 @@ interface CodaStore {
   ai: { seat: number; phase: 'thinking' | 'speaking' | 'deciding' } | null;
   /** 말한 뒤 판정까지의 뜸 — 대상 타일을 가리킨다 */
   pending: { by: number; target: number; index: number; value: CodaGuess } | null;
+  /** 틀린 뒤 공개하려고 고른 내 타일 (공개하기를 눌러야 확정) */
+  ownPick: number | null;
   /** 판정 결과를 번쩍 보여 줄 타일 */
   flash: { id: number; target: number; tile: number; hit: boolean } | null;
   curtain: boolean;
@@ -97,6 +101,10 @@ interface CodaStore {
   stop: () => void;
   place: (index: number) => void;
   revealOwn: (index: number) => void;
+  /** 공개할 내 타일 고르기 (한 번 더 누르면 취소) */
+  pickOwn: (index: number) => void;
+  /** 고른 타일을 공개하기 */
+  revealPicked: () => void;
   reveal: () => void;
   openMenu: () => void;
   openLog: () => void;
@@ -195,6 +203,11 @@ function sanitize(raw: unknown): CodaSession | null {
   if (s.v !== 1 || !s.state || !Array.isArray(s.state.players) || !Array.isArray(s.meta)) return null;
   // 예전 저장에는 첫 차례 자리(first)가 없다 — 이미 처음 고르기가 끝난 판이라 아무 값이면 된다
   if (typeof s.state.first !== 'number') s = { ...s, state: { ...s.state, first: 0 } };
+  // 공개 규칙이 생기기 전 판은 공식 규칙(뽑은 타일 공개) 그대로 이어 둔다
+  if (s.state.penalty !== 'choose' && s.state.penalty !== 'drawn') s = { ...s, state: { ...s.state, penalty: 'drawn' } };
+  if (typeof s.state.mustReveal !== 'boolean') s = { ...s, state: { ...s.state, mustReveal: false } };
+  if (typeof s.state.justPlaced !== 'number') s = { ...s, state: { ...s.state, justPlaced: null } };
+  if (s.config && s.config.penalty !== 'drawn') s = { ...s, config: { ...s.config, penalty: 'choose' } };
   if (codaInvariants(s.state).length) return null;
   if (!s.meta.every((m) => isCharacterId(m?.character))) return null;
   return s;
@@ -322,7 +335,7 @@ export const useCoda = create<CodaStore>((set, get) => {
     let next: CodaSession = { ...s, state: r.state };
     if (r.state.phase === 'over') next = record({ ...next, endedAt: Date.now() });
     const turnChanged = r.state.current !== prev.current || r.state.turnNo !== prev.turnNo;
-    put(next, { selected: null, pending: null, hint: turnChanged ? null : get().hint });
+    put(next, { selected: null, pending: null, ownPick: null, hint: turnChanged ? null : get().hint });
     effects(next, r.events, byAi);
     if (next.online?.role === 'host') bridge.publish?.('coda', payloadOf(next), r.events);
     if (r.state.phase === 'over') {
@@ -417,6 +430,7 @@ export const useCoda = create<CodaStore>((set, get) => {
     const state = newCoda({
       seats: cfg.seats.map((x) => ({ name: x.name, seat: x.kind, ...(x.kind === 'ai' ? { ai: x.level } : {}) })),
       jokers: cfg.jokers,
+      penalty: cfg.penalty,
       seed,
     });
     return {
@@ -436,7 +450,7 @@ export const useCoda = create<CodaStore>((set, get) => {
   const startSession = (session: CodaSession, resumed = false): void => {
     aiToken++;
     const needsCurtain = !session.online && session.mode === 'local' && session.state.players.filter((p) => p.seat === 'human').length > 1 && session.state.players[session.state.current]?.seat === 'human';
-    put(session, { selected: null, pending: null, flash: null, ai: null, overlay: null, hint: null, reactions: [], lastText: null, curtain: needsCurtain });
+    put(session, { selected: null, pending: null, ownPick: null, flash: null, ai: null, overlay: null, hint: null, reactions: [], lastText: null, curtain: needsCurtain });
     useGame.getState().go('coda');
     if (!resumed) sfx('shuffle');
     if (session.online?.role === 'host') bridge.publish?.('coda', payloadOf(session), []);
@@ -460,6 +474,7 @@ export const useCoda = create<CodaStore>((set, get) => {
     selected: null,
     ai: null,
     pending: null,
+    ownPick: null,
     flash: null,
     curtain: false,
     overlay: null,
@@ -489,7 +504,7 @@ export const useCoda = create<CodaStore>((set, get) => {
     quit: () => {
       aiToken++;
       if (get().session?.online) bridge.leave?.();
-      put(null, { ai: null, pending: null, overlay: null, curtain: false, selected: null, hint: null });
+      put(null, { ai: null, pending: null, overlay: null, curtain: false, selected: null, ownPick: null, hint: null });
       useGame.getState().go('home');
     },
 
@@ -519,7 +534,7 @@ export const useCoda = create<CodaStore>((set, get) => {
       buzz('pick');
     },
 
-    clearSelect: () => set({ selected: null }),
+    clearSelect: () => set({ selected: null, ownPick: null }),
 
     guess: (value) => {
       const s = get().session;
@@ -563,6 +578,27 @@ export const useCoda = create<CodaStore>((set, get) => {
       const s = get().session;
       if (!s || !isHumanTurn(s)) return;
       submit({ type: 'reveal-own', index });
+    },
+
+    pickOwn: (index) => {
+      const s = get().session;
+      if (!s || !isHumanTurn(s) || get().curtain || get().waiting) return;
+      const st = s.state;
+      if (st.phase !== 'reveal-own') return;
+      const slot = st.players[st.current]?.row[index];
+      if (!slot || slot.revealed) return;
+      set({ ownPick: get().ownPick === index ? null : index });
+      sfx('pick');
+      buzz('pick');
+    },
+
+    revealPicked: () => {
+      const idx = get().ownPick;
+      const s = get().session;
+      if (idx === null || !s || s.state.phase !== 'reveal-own') return;
+      get().revealOwn(idx);
+      // 온라인 참가자는 방장의 답이 올 때까지 같은 수를 또 보내지 않게
+      if (s.online?.role === 'guest') set({ ownPick: null });
     },
 
     reveal: () => {
@@ -618,6 +654,7 @@ export const useCoda = create<CodaStore>((set, get) => {
       const cfg: CodaSetupConfig = {
         mode: 'online',
         jokers: table.jokers,
+        penalty: table.penalty === 'drawn' ? 'drawn' : 'choose',
         seats: table.seats.map((x) => ({ name: x.name, kind: x.kind, level: x.level ?? 'casual', character: x.character })),
       };
       startSession({ ...fresh(cfg), online: info });
@@ -659,6 +696,7 @@ export const useCoda = create<CodaStore>((set, get) => {
       const phaseChanged = !prev || prev.state.phase !== next.state.phase;
       put(next, {
         pending: null,
+        ownPick: turnChanged || phaseChanged ? null : get().ownPick,
         selected: turnChanged || phaseChanged ? null : get().selected,
         hint: turnChanged ? null : get().hint,
         curtain: false,
@@ -707,6 +745,7 @@ export function loadCodaSetup(): CodaSetupConfig | null {
   return {
     mode: raw.mode === 'local' ? 'local' : 'solo',
     jokers: raw.jokers !== false,
+    penalty: raw.penalty === 'drawn' ? 'drawn' : 'choose',
     seats: raw.seats.map((x, i) => ({
       name: typeof x?.name === 'string' ? x.name.slice(0, 12) : `P${i + 1}`,
       kind: x?.kind === 'ai' ? 'ai' : 'human',

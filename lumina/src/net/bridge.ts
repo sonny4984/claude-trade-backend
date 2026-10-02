@@ -71,6 +71,8 @@ export interface TableDoc {
   readonly status: 'lobby' | 'playing' | 'closed';
   readonly seats: readonly TableSeat[];
   readonly jokers: boolean;
+  /** 다빈치 코드: 틀렸을 때 공개하는 타일 — choose(내가 고르기, 기본) / drawn(공식: 뽑은 타일). 없으면 choose */
+  readonly penalty?: 'choose' | 'drawn';
   /** 판이 바뀔 때마다 1씩 */
   readonly seq: number;
   /** 게임 저장소의 세션 — JSON 문자열 하나로 */

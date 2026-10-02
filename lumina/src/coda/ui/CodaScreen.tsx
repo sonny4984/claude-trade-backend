@@ -11,7 +11,7 @@ import { usePortrait } from '../../characters/portrait3d';
 import type { CharacterId } from '../../characters/roster';
 import type { Expression } from '../../characters/draw2d';
 import { codaColor, codaTiles, codaValue, guessOf, hiddenCount, poolColors, startCount, validSlots, type CodaGuess, type CodaPlayer, type CodaSlot } from '../engine';
-import { knownTiles } from '../deduce';
+import { exposure, knownTiles } from '../deduce';
 import { isHumanTurn, useCoda, valueText, viewerOf, type CodaSession } from '../store';
 import { CodaTile } from './CodaTile';
 import { CodaStage } from './CodaStage';
@@ -101,6 +101,7 @@ function MyCode({ session }: { session: CodaSession }) {
   const t = useT();
   const lang = useLang();
   const flash = useCoda((s) => s.flash);
+  const ownPick = useCoda((s) => s.ownPick);
   const curtain = useCoda((s) => s.curtain);
   const st = session.state;
   const viewer = viewerOf(session);
@@ -109,12 +110,17 @@ function MyCode({ session }: { session: CodaSession }) {
   const placing = mine && st.phase === 'place' && st.drawn !== null;
   const gaps = placing ? validSlots(me.row, st.drawn as number) : [];
   const revealing = mine && st.phase === 'reveal-own';
+  // 도움 "많이"(연습): 공개할 타일을 고를 때 상대가 이미 얼마나 짐작하는지 %로 (높을수록 내줘도 덜 아프다)
+  const assist = useSettings((s) => s.assist);
+  const exposed = useMemo(() => (revealing && assist === 'lots' ? exposure(st, viewer) : null), [revealing, assist, st, viewer]);
   const showDrawn = st.current === viewer && st.drawn !== null && !curtain && st.phase !== 'over';
   const drawSlot = mine && st.phase === 'draw';
   const tiles: React.ReactNode[] = [];
   me.row.forEach((slot, i) => {
     if (gaps.includes(i)) tiles.push(<button key={`g${i}`} type="button" className="code-gap" aria-label={t('coda.gap')} onClick={() => useCoda.getState().place(i)} />);
     const isFlash = flash && flash.target === viewer && flash.tile === slot.tile;
+    // 틀린 뒤 공개할 타일을 고를 때: 방금 숨긴 채 끼운 타일에 ✦ 표시
+    const fresh = revealing && !slot.revealed && st.justPlaced === slot.tile;
     tiles.push(
       <CodaTile
         key={slot.tile}
@@ -122,10 +128,13 @@ function MyCode({ session }: { session: CodaSession }) {
         faceUp
         revealed={slot.revealed}
         secret={!slot.revealed}
+        selected={revealing && ownPick === i}
+        fresh={fresh}
+        note={exposed && exposed[i] !== null && !slot.revealed ? `${Math.round((exposed[i] as number) * 100)}%` : null}
         flash={isFlash ? 'open' : null}
         size="lg"
-        label={slotLabel(t, lang, null, i, slot, true)}
-        onClick={revealing && !slot.revealed ? () => useCoda.getState().revealOwn(i) : undefined}
+        label={slotLabel(t, lang, null, i, slot, true) + (fresh ? t('coda.stateFresh') : '')}
+        onClick={revealing && !slot.revealed ? () => useCoda.getState().pickOwn(i) : undefined}
       />,
     );
   });
@@ -271,10 +280,30 @@ function Actions({ session }: { session: CodaSession }) {
   const selected = useCoda((s) => s.selected);
   const pending = useCoda((s) => s.pending);
   const curtain = useCoda((s) => s.curtain);
+  const ownPick = useCoda((s) => s.ownPick);
+  const assist = useSettings((s) => s.assist);
   const st = session.state;
   if (st.phase === 'over' || curtain) return <nav className="coda-actions" />;
   if (!isHumanTurn(session)) return <nav className="coda-actions" aria-hidden="true" />;
   const store = useCoda.getState();
+  if (st.phase === 'reveal-own') {
+    // 틀린 뒤 공개할 내 타일: 눌러서 고르고 "공개하기"로 확정 (한 번 누르다 잘못 공개하는 일이 없게)
+    const me = st.players[st.current] as CodaPlayer;
+    const picked = ownPick !== null ? me.row[ownPick] : undefined;
+    const v = picked ? codaValue(picked.tile) : null;
+    return (
+      <nav className="coda-actions">
+        <div className="reveal-panel">
+          <p className="reveal-tip">{t(st.penalty === 'choose' ? 'coda.revealTipChoose' : 'coda.revealTip') + (assist === 'lots' ? ` ${t('coda.exposureTip')}` : '')}</p>
+          <div className="moves">
+            <button type="button" className="btn btn-primary reveal-confirm" disabled={!picked} onClick={() => store.revealPicked()}>
+              {picked ? t('coda.revealConfirm', { value: v === null ? t('coda.joker') : v }) : t('coda.revealPick')}
+            </button>
+          </div>
+        </div>
+      </nav>
+    );
+  }
   if (st.phase === 'deal' || st.phase === 'draw') {
     return (
       <nav className="coda-actions">
@@ -336,7 +365,7 @@ function statusText(t: T, lang: 'ko' | 'en', session: CodaSession, ai: { seat: n
     case 'place':
       return st.placeRevealed ? t('coda.placeRevealed') : t('coda.place');
     case 'reveal-own':
-      return t('coda.revealOwn');
+      return t(st.penalty === 'choose' ? 'coda.revealPenalty' : 'coda.revealOwn');
     default:
       return '';
   }
@@ -549,7 +578,17 @@ export function CodaScreen() {
       if (st.overlay || st.curtain || !st.session) return;
       const k = e.key.toLowerCase();
       if (k === 'escape') st.clearSelect();
-      else if (k === 'h') st.requestHint();
+      else if (k === 'enter' && st.ownPick !== null) st.revealPicked();
+      else if ((k === 'arrowleft' || k === 'arrowright') && st.session.state.phase === 'reveal-own' && isHumanTurn(st.session)) {
+        // 공개할 내 타일을 키보드로: 숨은 타일 사이를 좌우로
+        const cur = st.session.state.players[st.session.state.current];
+        const hidden = (cur?.row ?? []).map((x, i) => (x.revealed ? -1 : i)).filter((i) => i >= 0);
+        if (!hidden.length) return;
+        const at = st.ownPick === null ? -1 : hidden.indexOf(st.ownPick);
+        const next = k === 'arrowright' ? (at + 1) % hidden.length : (at <= 0 ? hidden.length : at) - 1;
+        const target = hidden[next];
+        if (target !== undefined) st.pickOwn(target);
+      } else if (k === 'h') st.requestHint();
       else if (k === 'm') st.openMenu();
       else if (k === 'l') st.openLog();
       else if (/^[0-9]$/.test(k) && st.selected) st.guess(Number(k));

@@ -71,6 +71,7 @@ interface OnlineStore {
   removeSeat: (i: number) => void;
   setLevel: (i: number, level: AiLevel) => void;
   setJokers: (on: boolean) => void;
+  setPenalty: (p: 'choose' | 'drawn') => void;
   replaceWithAi: (i: number) => void;
   start: () => void;
   clearError: () => void;
@@ -616,6 +617,7 @@ export const useOnline = create<OnlineStore>((set, get) => {
         status: 'lobby',
         seats: [{ kind: 'human', peer: myPeer, pid: playerId(), name: profile.name, character: profile.character }],
         jokers: true,
+        penalty: 'choose',
         seq: 0,
         payload: null,
         events: '[]',
@@ -765,6 +767,14 @@ export const useOnline = create<OnlineStore>((set, get) => {
       const t = get().table;
       if (!t || get().role !== 'host' || t.status !== 'lobby') return;
       const nt: TableDoc = { ...t, jokers: on, at: Date.now() };
+      set({ table: nt });
+      write(nt);
+    },
+
+    setPenalty: (p) => {
+      const t = get().table;
+      if (!t || get().role !== 'host' || t.status !== 'lobby') return;
+      const nt: TableDoc = { ...t, penalty: p, at: Date.now() };
       set({ table: nt });
       write(nt);
     },

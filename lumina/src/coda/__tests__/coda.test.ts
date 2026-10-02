@@ -11,12 +11,13 @@ import {
   newCoda,
   validSlots,
   type CodaAction,
+  type CodaPenalty,
   type CodaPlayer,
   type CodaSlot,
   type CodaState,
   type CodaTileId,
 } from '../engine';
-import { beliefs, guessOptions, narrowest } from '../deduce';
+import { beliefs, exposure, guessOptions, narrowest } from '../deduce';
 import { CODA_PROFILES, codaDecide } from '../ai';
 import { createRng } from '../../game/rng';
 import type { AiLevel } from '../../game/types';
@@ -31,7 +32,7 @@ function seats(n: number, ai = false) {
 }
 
 /** 손으로 만든 판 */
-function board(rows: CodaSlot[][], o: { pool?: CodaTileId[]; drawn?: CodaTileId | null; current?: number; jokers?: boolean } = {}): CodaState {
+function board(rows: CodaSlot[][], o: { pool?: CodaTileId[]; drawn?: CodaTileId | null; current?: number; jokers?: boolean; penalty?: CodaPenalty } = {}): CodaState {
   const players: CodaPlayer[] = rows.map((row, i) => ({ name: `P${i}`, seat: 'human', row, out: row.every((x) => x.revealed), stats: { guesses: 0, correct: 0, bestStreak: 0 } }));
   return {
     v: 1,
@@ -48,6 +49,10 @@ function board(rows: CodaSlot[][], o: { pool?: CodaTileId[]; drawn?: CodaTileId 
     winner: null,
     log: [],
     first: 0,
+    // 손으로 만든 판은 따로 말하지 않으면 공식 규칙(뽑은 타일 공개)
+    penalty: o.penalty ?? 'drawn',
+    mustReveal: false,
+    justPlaced: null,
   };
 }
 
@@ -251,6 +256,135 @@ describe('차례', () => {
   });
 });
 
+describe('공개 규칙 — 내가 골라 공개 (choose)', () => {
+  const two = (o: { drawn?: CodaTileId | null; pool?: CodaTileId[]; jokers?: boolean } = {}): CodaState =>
+    board([[hid(B(1)), hid(W(8))], [hid(B(3)), hid(W(6))]], { penalty: 'choose', drawn: W(4), pool: [B(10)], ...o });
+
+  it('틀리면 뽑은 타일은 숨긴 채 제자리에 끼우고, 공개할 내 타일을 고르는 단계가 된다', () => {
+    let s = act(two(), { type: 'guess', target: 1, index: 0, value: 2 });
+    expect(s.phase).toBe('reveal-own');
+    expect(s.current).toBe(0);
+    expect(s.drawn).toBeNull();
+    expect(s.players[0]?.row.map((x) => [x.tile, x.revealed])).toEqual([
+      [B(1), false],
+      [W(4), false],
+      [W(8), false],
+    ]);
+    expect(s.justPlaced).toBe(W(4));
+    expect(s.mustReveal).toBe(true);
+    expect(s.players[1]?.row[0]?.misses).toEqual([2]);
+    // 이미 공개된 자리·없는 자리는 못 고른다
+    expect(codaReduce(s, { type: 'reveal-own', index: 9 }).ok).toBe(false);
+    // 내가 고른 타일(옛 타일)이 공개되고 차례가 넘어간다 — 숨은 장수는 그대로
+    const before = hiddenCount(s.players[0] as CodaPlayer) - 1;
+    s = act(s, { type: 'reveal-own', index: 2 });
+    expect(s.players[0]?.row.map((x) => [x.tile, x.revealed])).toEqual([
+      [B(1), false],
+      [W(4), false],
+      [W(8), true],
+    ]);
+    expect(hiddenCount(s.players[0] as CodaPlayer)).toBe(before);
+    expect(s.mustReveal).toBe(false);
+    expect(s.justPlaced).toBeNull();
+    expect(s.current).toBe(1);
+    expect(s.phase).toBe('draw');
+    expect(sortedRows(s)).toBe(true);
+  });
+
+  it('방금 뽑은 타일을 골라도 된다 (그러면 공식 규칙과 같은 모양)', () => {
+    const miss = act(two(), { type: 'guess', target: 1, index: 0, value: 2 });
+    const chosen = act(miss, { type: 'reveal-own', index: 1 });
+    const official = act(board([[hid(B(1)), hid(W(8))], [hid(B(3)), hid(W(6))]], { penalty: 'drawn', drawn: W(4), pool: [B(10)] }), { type: 'guess', target: 1, index: 0, value: 2 });
+    expect(chosen.players[0]?.row).toEqual(official.players[0]?.row);
+    expect(chosen.current).toBe(official.current);
+  });
+
+  it('조커를 뽑았으면 놓을 자리를 먼저 고르고, 그다음 공개할 타일을 고른다', () => {
+    let s = act(two({ drawn: WHITE_JOKER }), { type: 'guess', target: 1, index: 0, value: 2 });
+    expect(s.phase).toBe('place');
+    expect(s.placeRevealed).toBe(false);
+    expect(s.mustReveal).toBe(true);
+    s = act(s, { type: 'place', index: 1 });
+    expect(s.phase).toBe('reveal-own');
+    expect(s.players[0]?.row.map((x) => x.tile)).toEqual([B(1), WHITE_JOKER, W(8)]);
+    expect(s.players[0]?.row[1]?.revealed).toBe(false);
+    expect(s.justPlaced).toBe(WHITE_JOKER);
+    // 조커를 숨기고 다른 타일을 공개
+    s = act(s, { type: 'reveal-own', index: 0 });
+    expect(s.players[0]?.row.map((x) => x.revealed)).toEqual([true, false, false]);
+    expect(s.current).toBe(1);
+  });
+
+  it('맞히면 규칙과 상관없이 그대로: 계속/멈춤을 고르고, 멈추면 숨긴 채 끼운다', () => {
+    let s = act(two(), { type: 'guess', target: 1, index: 1, value: 6 });
+    expect(s.phase).toBe('decide');
+    expect(s.mustReveal).toBe(false);
+    s = act(s, { type: 'stop' });
+    expect(s.players[0]?.row.every((x) => !x.revealed)).toBe(true);
+    expect(s.current).toBe(1);
+  });
+
+  it('더미가 비었으면 뽑은 타일이 없으니 곧바로 내 숨은 타일을 고른다 (공식 규칙과 같다)', () => {
+    for (const penalty of ['choose', 'drawn'] as const) {
+      let s = board([[hid(B(1)), hid(W(8))], [hid(B(3)), hid(W(6))]], { penalty, drawn: null });
+      s = act(s, { type: 'guess', target: 1, index: 0, value: 9 });
+      expect(s.phase).toBe('reveal-own');
+      s = act(s, { type: 'reveal-own', index: 0 });
+      expect(s.players[0]?.row[0]?.revealed).toBe(true);
+      expect(s.current).toBe(1);
+    }
+  });
+
+  it('숨은 타일이 하나뿐이어도 새로 끼운 타일과 둘 중에서 고르므로 곧바로 탈락하지는 않는다', () => {
+    let s = board([[open(B(1)), hid(W(8))], [hid(B(3)), hid(W(6))], [hid(B(4))]], { penalty: 'choose', drawn: W(2), pool: [B(10)] });
+    s = act(s, { type: 'guess', target: 1, index: 0, value: 9 });
+    expect(s.phase).toBe('reveal-own');
+    expect(s.players[0]?.out).toBe(false);
+    expect(hiddenCount(s.players[0] as CodaPlayer)).toBe(2);
+    // 하나를 공개해도 하나는 숨은 채 — 같은 장수로 이어 간다
+    s = act(s, { type: 'reveal-own', index: 1 });
+    expect(s.players[0]?.out).toBe(false);
+    expect(hiddenCount(s.players[0] as CodaPlayer)).toBe(1);
+  });
+
+  it('고를 때가 아니면 공개할 수 없다', () => {
+    const s = two();
+    expect(codaReduce(s, { type: 'reveal-own', index: 0 }).ok).toBe(false); // 추리 단계
+    const m = act(s, { type: 'guess', target: 1, index: 0, value: 2 });
+    expect(codaReduce(m, { type: 'guess', target: 1, index: 1, value: 6 }).ok).toBe(false); // 공개할 타일을 골라야 한다
+    expect(codaReduce(m, { type: 'stop' }).ok).toBe(false);
+  });
+
+  it('옛 저장본(공개 규칙 값이 없는 판)은 공식 규칙대로 뽑은 타일을 공개한다', () => {
+    const old: Record<string, unknown> = { ...board([[hid(B(1)), hid(W(8))], [hid(B(3)), hid(W(6))]], { drawn: W(4), pool: [B(10)] }) };
+    delete old.penalty;
+    delete old.mustReveal;
+    delete old.justPlaced;
+    const s = act(old as unknown as CodaState, { type: 'guess', target: 1, index: 0, value: 2 });
+    expect(s.current).toBe(1);
+    expect(s.players[0]?.row[1]).toMatchObject({ tile: W(4), revealed: true });
+  });
+
+  it('새 판의 기본 규칙은 내가 골라 공개', () => {
+    expect(newCoda({ seats: seats(2), jokers: true, seed: 1 }).penalty).toBe('choose');
+    expect(newCoda({ seats: seats(2), jokers: true, seed: 1, penalty: 'drawn' }).penalty).toBe('drawn');
+  });
+});
+
+describe('공개할 타일 고르기 — 상대가 짐작하는 정도', () => {
+  it('숨은 타일마다 공개 정보만으로 본 가장 높은 확률 (공개된 자리는 null)', () => {
+    // 검정2 [검정?] 검정4 사이의 검정 타일은 검정3뿐 → 상대도 확실히 안다
+    const s = board([[open(B(2)), hid(B(3)), open(B(4)), hid(W(9))], [hid(B(5)), hid(W(7))]], { drawn: null, jokers: false });
+    const e = exposure(s, 0);
+    expect(e[0]).toBeNull();
+    expect(e[1]).toBeCloseTo(1, 5);
+    expect(e[2]).toBeNull();
+    // 아무 단서 없는 쪽(하양9: 뒤가 열려 있다)은 덜 확실하다
+    expect(e[3] as number).toBeLessThan(1);
+    expect(e[3] as number).toBeGreaterThan(0);
+  });
+});
+
 describe('추리기', () => {
   it('순서로 좁힌다: 검정3 < ? < 하양5 이고 ?가 하양이면 하양3 또는 하양4', () => {
     const s = board([[hid(B(0))], [open(B(3)), hid(W(4)), open(W(5))]], { drawn: null, jokers: false });
@@ -301,9 +435,9 @@ describe('추리기', () => {
 });
 
 describe('AI', () => {
-  function play(levels: AiLevel[], seed: number, jokers: boolean): { state: CodaState; steps: number } {
+  function play(levels: AiLevel[], seed: number, jokers: boolean, penalty: CodaPenalty = 'choose'): { state: CodaState; steps: number } {
     const rng = createRng(seed * 31 + 7);
-    let s = newCoda({ seats: levels.map((ai, i) => ({ name: `AI${i}`, seat: 'ai' as const, ai })), jokers, seed });
+    let s = newCoda({ seats: levels.map((ai, i) => ({ name: `AI${i}`, seat: 'ai' as const, ai })), jokers, seed, penalty });
     let steps = 0;
     while (s.phase !== 'over' && steps < 2000) {
       const a = codaDecide(s, rng);
@@ -322,7 +456,8 @@ describe('AI', () => {
     for (let g = 0; g < 300; g++) {
       const n = 2 + (g % 3);
       const seatLevels = Array.from({ length: n }, (_, i) => levels[(g + i) % 4] as AiLevel);
-      const { state, steps } = play(seatLevels, 5000 + g, g % 3 !== 0);
+      // 두 공개 규칙(내가 고르기 · 공식)을 번갈아
+      const { state, steps } = play(seatLevels, 5000 + g, g % 3 !== 0, g % 2 === 0 ? 'choose' : 'drawn');
       expect(state.phase).toBe('over');
       expect(state.winner).not.toBeNull();
       expect(steps).toBeLessThan(2000);

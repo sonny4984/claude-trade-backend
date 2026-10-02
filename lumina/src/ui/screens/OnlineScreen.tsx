@@ -337,6 +337,13 @@ function Lobby() {
             </span>
             <input type="checkbox" className="switch" checked={table.jokers} onChange={(e) => store.setJokers(e.target.checked)} />
           </label>
+          <label className="toggle-row">
+            <span>
+              {t('coda.penalty')}
+              <small className="toggle-sub">{t('coda.penaltySub')}</small>
+            </span>
+            <input type="checkbox" className="switch" checked={table.penalty !== 'drawn'} onChange={(e) => store.setPenalty(e.target.checked ? 'choose' : 'drawn')} />
+          </label>
         </section>
       )}
       {!host && status === 'lobby' && (

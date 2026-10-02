@@ -344,6 +344,47 @@ test('다빈치 코드 혼자 두기: 시작하면 내 코드가 보이고 추�
   expect(errors).toEqual([]);
 });
 
+test('다빈치 코드: 틀리면 공개할 내 타일을 내가 고르고, "공개하기"로 확정한다', async ({ page }) => {
+  const errors = await open(page, {}, '/?seed=3');
+  await page.locator('.plate-coda').click();
+  await page.locator('.screen-foot .btn-primary').click();
+  await expect(page.locator('.coda')).toBeVisible();
+  for (const color of ['black', 'white', 'black', 'white']) {
+    const heap = page.locator(`button.pile-heap[data-color="${color}"]`);
+    await expect(heap).toBeVisible({ timeout: 20_000 });
+    await heap.click();
+  }
+  // 틀릴 때까지 한 수씩 (맞히면 멈추고 다음 차례로)
+  const confirm = page.locator('.reveal-confirm');
+  for (let i = 0; i < 80 && !(await confirm.count()); i++) {
+    if (await page.locator('button.pile-heap[data-pick]').count()) await page.locator('button.pile-heap[data-pick]').first().click();
+    else if (await page.locator('.code-gap').count()) await page.locator('.code-gap').first().click();
+    else if (await page.locator('.coda-actions .moves .btn-secondary').count()) await page.locator('.coda-actions .moves .btn-secondary').first().click();
+    else if (await page.locator('.numpad button:not([disabled])').count()) await page.locator('.numpad button:not([disabled])').last().click();
+    else if (await page.locator('.code-row button.ctile').count()) await page.locator('.code-row button.ctile').first().click();
+    await page.waitForTimeout(600);
+  }
+  await expect(confirm).toBeVisible();
+  // 방금 뽑은 타일 표시(✦)가 있고, 확정 버튼은 고르기 전엔 꺼져 있다
+  await expect(page.locator('.my-code .ctile[data-fresh]')).toHaveCount(1);
+  await expect(confirm).toBeDisabled();
+  const hidden = await page.locator('.my-code .ctile:not([data-revealed])').count();
+  // 방금 뽑은 타일이 아닌 타일을 골라 본다 (고르면 올라오고 버튼이 켜진다 — 한 번 더 누르면 취소)
+  const other = page.locator('.my-code button.ctile:not([data-fresh])').first();
+  await other.click();
+  await expect(page.locator('.my-code .ctile[data-selected]')).toHaveCount(1);
+  await expect(confirm).toBeEnabled();
+  await other.click();
+  await expect(confirm).toBeDisabled();
+  await other.click();
+  await confirm.click();
+  // 고른 타일 하나만 공개되고 차례가 넘어간다 (숨은 장수는 하나 줄어든 채)
+  await expect(page.locator('.my-code .ctile[data-revealed]')).toHaveCount(1);
+  await expect(confirm).toHaveCount(0);
+  expect(await page.locator('.my-code .ctile:not([data-revealed])').count()).toBe(hidden - 1);
+  expect(errors).toEqual([]);
+});
+
 /** 다빈치 코드: 처음 4장을 가져오고, 내 차례에 한 장 뽑아 상대 타일 하나를 고른다 */
 async function codaPickTarget(page: Page): Promise<void> {
   await page.locator('.plate-coda').click();

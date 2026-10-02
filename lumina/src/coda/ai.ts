@@ -104,8 +104,9 @@ function wantsMore(s: CodaState, prof: CodaAiProfile): boolean {
     const target = s.players[best.target] as CodaPlayer;
     if (hiddenCount(target) === 1) need -= 0.12; // 떨어뜨릴 기회
     if (hiddenCount(me) <= 2) need += 0.12; // 내가 위험
-    if (s.drawn === null) need += 0.1; // 틀리면 내 타일을 공개해야 한다
-    if (s.drawn !== null && isCodaJoker(s.drawn)) need += 0.1; // 조커를 들키기 싫다
+    if (s.drawn === null) need += 0.1; // 더미가 비었다: 틀리면 내 숨은 타일 하나를 공개해야 한다
+    else if (s.penalty === 'choose') need -= 0.03; // 공개할 타일을 내가 고르니(이미 짐작당한 걸 내준다) 틀려도 덜 아프다
+    else if (isCodaJoker(s.drawn)) need += 0.1; // 조커를 들키기 싫다 (공식 규칙: 뽑은 타일이 그대로 공개된다)
     if (activePlayers(s).length === 2 && hiddenCount(target) <= hiddenCount(me) - 2) need += 0.05;
   }
   return best.p >= need;
@@ -147,6 +148,7 @@ export function codaDecide(s: CodaState, rng: Rng, level?: AiLevel): CodaAction 
       return { type: 'place', index: slots[rng.int(slots.length)] ?? 0 };
     }
     case 'reveal-own': {
+      // 틀렸을 때 공개할 내 타일 (방금 숨긴 채 끼운 타일도 후보)
       const hidden = me.row.map((x, i) => (x.revealed ? -1 : i)).filter((i) => i >= 0);
       if (prof.level === 'advanced' || prof.level === 'expert') {
         // 모두가 이미 거의 아는 타일을 내준다 (공개 정보만으로 본 확률이 가장 높은 자리)

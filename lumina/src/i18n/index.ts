@@ -102,5 +102,9 @@ export function commitIssueText(lang: Lang, issue: CommitIssue): string {
 
 /** "휘기가 / 뽀니가 / 모카가" — 이름 + 이/가 */
 export function subj(lang: Lang, name: string): string {
-  return lang === 'ko' ? name + josa(name, '이', '가') : name;
+  if (lang !== 'ko') return name;
+  // 이름이 "나"·"저"면 주격은 "나가"·"저가"가 아니라 "내가"·"제가"
+  if (name === '나') return '내가';
+  if (name === '저') return '제가';
+  return name + josa(name, '이', '가');
 }

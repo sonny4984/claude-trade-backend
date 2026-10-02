@@ -7,8 +7,11 @@
  *  · 자기 줄은 작은 수가 왼쪽. 같은 수면 검정이 왼쪽. 조커는 아무 자리에나 둘 수 있다.
  *  · 차례: 더미에서 검정이나 하양 한 장을 골라 뽑아 혼자 본다(draw) → 상대의 숨은 타일 하나를 가리켜 숫자를 말한다.
  *    맞으면 그 타일이 공개되고, 더 맞힐지 멈출지 고른다. 멈추면 뽑은 타일을 숨긴 채 제자리에 끼운다.
- *    틀리면 뽑은 타일을 공개한 채 제자리에 끼우고 차례가 끝난다.
- *  · 더미가 비면 뽑지 않고 추리한다. 틀리면 자기 숨은 타일 하나를 골라 공개한다.
+ *    틀리면(공개 규칙, penalty):
+ *     - 'choose'(기본): 뽑은 타일을 숨긴 채 제자리에 끼우고, 내 숨은 타일 중 하나를 내가 골라 공개한다 (방금 뽑은 타일도 고를 수 있다).
+ *     - 'drawn'(공식 규칙): 뽑은 타일을 공개한 채 제자리에 끼운다.
+ *    어느 쪽이든 그 뒤 차례가 끝난다.
+ *  · 더미가 비면 뽑지 않고 추리한다. 틀리면 (규칙과 상관없이) 자기 숨은 타일 하나를 골라 공개한다.
  *  · 줄이 모두 공개되면 탈락. 마지막까지 숨은 타일이 남은 사람이 이긴다.
  */
 import { createRng, shuffle } from '../game/rng';
@@ -89,6 +92,9 @@ export interface CodaPlayer {
 
 export type CodaPhase = 'deal' | 'draw' | 'guess' | 'decide' | 'place' | 'reveal-own' | 'over';
 
+/** 추리가 틀렸을 때 공개하는 타일: 내가 고른 숨은 타일(choose) 또는 방금 뽑은 타일(drawn, 공식) */
+export type CodaPenalty = 'choose' | 'drawn';
+
 export interface CodaLogEntry {
   readonly turn: number;
   readonly p: number;
@@ -117,6 +123,12 @@ export interface CodaState {
   readonly log: readonly CodaLogEntry[];
   /** 처음 타일을 다 가져간 뒤 첫 차례를 할 사람 */
   readonly first: number;
+  /** 틀렸을 때 어떤 타일을 공개하는가 (옛 저장본에는 없다 = 공식 규칙) */
+  readonly penalty: CodaPenalty;
+  /** 틀려서 내 타일을 하나 공개해야 하는 중 (뽑은 타일을 끼우는 동안과 공개할 타일을 고르는 동안) */
+  readonly mustReveal: boolean;
+  /** 틀린 뒤 방금 숨긴 채 끼운 타일 — 공개할 타일을 고를 때 표시해 준다 */
+  readonly justPlaced: CodaTileId | null;
 }
 
 export type CodaAction =
@@ -210,10 +222,10 @@ export function poolColors(s: CodaState): Readonly<Record<CodaColor, number>> {
 /** 차례 시작: 더미가 있으면 먼저 한 장을 골라 뽑는다(draw), 없으면 바로 추리 */
 function beginTurn(s: CodaState, p: number, events: CodaEvent[]): CodaState {
   events.push({ type: 'turn', p });
-  return { ...s, drawn: null, current: p, phase: s.pool.length ? 'draw' : 'guess', placeRevealed: false, streak: 0, turnNo: s.turnNo + 1 };
+  return { ...s, drawn: null, current: p, phase: s.pool.length ? 'draw' : 'guess', placeRevealed: false, mustReveal: false, justPlaced: null, streak: 0, turnNo: s.turnNo + 1 };
 }
 
-export function newCoda(o: { seats: readonly CodaSeat[]; jokers: boolean; seed: number; first?: number }): CodaState {
+export function newCoda(o: { seats: readonly CodaSeat[]; jokers: boolean; seed: number; first?: number; penalty?: CodaPenalty }): CodaState {
   const n = o.seats.length;
   if (n < 2 || n > 4) throw new Error('다빈치 코드는 2~4명이 둡니다');
   const rng = createRng(o.seed);
@@ -243,6 +255,9 @@ export function newCoda(o: { seats: readonly CodaSeat[]; jokers: boolean; seed: 
     winner: null,
     log: [],
     first,
+    penalty: o.penalty ?? 'choose',
+    mustReveal: false,
+    justPlaced: null,
   };
 }
 
@@ -321,6 +336,13 @@ function finishPlace(s: CodaState, index: number, revealed: boolean, events: Cod
   let st = withPlayer(s, s.current, { row: insertAt(me.row, index, { tile, revealed, misses: [] }) });
   st = { ...st, drawn: null, placeRevealed: false };
   events.push({ type: 'placed', p: s.current, index, revealed, tile: revealed ? tile : null });
+  if (s.mustReveal) {
+    // 틀렸다: 방금 숨긴 채 끼운 타일을 포함해 내 숨은 타일 하나를 골라 공개한다
+    st = { ...st, justPlaced: tile };
+    const hidden = (st.players[s.current] as CodaPlayer).row.map((x, i) => (x.revealed ? -1 : i)).filter((i) => i >= 0);
+    if (hidden.length === 1) return revealOwn(st, hidden[0] as number, events);
+    return { ...st, phase: 'reveal-own' };
+  }
   const r = settle(st, events);
   return r.over ? r.state : endTurn(r.state, events);
 }
@@ -363,7 +385,11 @@ export function codaReduce(s: CodaState, a: CodaAction): CodaResult {
       }
       st = withSlot(st, a.target, a.index, { misses: [...slot.misses, a.value] });
       events.push({ type: 'miss', p: s.current, target: a.target, index: a.index, value: a.value });
-      if (st.drawn !== null) return { ok: true, state: placeDrawn(st, true, events), events };
+      if (st.drawn !== null) {
+        // 공식 규칙: 뽑은 타일을 공개한 채 끼운다 / 고르기 규칙: 숨긴 채 끼우고 공개할 타일을 고른다
+        if (s.penalty === 'choose') return { ok: true, state: placeDrawn({ ...st, mustReveal: true }, false, events), events };
+        return { ok: true, state: placeDrawn(st, true, events), events };
+      }
       // 더미가 비었다: 자기 숨은 타일 하나를 공개
       const hidden = me.row.map((x, i) => (x.revealed ? -1 : i)).filter((i) => i >= 0);
       if (hidden.length === 1) return { ok: true, state: revealOwn(st, hidden[0] as number, events), events };
@@ -396,7 +422,7 @@ export function codaReduce(s: CodaState, a: CodaAction): CodaResult {
 function revealOwn(s: CodaState, index: number, events: CodaEvent[]): CodaState {
   const me = s.players[s.current] as CodaPlayer;
   const slot = me.row[index] as CodaSlot;
-  const st = withSlot(s, s.current, index, { revealed: true });
+  const st = { ...withSlot(s, s.current, index, { revealed: true }), mustReveal: false, justPlaced: null };
   events.push({ type: 'reveal-own', p: s.current, index, tile: slot.tile });
   const r = settle(st, events);
   return r.over ? r.state : endTurn(r.state, events);
@@ -429,6 +455,8 @@ export function codaInvariants(s: CodaState): string[] {
     if (s.phase !== 'deal' && p.out !== (hiddenCount(p) === 0)) issues.push(`${i}번 탈락 표시`);
     if (s.phase === 'deal' && p.out) issues.push(`${i}번 탈락 표시`);
   });
+  if (s.mustReveal && s.phase !== 'place' && s.phase !== 'reveal-own') issues.push('공개 중 표시가 남음');
+  if (s.phase === 'reveal-own' && hiddenCount(s.players[s.current] as CodaPlayer) < 1) issues.push('공개할 타일 없음');
   if (s.phase === 'over' && s.winner === null) issues.push('승자 없음');
   if (s.phase !== 'over' && activePlayers(s).length < 2) issues.push('끝났어야 함');
   return issues;

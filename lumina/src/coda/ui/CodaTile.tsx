@@ -13,6 +13,10 @@ export interface CodaTileProps {
   readonly pending?: boolean;
   readonly flash?: 'hit' | 'open' | null;
   readonly hinted?: boolean;
+  /** 틀린 뒤 방금 숨긴 채 끼운 타일 — 공개할 타일을 고를 때 표시 */
+  readonly fresh?: boolean;
+  /** 타일 아래에 붙이는 작은 글 (공개할 타일을 고를 때 상대가 짐작하는 정도 등) */
+  readonly note?: string | null;
   readonly misses?: readonly CodaGuess[];
   /** 타일 위에 띄우는 말 ("7?" 같은 추리 값) */
   readonly callout?: string | null;
@@ -22,7 +26,7 @@ export interface CodaTileProps {
 }
 
 /** 다빈치 코드의 흑·백 타일 — 서 있으면 숨김, 앞으로 쓰러지면 공개 */
-export const CodaTile = memo(function CodaTile({ id, faceUp, revealed, secret, selected, pending, flash, hinted, misses, callout, label, onClick, size = 'md' }: CodaTileProps) {
+export const CodaTile = memo(function CodaTile({ id, faceUp, revealed, secret, selected, pending, flash, hinted, fresh, note, misses, callout, label, onClick, size = 'md' }: CodaTileProps) {
   const color = codaColor(id);
   const value = codaValue(id);
   const face = faceUp ? (
@@ -48,6 +52,7 @@ export const CodaTile = memo(function CodaTile({ id, faceUp, revealed, secret, s
     'data-pending': pending || undefined,
     'data-flash': flash ?? undefined,
     'data-hinted': hinted || undefined,
+    'data-fresh': fresh || undefined,
     'aria-label': label,
   } as const;
   return (
@@ -64,6 +69,11 @@ export const CodaTile = memo(function CodaTile({ id, faceUp, revealed, secret, s
       ) : (
         <span {...common} role="img">
           {face}
+        </span>
+      )}
+      {note && (
+        <span className="ctile-note" aria-hidden="true">
+          {note}
         </span>
       )}
       {misses && misses.length > 0 && (

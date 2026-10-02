@@ -11,12 +11,13 @@ import { CodaTile } from './CodaTile';
 
 const LEVELS: AiLevel[] = ['beginner', 'casual', 'advanced', 'expert'];
 
-function defaults(mode: 'solo' | 'local', lang: 'ko' | 'en', jokers = true): CodaSetupConfig {
+function defaults(mode: 'solo' | 'local', lang: 'ko' | 'en', jokers = true, penalty: CodaSetupConfig['penalty'] = 'choose'): CodaSetupConfig {
   const ko = lang === 'ko';
   if (mode === 'solo') {
     return {
       mode,
       jokers,
+      penalty,
       seats: [
         { name: ko ? '나' : 'You', kind: 'human', level: 'casual', character: 'moka' },
         { name: ko ? '휘기' : 'Hwigi', kind: 'ai', level: 'beginner', character: 'hwigi' },
@@ -27,6 +28,7 @@ function defaults(mode: 'solo' | 'local', lang: 'ko' | 'en', jokers = true): Cod
   return {
     mode,
     jokers,
+    penalty,
     seats: [
       { name: ko ? '나' : 'Player 1', kind: 'human', level: 'casual', character: 'hwigi' },
       { name: ko ? '여자친구' : 'Player 2', kind: 'human', level: 'casual', character: 'ginini' },
@@ -112,7 +114,7 @@ export function CodaSetup() {
   };
   const setMode = (mode: 'solo' | 'local'): void => {
     if (mode === cfg.mode) return;
-    setCfg(defaults(mode, lang, cfg.jokers));
+    setCfg(defaults(mode, lang, cfg.jokers, cfg.penalty));
   };
   const start = (): void => {
     useCoda.getState().start({
@@ -205,6 +207,13 @@ export function CodaSetup() {
               <small className="toggle-sub">{t('coda.jokersSub')}</small>
             </span>
             <input type="checkbox" className="switch" checked={cfg.jokers} onChange={(e) => setCfg((c) => ({ ...c, jokers: e.target.checked }))} />
+          </label>
+          <label className="toggle-row">
+            <span>
+              {t('coda.penalty')}
+              <small className="toggle-sub">{t('coda.penaltySub')}</small>
+            </span>
+            <input type="checkbox" className="switch" checked={cfg.penalty === 'choose'} onChange={(e) => setCfg((c) => ({ ...c, penalty: e.target.checked ? 'choose' : 'drawn' }))} />
           </label>
           <AssistPick />
         </section>

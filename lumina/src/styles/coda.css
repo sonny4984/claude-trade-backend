@@ -314,6 +314,45 @@ button.ctile:hover:not([data-revealed]) {
     background: rgba(226, 194, 127, 0.28);
   }
 }
+/* 틀린 뒤 공개할 타일을 고를 때: 방금 숨긴 채 끼운 타일은 ✦ */
+.ctile[data-fresh] {
+  outline: 2px dashed var(--accent-2);
+  outline-offset: 2px;
+}
+.ctile[data-fresh]::after {
+  content: '✦';
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.ctile-note {
+  font: 700 11px/1 var(--font-ui);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.reveal-panel {
+  display: grid;
+  gap: 8px;
+}
+.reveal-tip {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+}
 .my-code[data-choosing] button.ctile {
   box-shadow:
     inset 0 1px 0 var(--ct-hi),
