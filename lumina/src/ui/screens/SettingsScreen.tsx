@@ -89,6 +89,7 @@ export function SettingsScreen() {
           <h2 className="card-title">{t('settings.appearance')}</h2>
           <Choice label={t('settings.tileSize')} value={s.tileSize} options={[{ v: 'S', label: t('settings.small') }, { v: 'M', label: t('settings.medium') }, { v: 'L', label: t('settings.large') }]} onChange={(v) => s.set({ tileSize: v })} />
           <Choice label={t('settings.motion')} value={s.motion} options={[{ v: 'system', label: t('settings.motionSystem') }, { v: 'full', label: t('settings.motionFull') }, { v: 'reduced', label: t('settings.motionReduced') }]} onChange={(v) => s.set({ motion: v })} />
+          <Choice label={t('settings.rkTable')} value={s.rkTable} options={(['classic', 'theme'] as const).map((v) => ({ v, label: t(`settings.rkTableOpt.${v}`) }))} onChange={(v) => s.set({ rkTable: v })} />
           <Toggle label="3D" value={s.show3d} onChange={(v) => s.set({ show3d: v })} />
           <Choice label={t('settings.language')} value={s.lang} options={[{ v: 'ko', label: '한국어' }, { v: 'en', label: 'English' }]} onChange={(v) => s.set({ lang: v })} />
         </section>

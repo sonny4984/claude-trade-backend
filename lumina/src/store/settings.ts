@@ -5,8 +5,8 @@ import type { AiLevel } from '../game/types';
 import type { MatchFormat } from '../game/match';
 import { isCharacterId, type CharacterId } from '../characters/roster';
 
-export type ThemeId = 'picnic' | 'lumina' | 'ivory' | 'midnight' | 'walnut' | 'glass' | 'studio' | 'pastel' | 'matcha';
-export const THEME_IDS: readonly ThemeId[] = ['picnic', 'lumina', 'ivory', 'midnight', 'walnut', 'glass', 'studio', 'pastel', 'matcha'];
+export type ThemeId = 'picnic' | 'classic' | 'lumina' | 'ivory' | 'midnight' | 'walnut' | 'glass' | 'studio' | 'pastel' | 'matcha';
+export const THEME_IDS: readonly ThemeId[] = ['picnic', 'classic', 'lumina', 'ivory', 'midnight', 'walnut', 'glass', 'studio', 'pastel', 'matcha'];
 export type Lang = 'ko' | 'en';
 
 export interface SeatConfig {
@@ -51,6 +51,8 @@ export interface SettingsState {
    * lots(많이): 연습용 — 힌트 무제한, 완성된 테이블·숫자별 확률까지
    */
   assist: 'self' | 'some' | 'lots';
+  /** 루미큐브 테이블: 클래식(초록 펠트·원목 랙·선명한 숫자 — 앱 테마와 상관없이) · 앱 테마 따라 */
+  rkTable: 'classic' | 'theme';
   confirmDraw: boolean;
   autoSort: 'off' | 'color' | 'number';
   show3d: boolean;
@@ -78,6 +80,7 @@ const DEFAULTS: Omit<SettingsState, 'set'> = {
   aiSpeed: 'normal',
   hints: 'limited',
   assist: 'self',
+  rkTable: 'classic',
   confirmDraw: true,
   autoSort: 'color',
   show3d: true,
@@ -128,6 +131,7 @@ function load(): Omit<SettingsState, 'set'> {
     aiSpeed: pick(raw.aiSpeed, ['fast', 'normal', 'slow'] as const, 'normal'),
     hints: pick(raw.hints, ['limited', 'unlimited', 'off'] as const, 'limited'),
     assist: pick(raw.assist ?? (raw as { rkAssist?: unknown }).rkAssist, ['self', 'some', 'lots'] as const, 'self'),
+    rkTable: pick(raw.rkTable, ['classic', 'theme'] as const, 'classic'),
     confirmDraw: typeof raw.confirmDraw === 'boolean' ? raw.confirmDraw : true,
     autoSort: pick(raw.autoSort, ['off', 'color', 'number'] as const, 'color'),
     show3d: typeof raw.show3d === 'boolean' ? raw.show3d : true,

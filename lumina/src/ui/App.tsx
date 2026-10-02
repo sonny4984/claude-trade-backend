@@ -29,7 +29,11 @@ import { FullscreenHelp, canFullscreen, enterFullscreen, isFullscreen, isStandal
 
 /** 테마·접근성 설정을 <html> 속성으로 */
 function useDocumentSettings(): void {
-  const theme = useSettings((s) => s.theme);
+  const appTheme = useSettings((s) => s.theme);
+  // 루미큐브 판은 기본으로 클래식 테이블 (초록 펠트·원목 랙) — 설정에서 앱 테마를 따르게 할 수 있다
+  const rkTable = useSettings((s) => s.rkTable);
+  const inRummikub = useGame((s) => s.screen === 'game');
+  const theme = inRummikub && rkTable === 'classic' ? 'classic' : appTheme;
   const hc = useSettings((s) => s.highContrast);
   const cvd = useSettings((s) => s.cvd);
   const motion = useSettings((s) => s.motion);

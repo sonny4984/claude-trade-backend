@@ -307,6 +307,8 @@ export const en: Dict = {
     hints: 'Hints (Gomoku)',
     assist: 'Help (Rummikub · Da Vinci Code)',
     assistShort: 'Help',
+    rkTable: 'Rummikub table',
+    rkTableOpt: { classic: 'Classic', theme: 'App theme' },
     assistOpt: { self: 'On my own', some: 'A little', lots: 'Lots' },
     assistCodaSub: {
       self: 'Da Vinci Code: the number pad doesn’t cross out numbers you can see or already missed. One hint per game (just the most narrowed-down tile and how many numbers are left).',
@@ -350,6 +352,8 @@ export const en: Dict = {
   theme: {
     picnic: 'Picnic',
     picnicSub: 'A guinea-pig picnic blanket',
+    classic: 'Classic table',
+    classicSub: 'Green felt, wood rack, bold numbers',
     lumina: 'Lumina',
     luminaSub: 'Evening felt table',
     ivory: 'Classic Ivory',

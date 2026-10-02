@@ -392,3 +392,79 @@
   --ink-blue: #0068b0;
   --ink-black: #111111;
 }
+
+/* ── 10 클래식 테이블: 짙은 청록 방, 초록 펠트 위 옅은 놓는 칸, 밝은 원목 랙,
+       하얀 타일에 굵고 선명한 빨강·파랑·주황·검정 숫자 (루미큐브 판의 기본 모습) ── */
+:root[data-lumina-theme='classic'] {
+  color-scheme: dark;
+  --font-num: 'Figtree', 'IBM Plex Sans KR', system-ui, sans-serif;
+  --plate-ink: #ffffff;
+  --room-0: #0a2432;
+  --room-1: rgba(90, 190, 230, 0.12);
+  --vignette: rgba(0, 8, 16, 0.5);
+  --felt-0: #115c4c;
+  --felt-1: #1a7861;
+  --felt-grain: 1;
+  --felt-edge: rgba(0, 0, 0, 0.35);
+  --rail-0: #37220f;
+  --rail-1: #5a381d;
+  --rail-inner: #e2b66a;
+  --rack-0: #b5743a;
+  --rack-1: #dda466;
+  --rack-lip: rgba(255, 236, 205, 0.5);
+  --rack-well: #9c6232;
+  --rack-well-shade: rgba(60, 28, 8, 0.45);
+  --tile-0: #fffdf8;
+  --tile-1: #eee6d6;
+  --tile-hi: #ffffff;
+  --tile-lo: rgba(120, 100, 70, 0.28);
+  --tile-edge: #d4c9b2;
+  --tile-edge-2: #b9ac90;
+  --tile-shadow: rgba(0, 0, 0, 0.38);
+  --tile-lift-shadow: rgba(0, 0, 0, 0.48);
+  --ink-red: #d8232e;
+  --ink-blue: #1d5fd8;
+  --ink-orange: #f08a00;
+  --ink-black: #141414;
+  --ink-emboss-hi: rgba(255, 255, 255, 0.4);
+  --ink-emboss-lo: rgba(0, 0, 0, 0.12);
+  --text: #f1f6f5;
+  --text-dim: rgba(241, 246, 245, 0.72);
+  --text-faint: rgba(241, 246, 245, 0.46);
+  --panel: rgba(8, 30, 40, 0.86);
+  --panel-solid: #0e2a37;
+  --panel-line: rgba(246, 185, 59, 0.26);
+  --accent: #f6b93b;
+  --accent-2: #ffd36e;
+  --accent-ink: #2a1a00;
+  --accent-soft: rgba(246, 185, 59, 0.16);
+  --btn: rgba(255, 255, 255, 0.07);
+  --btn-line: rgba(246, 185, 59, 0.5);
+  --btn-hover: rgba(246, 185, 59, 0.1);
+  --overlay: rgba(4, 16, 22, 0.76);
+  --valid: rgba(150, 225, 165, 0.72);
+  --valid-glow: rgba(150, 225, 165, 0.18);
+  --incomplete: rgba(225, 225, 205, 0.55);
+  --invalid: rgba(245, 115, 105, 0.88);
+  --invalid-glow: rgba(245, 115, 105, 0.16);
+  --select: #ffd36e;
+  --fresh: #ffd36e;
+  --focus: #ffe7a8;
+  --danger: #f08070;
+  --portrait-ring: rgba(246, 185, 59, 0.75);
+}
+/* 펠트: 거친 결 대신 옅은 칸 무늬 — 타일을 칸에 맞춰 놓는 느낌 */
+:root[data-lumina-theme='classic'] .felt::before {
+  opacity: 1;
+  mix-blend-mode: normal;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: calc(var(--tw) * 1.12) calc(var(--tw) * 1.48);
+  background-position: 11px 13px;
+}
+/* 굵고 또렷한 숫자 */
+:root[data-lumina-theme='classic'] .tile-num {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}

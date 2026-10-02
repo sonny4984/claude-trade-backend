@@ -206,12 +206,28 @@ test('테마를 바꾸면 문서 전체의 재질이 바뀐다', async ({ page }
   // 기본은 피크닉(기니피그 소풍 담요)
   await expect(page.locator('html')).toHaveAttribute('data-lumina-theme', 'picnic');
   await page.locator('.home-links').getByText('설정').click();
-  for (const id of ['ivory', 'midnight', 'walnut', 'glass', 'studio', 'pastel', 'matcha', 'picnic']) {
+  for (const id of ['classic', 'ivory', 'midnight', 'walnut', 'glass', 'studio', 'pastel', 'matcha', 'picnic']) {
     await page.locator(`.theme-card[data-preview="${id}"]`).click();
     await expect(page.locator('html')).toHaveAttribute('data-lumina-theme', id);
   }
   await page.locator('.theme-card[data-preview="lumina"]').click();
   await expect(page.locator('html')).not.toHaveAttribute('data-lumina-theme', /.+/);
+  expect(errors).toEqual([]);
+});
+
+test('루미큐브 판은 기본으로 클래식 테이블(초록 펠트·원목 랙)', async ({ page }) => {
+  const errors = await open(page);
+  await expect(page.locator('html')).toHaveAttribute('data-lumina-theme', 'picnic');
+  await startSolo(page);
+  await expect(page.locator('html')).toHaveAttribute('data-lumina-theme', 'classic');
+  expect(errors).toEqual([]);
+});
+
+test('루미큐브 테이블을 "앱 테마"로 두면 판에서도 앱 테마 그대로', async ({ page }) => {
+  const errors = await open(page, { rkTable: 'theme' });
+  await startSolo(page);
+  await expect(page.locator('.game')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-lumina-theme', 'picnic');
   expect(errors).toEqual([]);
 });
 

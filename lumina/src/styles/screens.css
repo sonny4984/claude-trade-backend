@@ -614,6 +614,22 @@
   font-family: 'Fredoka', var(--font-num);
   border-radius: 6px;
 }
+.theme-swatch[data-theme-preview='classic'] {
+  --sw-room: #0a2432;
+  --sw-felt-0: #115c4c;
+  --sw-felt-1: #1a7861;
+  --sw-rail-0: #37220f;
+  --sw-rail-1: #5a381d;
+  --sw-line: #e2b66a;
+  --sw-tile-0: #fffdf8;
+  --sw-tile-1: #eee6d6;
+  --sw-edge: #d4c9b2;
+  --sw-ink: #d8232e;
+}
+.theme-swatch[data-theme-preview='classic'] .swatch-tile {
+  font-family: 'Figtree', var(--font-num);
+  font-weight: 800;
+}
 .theme-swatch[data-theme-preview='ivory'] {
   --sw-room: #e9e1d2;
   --sw-felt-0: #efe6d4;

@@ -305,6 +305,8 @@ export const ko = {
     hints: '힌트 (오목)',
     assist: '도움 정도 (루미큐브·다빈치 코드)',
     assistShort: '도움 정도',
+    rkTable: '루미큐브 테이블',
+    rkTableOpt: { classic: '클래식', theme: '앱 테마' },
     assistOpt: { self: '스스로', some: '조금', lots: '많이' },
     assistSub: {
       self: '루미큐브: 혼자 확인해요. 힌트는 판마다 1번(쓸 타일 하나만)이고, 세트가 맞는지 틀렸는지 색으로 알려 주지 않아요(3장이 안 되는 세트만 표시).',
@@ -348,6 +350,8 @@ export const ko = {
   theme: {
     picnic: '피크닉',
     picnicSub: '기니피그 소풍 담요',
+    classic: '클래식 테이블',
+    classicSub: '초록 펠트와 원목 랙, 선명한 숫자',
     lumina: '루미나',
     luminaSub: '저녁 펠트 테이블',
     ivory: '클래식 아이보리',
