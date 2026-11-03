@@ -79,7 +79,9 @@ export type SoupAction =
   | { readonly type: 'quick'; readonly by: number; readonly reply: SoupAnswer }
   | { readonly type: 'hint' }
   | { readonly type: 'reveal' }
-  | { readonly type: 'next'; readonly puzzle: string };
+  | { readonly type: 'next'; readonly puzzle: string }
+  /** 전말을 보지 않고 다른 문제로 (AI가 이 문제에 답하지 못할 때) — 점수·기록 없이 */
+  | { readonly type: 'skip'; readonly puzzle: string };
 
 export type SoupError = 'phase' | 'empty' | 'long' | 'who' | 'entry' | 'reply' | 'hints' | 'puzzle' | 'host';
 export type SoupResult = { readonly ok: true; readonly state: SoupState } | { readonly ok: false; readonly error: SoupError };
@@ -194,8 +196,9 @@ export function soupReduce(s: SoupState, a: SoupAction): SoupResult {
       if (s.phase !== 'play') return { ok: false, error: 'phase' };
       return { ok: true, state: { ...s, phase: 'over', solvedBy: null } };
     }
-    case 'next': {
-      if (s.phase !== 'over') return { ok: false, error: 'phase' };
+    case 'next':
+    case 'skip': {
+      if (s.phase !== (a.type === 'next' ? 'over' : 'play')) return { ok: false, error: 'phase' };
       if (!puzzleById(a.puzzle)) return { ok: false, error: 'puzzle' };
       const st: SoupState = { ...s, puzzle: a.puzzle, log: [], found: [], hints: 0, phase: 'play', solvedBy: null, round: s.round + 1, played: [...s.played.filter((x) => x !== a.puzzle), a.puzzle] };
       return { ok: true, state: st };

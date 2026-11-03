@@ -184,6 +184,9 @@ function Askers({ st }: { st: SoupState }) {
   );
 }
 
+/** 단추를 눌러도 입력 칸의 커서(폰 키보드)가 그대로 남게 */
+const keepFocus = (e: React.PointerEvent): void => e.preventDefault();
+
 function Composer({ s }: { s: SoupSession }) {
   const t = useT();
   const [text, setText] = useState('');
@@ -229,10 +232,10 @@ function Composer({ s }: { s: SoupSession }) {
             onChange={(e) => setText(e.target.value)}
             disabled={waiting}
           />
-          <button type="submit" className="btn btn-primary soup-ask" disabled={!text.trim() || waiting}>
+          <button type="submit" className="btn btn-primary soup-ask" disabled={!text.trim() || waiting} onPointerDown={keepFocus}>
             {t('soup.ask')}
           </button>
-          <button type="button" className="btn btn-secondary soup-guess" disabled={!text.trim() || waiting} onClick={() => send('guess')}>
+          <button type="button" className="btn btn-secondary soup-guess" disabled={!text.trim() || waiting} onPointerDown={keepFocus} onClick={() => send('guess')}>
             {t('soup.guess')}
           </button>
         </form>

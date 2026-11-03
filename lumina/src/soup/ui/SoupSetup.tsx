@@ -11,8 +11,8 @@ import { useOnline } from '../../net/online';
 import { useAi } from '../../ai/store';
 import { GeminiCard } from '../../ai/GeminiCard';
 import { claudeUsed, dailyMax } from '../../ai/budget';
-import type { SoupFilter } from '../engine';
-import { loadSoupSetup, puzzleCount, savedSoup, useSoup, type SoupSetupConfig } from '../store';
+import { candidates, type SoupFilter } from '../engine';
+import { loadDone, loadSoupSetup, puzzleCount, resetDone, savedSoup, useSoup, type SoupSetupConfig } from '../store';
 
 function defaults(ko: boolean): SoupSetupConfig {
   return {
@@ -52,6 +52,12 @@ export function SoupSetup() {
   const count = puzzleCount(cfg.filter);
   const human = cfg.host === 'human';
   const canStart = count > 0 && (human ? n >= 2 : aiOk);
+  const [done, setDone] = useState(() => loadDone());
+  const [showList, setShowList] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const list = useMemo(() => [...candidates(cfg.filter)].sort((a, b) => a.level - b.level), [cfg.filter]);
+  const doneHere = list.filter((p) => done[p.id]).length;
+  const pickedPuzzle = list.find((p) => p.id === picked) ?? null;
 
   const patch = (i: number, p: Partial<SoupSetupConfig['players'][number]>): void => setCfg((c) => ({ ...c, players: c.players.map((x, k) => (k === i ? { ...x, ...p } : x)) }));
   const cycle = (i: number): void => {
@@ -142,7 +148,7 @@ export function SoupSetup() {
               <Icon name="plus" size={18} /> {t('setup.addSeat')}
             </button>
           )}
-          <p className="ai-sub">{t(human ? 'soup.playersHumanSub' : 'soup.playersSub')}</p>
+          <p className="ai-sub">{t(human ? 'soup.playersHumanSub' : n === 1 ? 'soup.playersSoloSub' : 'soup.playersSub')}</p>
         </section>
         <section className="card">
           <h2 className="card-title">{t('soup.puzzles')}</h2>
@@ -161,6 +167,45 @@ export function SoupSetup() {
             ))}
           </div>
           <p className="ai-sub">{t('soup.count', { n: count })}</p>
+          <p className="ai-sub soup-done">{t('soup.doneCount', { n: doneHere, total: list.length })}</p>
+          <p className="ai-sub soup-picked">{pickedPuzzle ? t('soup.pickedInfo', { title: pickedPuzzle.title }) : t('soup.random')}</p>
+          <div className="soup-list-tools">
+            <button type="button" className="btn btn-ghost btn-sm soup-list-toggle" aria-expanded={showList} onClick={() => setShowList((v) => !v)}>
+              {t(showList ? 'soup.listHide' : 'soup.listShow')}
+            </button>
+            {doneHere > 0 && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  resetDone();
+                  setDone({});
+                }}
+              >
+                {t('soup.resetDone')}
+              </button>
+            )}
+          </div>
+          {showList && (
+            <ul className="soup-list">
+              {list.map((p) => (
+                <li key={p.id}>
+                  <button type="button" className="soup-list-item" aria-pressed={picked === p.id} onClick={() => setPicked((x) => (x === p.id ? null : p.id))}>
+                    <span className="soup-list-title">{p.title}</span>
+                    <span className="soup-badge" data-level={p.level}>
+                      {t(`soup.levels.${p.level}`)}
+                    </span>
+                    {p.spice === 'dark' && (
+                      <span className="soup-badge" data-spice="dark">
+                        {t('soup.dark')}
+                      </span>
+                    )}
+                    {done[p.id] && <span className="soup-mark" data-mark={done[p.id]}>{t(done[p.id] === 'solved' ? 'soup.markSolved' : 'soup.markRevealed')}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
         <section className="card">
           <h2 className="card-title">{t('soup.howTitle')}</h2>
@@ -172,7 +217,7 @@ export function SoupSetup() {
         </section>
       </div>
       <footer className="screen-foot">
-        <button type="button" className="btn btn-primary btn-lg btn-block soup-start" disabled={!canStart} onClick={() => useSoup.getState().start(cfg)}>
+        <button type="button" className="btn btn-primary btn-lg btn-block soup-start" disabled={!canStart} onClick={() => useSoup.getState().start(cfg, pickedPuzzle?.id)}>
           {t('soup.start')}
         </button>
         <button

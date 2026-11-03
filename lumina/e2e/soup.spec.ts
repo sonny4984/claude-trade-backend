@@ -231,3 +231,47 @@ test('바다거북 스프: Gemini가 답을 거절하면 이유를 알리고 다
   await expect(page.locator('.soup-entry')).toHaveCount(0);
   expect(errors.filter((e) => !/400/.test(e))).toEqual([]);
 });
+
+test('바다거북 스프: 혼자서 AI와 — 끝낸 문제는 기록되고, 목록에서 골라 시작', async ({ page }) => {
+  await page.route(/generativelanguage\.googleapis\.com/, async (r) => {
+    const prompt = ((r.request().postDataJSON() ?? {}) as { contents?: { parts?: { text?: string }[] }[] }).contents?.[0]?.parts?.[0]?.text ?? '';
+    const out = prompt.includes('[참가자의 정답]') ? { v: 'correct', note: '', k: [1] } : { a: 'yes', note: '', k: [] };
+    await r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] }) });
+  });
+  const errors = await open(page, { 'lumina.gemini.v1': { key: 'e2e-not-a-key', model: 'gemini-e2e', models: ['gemini-e2e'] } });
+  // 혼자: 나머지 둘을 뺀다
+  for (let k = 0; k < 2; k++) await page.locator('.soup-player').last().getByRole('button', { name: '빼기' }).click();
+  await expect(page.locator('.soup-player')).toHaveCount(1);
+  await expect(page.getByRole('radio', { name: '사람 진행자' })).toBeDisabled();
+  await expect(page.getByText('혼자서도 할 수 있어요')).toBeVisible();
+  await expect(page.locator('.soup-done')).toContainText('0/');
+  await page.locator('.soup-start').click();
+  await expect(page.locator('.soup-askers')).toHaveCount(0);
+  const title = await page.locator('.soup-story-head h2').textContent();
+
+  // 질문 → 커서는 입력 칸에 남는다
+  const input = page.locator('.soup-input .text-input');
+  await input.fill('사람이 나오나요?');
+  await page.locator('.soup-ask').click();
+  await expect(page.locator('.soup-entry .soup-reply').first()).toHaveText('예');
+  await expect(input).toBeFocused();
+  await input.fill('이렇게 된 거예요');
+  await page.locator('.soup-guess').click();
+  await expect(page.locator('.soup-result h2')).toHaveText('나 정답! +3점');
+
+  // 다시 준비 화면: 1개 끝냄, 목록에 "맞힘", 목록에서 골라 시작
+  await page.getByRole('button', { name: '메뉴' }).click();
+  await page.getByRole('button', { name: '그만두고 홈으로' }).click();
+  await page.getByRole('button', { name: '그만두기', exact: true }).click();
+  await page.locator('.plate-soup').click();
+  await expect(page.locator('.soup-done')).toContainText('1/');
+  await page.locator('.soup-list-toggle').click();
+  await expect(page.locator('.soup-list-item', { hasText: title ?? '' }).locator('.soup-mark')).toHaveText('맞힘');
+  const other = page.locator('.soup-list-item:not(:has(.soup-mark))').first();
+  const otherTitle = (await other.locator('.soup-list-title').textContent()) ?? '';
+  await other.click();
+  await expect(page.locator('.soup-picked')).toContainText(otherTitle);
+  await page.locator('.soup-start').click();
+  await expect(page.locator('.soup-story-head h2')).toHaveText(otherTitle);
+  expect(errors).toEqual([]);
+});

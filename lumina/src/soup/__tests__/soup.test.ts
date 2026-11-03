@@ -161,6 +161,19 @@ describe('핵심 진척도', () => {
   });
 });
 
+describe('다른 문제로 넘기기', () => {
+  it('진행 중에만, 전말을 열지 않고 점수 없이 다음 문제로', () => {
+    let s = newSoup({ players, host: 'ai', puzzle: 'seaturtle', filter: { spice: 'all', level: 0 } });
+    s = ok(s, { type: 'ask', by: 0, text: '바다?' });
+    s = ok(s, { type: 'skip', puzzle: 'elevator' });
+    expect(s).toMatchObject({ puzzle: 'elevator', phase: 'play', round: 2, solvedBy: null, log: [], hints: 0 });
+    expect(s.scores).toEqual([0, 0, 0]);
+    expect(s.played).toEqual(['seaturtle', 'elevator']);
+    s = ok(s, { type: 'reveal' });
+    expect(soupReduce(s, { type: 'skip', puzzle: 'hiccup' })).toEqual({ ok: false, error: 'phase' });
+  });
+});
+
 describe('soupReduce — 사람 진행자', () => {
   const start = (): SoupState => newSoup({ players, host: 'human', hostSeat: 1, puzzle: 'goldfish', filter: { spice: 'mild', level: 0 } });
   it('진행자는 묻지 못하고 차례에서 빠진다', () => {

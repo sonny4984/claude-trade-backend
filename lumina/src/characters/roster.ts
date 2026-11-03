@@ -264,5 +264,5 @@ export const CHARACTER_ORDER: readonly CharacterId[] = ['hwigi', 'ginini', 'ppon
 export const ALL_CHARACTERS: readonly CharacterId[] = [...CHARACTER_ORDER, 'dubu', 'kongi', 'bori', 'nuri'];
 
 export function isCharacterId(x: unknown): x is CharacterId {
-  return typeof x === 'string' && (CHARACTER_ORDER as readonly string[]).includes(x);
+  return typeof x === 'string' && (ALL_CHARACTERS as readonly string[]).includes(x);
 }

@@ -48,7 +48,8 @@ interface SoupStore {
   overlay: null | 'menu';
   /** 온라인 참가자: 방장에게 보낸 것의 답을 기다리는 중 */
   waiting: boolean;
-  start(cfg: SoupSetupConfig): void;
+  /** puzzle: 목록에서 고른 첫 문제 (없으면 안 푼 문제 중 무작위) */
+  start(cfg: SoupSetupConfig, puzzle?: string): void;
   resume(): boolean;
   quit(): void;
   setAsker(i: number): void;
@@ -77,6 +78,32 @@ const SETUP_KEY = 'lumina.soup-setup.v1';
 const save = throttledWriter(KEY, 300);
 const tr = (path: string, params?: Record<string, string | number>): string => translate(useSettings.getState().lang, path, params);
 const get = (): SoupStore => useSoup.getState();
+
+/** 이 기기에서 끝낸 문제 기록 (맞힘·전말 봄) — 다음에 시작할 때 안 푼 문제부터 */
+const DONE_KEY = 'lumina.soup-done.v1';
+export type DoneMark = 'solved' | 'revealed';
+export function loadDone(): Record<string, DoneMark> {
+  const raw = readJSON<Record<string, unknown>>(DONE_KEY);
+  const out: Record<string, DoneMark> = {};
+  if (raw && typeof raw === 'object') for (const [k, v] of Object.entries(raw)) if (puzzleById(k) && (v === 'solved' || v === 'revealed')) out[k] = v;
+  return out;
+}
+function markDone(id: string, mark: DoneMark): void {
+  const d = loadDone();
+  if (d[id] === 'solved') return;
+  d[id] = mark;
+  writeJSON(DONE_KEY, d);
+}
+export function resetDone(): void {
+  removeKey(DONE_KEY);
+}
+
+/** 안 나온 문제 → (다 풀었으면) 이번 판에 안 나온 문제 → 아무 문제 */
+function pickFresh(filter: SoupFilter, played: readonly string[], r: number) {
+  const done = Object.keys(loadDone());
+  const fresh = candidates(filter).some((p) => !played.includes(p.id) && !done.includes(p.id));
+  return pickPuzzle(filter, fresh ? [...played, ...done] : played, r);
+}
 
 function urlSeed(): number | null {
   try {
@@ -165,6 +192,7 @@ function apply(action: SoupAction): boolean {
 
 /** 소리·진동·알림 */
 function effects(prev: SoupState, next: SoupState): void {
+  if (prev.phase === 'play' && next.phase === 'over' && prev.puzzle === next.puzzle) markDone(next.puzzle, next.solvedBy === null ? 'revealed' : 'solved');
   const before = new Map(prev.log.map((e) => [e.n, e.reply] as const));
   for (const e of next.log) {
     if (e.reply === null || before.get(e.n) === e.reply) continue;
@@ -275,9 +303,9 @@ export const useSoup = create<SoupStore>((set) => ({
   overlay: null,
   waiting: false,
 
-  start(cfg) {
+  start(cfg, puzzle) {
     writeJSON(SETUP_KEY, cfg);
-    const p = pickPuzzle(cfg.filter, [], rnd(1));
+    const p = (puzzle ? puzzleById(puzzle) : null) ?? pickFresh(cfg.filter, [], rnd(1));
     if (!p) {
       useGame.getState().toastMsg(tr('soup.noPuzzle'), 'warn');
       return;
@@ -352,7 +380,7 @@ export const useSoup = create<SoupStore>((set) => ({
   next() {
     const s = get().session;
     if (!s || !canHost(s)) return;
-    const p = pickPuzzle(s.state.filter, s.state.played, rnd(s.state.round + 1));
+    const p = pickFresh(s.state.filter, s.state.played, rnd(s.state.round + 1));
     if (!p) return;
     set({ peek: false, fail: null });
     apply({ type: 'next', puzzle: p.id });
@@ -362,10 +390,10 @@ export const useSoup = create<SoupStore>((set) => ({
     const s = get().session;
     if (!s || !canHost(s) || s.state.phase !== 'play') return;
     stopAi();
-    const p = pickPuzzle(s.state.filter, s.state.played, rnd(s.state.round + 1));
+    const p = pickFresh(s.state.filter, s.state.played, rnd(s.state.round + 1));
     if (!p) return;
     set({ peek: false, fail: null, overlay: null });
-    if (apply({ type: 'reveal' })) apply({ type: 'next', puzzle: p.id });
+    apply({ type: 'skip', puzzle: p.id });
   },
 
   retry() {
@@ -386,7 +414,7 @@ export const useSoup = create<SoupStore>((set) => ({
     const players: SoupPlayer[] = table.seats.map((x, i) => ({ name: x.name || `P${i + 1}`, character: x.character }));
     const filter: SoupFilter = { spice: table.soupSpice === 'all' ? 'all' : 'mild', level: 0 };
     const host = table.soupHost === 'human' && players.length >= 2 ? 'human' : 'ai';
-    const p = pickPuzzle(filter, [], rnd(1));
+    const p = pickFresh(filter, [], rnd(1));
     if (!p) return;
     const state = newSoup({ players, host, hostSeat: info.mySeat, puzzle: p.id, filter });
     begin({ v: 1, id: `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, mode: 'online', state, startedAt: Date.now(), online: info });
