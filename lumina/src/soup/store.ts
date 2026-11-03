@@ -60,6 +60,8 @@ interface SoupStore {
   reveal(): void;
   next(): void;
   retry(): void;
+  /** AI가 이 문제에 답을 못 할 때: 전말을 보여 주지 않고 다음 문제로 */
+  skip(): void;
   setPeek(v: boolean): void;
   openMenu(): void;
   closeOverlay(): void;
@@ -354,6 +356,16 @@ export const useSoup = create<SoupStore>((set) => ({
     if (!p) return;
     set({ peek: false, fail: null });
     apply({ type: 'next', puzzle: p.id });
+  },
+
+  skip() {
+    const s = get().session;
+    if (!s || !canHost(s) || s.state.phase !== 'play') return;
+    stopAi();
+    const p = pickPuzzle(s.state.filter, s.state.played, rnd(s.state.round + 1));
+    if (!p) return;
+    set({ peek: false, fail: null, overlay: null });
+    if (apply({ type: 'reveal' })) apply({ type: 'next', puzzle: p.id });
   },
 
   retry() {

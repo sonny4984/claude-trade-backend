@@ -297,9 +297,15 @@ function FailBar() {
   return (
     <div className="soup-fail" role="alert">
       <span>{t(`soup.fail.${fail}`)}</span>
-      <button type="button" className="btn btn-secondary" onClick={() => useSoup.getState().retry()}>
-        {t('soup.retry')}
-      </button>
+      {fail === 'blocked' && canHost(useSoup.getState().session) ? (
+        <button type="button" className="btn btn-secondary soup-skip" onClick={() => useSoup.getState().skip()}>
+          {t('soup.skip')}
+        </button>
+      ) : (
+        <button type="button" className="btn btn-secondary" onClick={() => useSoup.getState().retry()}>
+          {t('soup.retry')}
+        </button>
+      )}
     </div>
   );
 }

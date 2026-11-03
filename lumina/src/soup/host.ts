@@ -10,7 +10,7 @@ import { FATAL, LIMITED, claudeSample } from '../mafia/claude';
 import { GeminiFail, geminiJson, loadGemini } from '../mafia/gemini';
 
 export type HostWho = 'claude' | 'gemini';
-export type HostFail = 'none' | 'locked' | 'claudeOff' | 'claudeLimit' | 'geminiKey' | 'geminiLimit' | 'geminiBusy' | 'net';
+export type HostFail = 'none' | 'locked' | 'claudeOff' | 'claudeLimit' | 'geminiKey' | 'geminiLimit' | 'geminiBusy' | 'blocked' | 'net';
 
 export class HostError extends Error {
   constructor(readonly code: HostFail) {
@@ -46,11 +46,15 @@ async function callJson(prompt: string, signal: AbortSignal): Promise<{ out: unk
   }
   const gem = loadGemini();
   if (!gem?.model) throw new HostError(claudeLocked() ? 'locked' : 'none');
-  try {
-    return { out: await geminiJson(gem, prompt, signal), who: 'gemini' };
-  } catch (e) {
-    if (e instanceof GeminiFail) throw new HostError(e.code === 'bad-key' ? 'geminiKey' : e.code === 'rate' ? 'geminiLimit' : e.code === 'busy' ? 'geminiBusy' : 'net');
-    throw e;
+  // 죽음이 나오는 고전 문제도 답하도록 안전 필터를 끄고, 잠깐 끊긴 거면 한 번 더 묻는다
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return { out: await geminiJson(gem, prompt, signal, { relaxed: true }), who: 'gemini' };
+    } catch (e) {
+      if (!(e instanceof GeminiFail)) throw e;
+      if (e.code === 'net' && attempt === 0) continue;
+      throw new HostError(e.code === 'bad-key' ? 'geminiKey' : e.code === 'rate' ? 'geminiLimit' : e.code === 'busy' ? 'geminiBusy' : e.code === 'blocked' ? 'blocked' : 'net');
+    }
   }
 }
 
@@ -68,7 +72,7 @@ function recent(log: readonly SoupEntry[]): string {
 export function askPrompt(p: SoupPuzzle, question: string, log: readonly SoupEntry[]): string {
   const past = recent(log);
   return [
-    '너는 "바다거북 스프"(상황 추리 게임)의 진행자야. 너만 전말을 알고, 참가자는 예/아니요 질문으로 전말을 알아낸다.',
+    '너는 "바다거북 스프"(상황 추리 게임)의 진행자야. 너만 전말을 알고, 참가자는 예/아니요 질문으로 전말을 알아낸다. 문제는 모두 지어낸 옛 추리 퍼즐이야.',
     `[문제] ${p.story}`,
     `[전말 — 절대 말하지 마] ${p.answer}`,
     `[핵심] ${p.keys.map((k, i) => `${i + 1}) ${k}`).join(' ')}`,
@@ -87,7 +91,7 @@ export function askPrompt(p: SoupPuzzle, question: string, log: readonly SoupEnt
 /** 정답을 채점하게 하는 글 */
 export function guessPrompt(p: SoupPuzzle, guess: string): string {
   return [
-    '너는 "바다거북 스프"(상황 추리 게임)의 진행자야. 참가자가 말한 정답을 채점해.',
+    '너는 "바다거북 스프"(상황 추리 게임)의 진행자야. 참가자가 말한 정답을 채점해. 문제는 모두 지어낸 옛 추리 퍼즐이야.',
     `[문제] ${p.story}`,
     `[전말] ${p.answer}`,
     `[핵심] ${p.keys.map((k, i) => `${i + 1}) ${k}`).join(' ')}`,

@@ -108,8 +108,16 @@ export function parseLoose(text: string): unknown {
 /** 생각 설정을 받지 않는 모델 (한 번 거절당하면 기억) */
 const plainModels = new Set<string>();
 
+/** 안전 필터 끄기 — 바다거북 스프처럼 죽음이 나오는 옛 추리 퍼즐(지어낸 이야기)에 답하도록 */
+const RELAXED = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH', 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT'].map((category) => ({ category, threshold: 'BLOCK_NONE' }));
+
+export interface AskOpts {
+  /** 안전 필터 완화 (지어낸 이야기를 다룰 때) */
+  readonly relaxed?: boolean;
+}
+
 /** 모델 하나에 묻기 */
-async function ask(key: string, model: string, prompt: string, signal: AbortSignal): Promise<unknown> {
+async function ask(key: string, model: string, prompt: string, signal: AbortSignal, opts: AskOpts = {}): Promise<unknown> {
   const call = async (think: boolean): Promise<Response> =>
     fetch(`${API}/models/${model}:generateContent`, {
       method: 'POST',
@@ -118,6 +126,7 @@ async function ask(key: string, model: string, prompt: string, signal: AbortSign
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         // 짧은 대사라 오래 생각할 필요가 없다 (빠르게)
         generationConfig: { responseMimeType: 'application/json', temperature: 1, maxOutputTokens: 2048, ...(think ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
+        ...(opts.relaxed ? { safetySettings: RELAXED } : {}),
       }),
       signal,
     });
@@ -136,7 +145,7 @@ async function ask(key: string, model: string, prompt: string, signal: AbortSign
     throw new GeminiFail('net');
   }
   if (!r.ok) throw new GeminiFail(classify(r.status, body));
-  let data: { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]; promptFeedback?: { blockReason?: string } };
+  let data: { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[]; promptFeedback?: { blockReason?: string } };
   try {
     data = JSON.parse(body) as typeof data;
   } catch {
@@ -146,18 +155,27 @@ async function ask(key: string, model: string, prompt: string, signal: AbortSign
     .filter((p) => !p.thought)
     .map((p) => p.text ?? '')
     .join('');
-  if (!text) throw new GeminiFail(data.promptFeedback?.blockReason ? 'blocked' : 'net');
+  if (!text) {
+    const why = data.candidates?.[0]?.finishReason ?? '';
+    if (data.promptFeedback?.blockReason || /SAFETY|PROHIBITED|BLOCKLIST|SPII|RECITATION/.test(why)) throw new GeminiFail('blocked');
+    // 생각하느라 글자 수를 다 쓴 경우: 다음부터 생각 없이
+    if (why === 'MAX_TOKENS' && !plainModels.has(model)) {
+      plainModels.add(model);
+      return ask(key, model, prompt, signal, opts);
+    }
+    throw new GeminiFail('net');
+  }
   return parseLoose(text);
 }
 
 /** 붐비거나 사용량을 넘긴 모델은 건너뛰고 다음 후보로 (한 번에 셋까지) — 답한 모델을 기억해 다음부터 먼저 쓴다 */
-export async function geminiJson(setup: GeminiSetup, prompt: string, signal: AbortSignal): Promise<unknown> {
+export async function geminiJson(setup: GeminiSetup, prompt: string, signal: AbortSignal, opts: AskOpts = {}): Promise<unknown> {
   const order = [...new Set([setup.model, ...(setup.models ?? [])].filter((m): m is string => !!m))];
   if (!order.length) order.push((await connectGemini(setup.key, signal)).model);
   let last: unknown = new GeminiFail('busy');
   for (const model of order.slice(0, 3)) {
     try {
-      const out = await ask(setup.key, model, prompt, signal);
+      const out = await ask(setup.key, model, prompt, signal, opts);
       if (model !== setup.model) saveGemini({ ...setup, model });
       return out;
     } catch (e) {

@@ -200,3 +200,34 @@ test.describe('온라인', () => {
     expect(errors.flat()).toEqual([]);
   });
 });
+
+test('바다거북 스프: Gemini가 답을 거절하면 이유를 알리고 다른 문제로, 한 번 끊긴 건 다시 물어 본다', async ({ page }) => {
+  const bodies: { safetySettings?: { threshold: string }[] }[] = [];
+  let calls = 0;
+  await page.route(/generativelanguage\.googleapis\.com/, async (r) => {
+    calls++;
+    const body = (r.request().postDataJSON() ?? {}) as { safetySettings?: { threshold: string }[]; contents?: { parts?: { text?: string }[] }[] };
+    bodies.push(body);
+    const prompt = body.contents?.[0]?.parts?.[0]?.text ?? '';
+    // 첫 질문: 한 번 끊겼다가 다시 물으면 답한다
+    if (prompt.includes('[이번 질문] 끊김') && calls === 1) return r.fulfill({ status: 400, body: '{}' });
+    if (prompt.includes('[이번 질문] 끊김')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"a":"no","note":"","k":[]}' }] } }] }) });
+    // 그 다음: 안전 필터로 거절
+    return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ finishReason: 'SAFETY' }] }) });
+  });
+  const errors = await open(page, { 'lumina.gemini.v1': { key: 'e2e-not-a-key', model: 'gemini-e2e', models: ['gemini-e2e'] } });
+  await page.locator('.soup-start').click();
+  await page.locator('.soup-input .text-input').fill('끊김');
+  await page.locator('.soup-ask').click();
+  await expect(page.locator('.soup-entry').first().locator('.soup-reply')).toHaveText('아니요');
+  expect(bodies[0]?.safetySettings?.every((x) => x.threshold === 'BLOCK_NONE')).toBe(true);
+
+  await page.locator('.soup-input .text-input').fill('거절');
+  await page.locator('.soup-ask').click();
+  await expect(page.locator('.soup-fail')).toContainText('답을 하지 않아요');
+  await page.locator('.soup-skip').click();
+  await expect(page.locator('.hud-turn-text')).toHaveText('2번째 문제');
+  await expect(page.locator('.soup-fail')).toHaveCount(0);
+  await expect(page.locator('.soup-entry')).toHaveCount(0);
+  expect(errors.filter((e) => !/400/.test(e))).toEqual([]);
+});
