@@ -1,6 +1,6 @@
 /*
  * 바다거북 스프 — 위에 문제 카드, 가운데 질문·답 기록, 아래에 묻는 사람과 질문 칸.
- * 답 색: 예(초록) · 아니요(빨강) · 상관없어요(회색) · 반쯤(노랑).
+ * 답 색: 예(초록) · 아니요(빨강) · 상관없어요(회색) · 거의 맞아요(노랑).
  */
 .soup {
   --yes: #4caf7a;
@@ -274,7 +274,6 @@
 .soup-reply[data-reply='irrelevant'] {
   color: var(--irr);
 }
-.soup-reply[data-reply='partly'],
 .soup-reply[data-reply='close'] {
   color: var(--part);
 }
@@ -307,7 +306,6 @@
 .btn[data-reply='wrong'] {
   color: var(--no);
 }
-.btn[data-reply='partly'],
 .btn[data-reply='close'] {
   color: var(--part);
 }
@@ -413,7 +411,7 @@
 }
 .soup-quick {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
 }
 .soup-quick small {

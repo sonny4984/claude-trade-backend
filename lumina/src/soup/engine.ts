@@ -1,7 +1,7 @@
 /**
  * 바다거북 스프 규칙 — UI와 무관한 순수 함수. 모든 변화는 soupReduce()만 만든다.
  *  · 진행자(AI 또는 사람 한 명)만 전말을 안다. 나머지는 예/아니요로 답할 수 있는 질문을 던진다.
- *  · 답은 넷: 예 · 아니요 · 상관없어요 · 반쯤 맞아요(질문 일부만 맞음).
+ *  · 답은 셋: 예 · 아니요 · 상관없어요.
  *  · 전말을 알 것 같으면 "정답"을 말한다 — 진행자가 맞음 · 거의 맞음 · 아니에요로 판정한다.
  *  · 힌트는 문제마다 셋, 하나씩 연다. 포기하면 전말을 공개한다.
  *  · 맞힌 사람이 점수를 얻는다: 힌트를 안 쓰면 3점, 하나 쓸 때마다 1점씩 줄어 최소 1점.
@@ -10,11 +10,11 @@
 import { PUZZLES, puzzleById, type SoupLevel, type SoupPuzzle, type SoupSpice } from './puzzles';
 import type { CharacterId } from '../characters/roster';
 
-export type SoupAnswer = 'yes' | 'no' | 'irrelevant' | 'partly';
+export type SoupAnswer = 'yes' | 'no' | 'irrelevant';
 export type SoupVerdict = 'correct' | 'close' | 'wrong';
 export type SoupReply = SoupAnswer | SoupVerdict;
 
-export const ANSWERS: readonly SoupAnswer[] = ['yes', 'no', 'irrelevant', 'partly'];
+export const ANSWERS: readonly SoupAnswer[] = ['yes', 'no', 'irrelevant'];
 export const VERDICTS: readonly SoupVerdict[] = ['correct', 'close', 'wrong'];
 
 /** 글자 수 한도 (질문·정답) */

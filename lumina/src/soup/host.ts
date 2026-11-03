@@ -54,13 +54,13 @@ async function callJson(prompt: string, signal: AbortSignal): Promise<{ out: unk
   }
 }
 
-const ANS_KO: Record<SoupAnswer, string> = { yes: '예', no: '아니요', irrelevant: '상관없어요', partly: '반쯤 맞아요' };
+const ANS_KO: Record<SoupAnswer, string> = { yes: '예', no: '아니요', irrelevant: '상관없어요' };
 
 function recent(log: readonly SoupEntry[]): string {
   return log
     .filter((e) => e.kind === 'ask' && e.reply && e.text)
     .slice(-6)
-    .map((e) => `Q: ${e.text} → ${ANS_KO[e.reply as SoupAnswer] ?? e.reply}`)
+    .map((e) => `Q: ${e.text} → ${ANS_KO[e.reply as SoupAnswer] ?? '상관없어요'}`)
     .join('\n');
 }
 
@@ -74,10 +74,10 @@ export function askPrompt(p: SoupPuzzle, question: string, log: readonly SoupEnt
     `[핵심] ${p.keys.join(' / ')}`,
     past ? `[지금까지]\n${past}` : '',
     `[이번 질문] ${question}`,
-    '전말에 비추어 사실대로 하나만 골라: yes(예), no(아니요), irrelevant(전말과 상관없거나 정해지지 않은 것), partly(질문 일부만 맞음 / 비슷하지만 정확하지 않음).',
+    '전말에 비추어 사실대로 하나만 골라: yes(예), no(아니요), irrelevant(전말과 상관없거나 정해지지 않은 것). 질문이 대체로 맞으면 yes, 핵심이 틀렸으면 no.',
     '예/아니요로 답할 수 없는 질문(왜, 무엇 등)이면 irrelevant를 고르고 note에 "예/아니요로 답할 수 있게 물어봐 주세요"라고 써.',
     'note는 비워 두거나, 핵심을 짚었을 때만 "좋은 질문이에요!" 같은 12자 이내 한마디. 전말·힌트·새 사실은 절대 넣지 마.',
-    'JSON만: {"a":"yes|no|irrelevant|partly","note":""}',
+    'JSON만: {"a":"yes|no|irrelevant","note":""}',
   ]
     .filter(Boolean)
     .join('\n');

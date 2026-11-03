@@ -171,7 +171,6 @@ function effects(prev: SoupState, next: SoupState): void {
       case 'yes':
         sfx('place');
         break;
-      case 'partly':
       case 'close':
         sfx('hint');
         break;
