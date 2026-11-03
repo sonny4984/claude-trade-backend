@@ -19,7 +19,7 @@ import { CommsButton } from '../online/Comms';
 import { sfx } from '../../audio/sfx';
 
 const LEVELS: AiLevel[] = ['beginner', 'casual', 'advanced', 'expert'];
-const GAMES: OnlineGame[] = ['lumina', 'coda', 'gomoku', 'fireice', 'mafia'];
+const GAMES: OnlineGame[] = ['lumina', 'coda', 'gomoku', 'fireice', 'mafia', 'soup'];
 
 function Face({ id, ex = 'idle', size = 56 }: { id: CharacterId; ex?: Expression; size?: number }) {
   const src = usePortrait(id, ex, 128);
@@ -346,6 +346,25 @@ function Lobby() {
           </label>
         </section>
       )}
+      {host && status === 'lobby' && table.game === 'soup' && (
+        <section className="card">
+          <label className="toggle-row">
+            <span>
+              {t('soup.olHuman')}
+              <small className="toggle-sub">{t('soup.olHumanSub')}</small>
+            </span>
+            <input type="checkbox" className="switch" checked={table.soupHost === 'human'} onChange={(e) => store.setSoup({ soupHost: e.target.checked ? 'human' : 'ai' })} />
+          </label>
+          <label className="toggle-row">
+            <span>
+              {t('soup.spicy')}
+              <small className="toggle-sub">{t('soup.spicySub')}</small>
+            </span>
+            <input type="checkbox" className="switch" checked={table.soupSpice === 'all'} onChange={(e) => store.setSoup({ soupSpice: e.target.checked ? 'all' : 'mild' })} />
+          </label>
+          {table.soupHost !== 'human' && <p className="ol-note">{t('soup.olAiNote')}</p>}
+        </section>
+      )}
       {!host && status === 'lobby' && (
         <section className="card ol-center ol-wait">
           <span className="ol-bounce" aria-hidden="true">
@@ -359,7 +378,7 @@ function Lobby() {
 }
 
 /** 지금 온라인 판이 도는 게임 화면 */
-function screenOf(game: OnlineGame): 'game' | 'coda' | 'gomoku' | 'fireice' | 'mafia' {
+function screenOf(game: OnlineGame): 'game' | 'coda' | 'gomoku' | 'fireice' | 'mafia' | 'soup' {
   return game === 'lumina' ? 'game' : game;
 }
 

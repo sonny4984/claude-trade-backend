@@ -2,7 +2,7 @@
  * 게임 저장소 ↔ 온라인 저장소 사이의 얇은 다리 (서로 import하지 않게).
  * 온라인 저장소가 함수를 끼워 넣고, 게임 저장소는 있으면 부른다.
  */
-export type OnlineGame = 'lumina' | 'coda' | 'gomoku' | 'fireice' | 'mafia';
+export type OnlineGame = 'lumina' | 'coda' | 'gomoku' | 'fireice' | 'mafia' | 'soup';
 
 /** 게임마다 자리 수와 AI 허용 */
 export const GAME_SEATS: Readonly<Record<OnlineGame, { readonly min: number; readonly max: number; readonly ai: boolean }>> = {
@@ -12,10 +12,12 @@ export const GAME_SEATS: Readonly<Record<OnlineGame, { readonly min: number; rea
   fireice: { min: 2, max: 3, ai: false },
   // 5명보다 적으면 판을 열 때 AI 친구가 채운다
   mafia: { min: 2, max: 8, ai: true },
+  // 바다거북 스프: 사람끼리 (진행은 AI 또는 방장)
+  soup: { min: 2, max: 8, ai: false },
 };
 
 export function isOnlineGame(x: unknown): x is OnlineGame {
-  return x === 'lumina' || x === 'coda' || x === 'gomoku' || x === 'fireice' || x === 'mafia';
+  return x === 'lumina' || x === 'coda' || x === 'gomoku' || x === 'fireice' || x === 'mafia' || x === 'soup';
 }
 
 export interface OnlineInfo {
@@ -73,6 +75,10 @@ export interface TableDoc {
   readonly jokers: boolean;
   /** 다빈치 코드: 틀렸을 때 공개하는 타일 — choose(내가 고르기, 기본) / drawn(공식: 뽑은 타일). 없으면 choose */
   readonly penalty?: 'choose' | 'drawn';
+  /** 바다거북 스프: 진행자 — ai(방장 기기의 AI가 답) / human(방장이 전말을 보고 답). 없으면 ai */
+  readonly soupHost?: 'ai' | 'human';
+  /** 바다거북 스프: mild 순한맛만 / all 매운맛 포함. 없으면 mild */
+  readonly soupSpice?: 'mild' | 'all';
   /** 판이 바뀔 때마다 1씩 */
   readonly seq: number;
   /** 게임 저장소의 세션 — JSON 문자열 하나로 */

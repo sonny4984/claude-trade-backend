@@ -25,7 +25,7 @@ const ROLE_ORDER: readonly (Role | 'random')[] = ['random', 'citizen', 'police',
 const VOICES: readonly VoiceMode[] = ['squeak', 'read', 'off'];
 
 /** Gemini 연결: 키 넣기 → 확인 → 켜고 끄기 (키는 이 기기에만) */
-function GeminiCard() {
+export function GeminiCard() {
   const t = useT();
   const cfg = useMafia((s) => s.cfg);
   const model = useMafia((s) => s.geminiModel);

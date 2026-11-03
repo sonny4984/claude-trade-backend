@@ -6,8 +6,8 @@ import { defineConfig } from '@playwright/test';
  * 샌드박스처럼 미리 깔린 Chromium이 있으면 그걸 쓰고(PW_CHROMIUM으로 바꿀 수 있음),
  * 없으면 Playwright 기본 브라우저를 쓴다. WebGL(3D 무대)은 SwiftShader로 소프트웨어 렌더링.
  */
-const preinstalled = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const executablePath = process.env.PW_CHROMIUM ?? (existsSync(preinstalled) ? preinstalled : undefined);
+const preinstalled = ['/opt/pw-browsers/chromium', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'].find((p) => existsSync(p));
+const executablePath = process.env.PW_CHROMIUM ?? preinstalled;
 
 export default defineConfig({
   testDir: 'e2e',

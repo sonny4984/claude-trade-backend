@@ -1,0 +1,450 @@
+/*
+ * 바다거북 스프 — 위에 문제 카드, 가운데 질문·답 기록, 아래에 묻는 사람과 질문 칸.
+ * 답 색: 예(초록) · 아니요(빨강) · 상관없어요(회색) · 반쯤(노랑).
+ */
+.soup {
+  --yes: #4caf7a;
+  --no: #e0605a;
+  --irr: var(--text-faint);
+  --part: #e2b443;
+}
+
+/* 홈 판: 스프 그릇 */
+.plate-bowl {
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  transform: translateY(-30%);
+  pointer-events: none;
+}
+.plate-bowl i {
+  position: relative;
+  display: block;
+  width: 26px;
+  height: 13px;
+  border-radius: 0 0 14px 14px;
+  background: var(--accent);
+  opacity: 0.75;
+}
+.plate-bowl i::before,
+.plate-bowl i::after {
+  content: '';
+  position: absolute;
+  bottom: 16px;
+  width: 3px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0.5;
+  animation: soup-steam 2.2s ease-in-out infinite;
+}
+.plate-bowl i::before {
+  left: 7px;
+}
+.plate-bowl i::after {
+  left: 15px;
+  animation-delay: 0.7s;
+}
+@keyframes soup-steam {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 0.15;
+  }
+}
+
+/* 준비 화면 */
+.soup-players {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.soup-player {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.soup-player .text-input {
+  min-width: 0;
+}
+.soup-host-pick {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 16px;
+  border: 1px solid var(--panel-line);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.soup-host-pick[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.soup-warn {
+  color: var(--part, #e2b443);
+  font-weight: 600;
+}
+.soup-setup .seg + .mf-sub,
+.soup-setup .toggle-row + .seg {
+  margin-top: 8px;
+}
+
+/* 판 */
+.game.soup {
+  gap: 8px;
+}
+.soup-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.soup-story {
+  flex: none;
+  display: grid;
+  gap: 8px;
+}
+.soup-story-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.soup-story-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+}
+.soup-badges {
+  display: flex;
+  gap: 4px;
+}
+.soup-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+}
+.soup-badge[data-spice='dark'] {
+  background: rgba(224, 96, 90, 0.18);
+  color: var(--no);
+}
+.soup-story-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+.soup-hints {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  list-style: none;
+  font-size: 14px;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+.soup-hints b {
+  color: var(--accent);
+  margin-right: 4px;
+}
+.soup-peek {
+  justify-self: start;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+.soup-answer {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--accent);
+  background: var(--panel-solid);
+  font-size: 14.5px;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+.soup-answer p {
+  margin: 4px 0 6px;
+}
+.soup-keys {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* 기록 */
+.soup-log {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 2px 4px;
+  list-style: none;
+}
+.soup-empty {
+  margin: 4px 2px;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+.soup-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'who reply' 'q reply';
+  align-items: center;
+  gap: 2px 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+}
+.soup-entry[data-kind='guess'] {
+  border-color: var(--accent);
+}
+.soup-who {
+  grid-area: who;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.soup-who .portrait {
+  border-radius: 50%;
+}
+.soup-guess-tag {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+}
+.soup-q {
+  grid-area: q;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+.soup-reply {
+  grid-area: reply;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: right;
+}
+.soup-reply small {
+  max-width: 9em;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.soup-reply[data-reply='yes'],
+.soup-reply[data-reply='correct'] {
+  color: var(--yes);
+}
+.soup-reply[data-reply='no'],
+.soup-reply[data-reply='wrong'] {
+  color: var(--no);
+}
+.soup-reply[data-reply='irrelevant'] {
+  color: var(--irr);
+}
+.soup-reply[data-reply='partly'],
+.soup-reply[data-reply='close'] {
+  color: var(--part);
+}
+.soup-reply[data-reply='wait'] {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.soup-reply-btns {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 4px;
+  margin-top: 4px;
+}
+.soup-reply-btns .btn,
+.soup-quick .btn {
+  min-height: 36px;
+  padding: 0 6px;
+  font-size: 13.5px;
+}
+.btn[data-reply='yes'],
+.btn[data-reply='correct'] {
+  color: var(--yes);
+}
+.btn[data-reply='no'],
+.btn[data-reply='wrong'] {
+  color: var(--no);
+}
+.btn[data-reply='partly'],
+.btn[data-reply='close'] {
+  color: var(--part);
+}
+
+/* 결과 */
+.soup-result {
+  flex: none;
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+.soup-result h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.soup-scores {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.soup-scores li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.soup-scores li span {
+  flex: 1;
+  text-align: left;
+}
+.soup-scores li[data-host] {
+  opacity: 0.7;
+}
+.soup-scores .portrait {
+  border-radius: 50%;
+}
+
+/* 아래 */
+.soup-fail {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(224, 96, 90, 0.14);
+  font-size: 13.5px;
+}
+.soup-fail span {
+  flex: 1;
+}
+.soup-foot {
+  flex: none;
+  display: grid;
+  gap: 6px;
+}
+.soup-tools {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+.soup-tools .btn {
+  min-height: 36px;
+  font-size: 13.5px;
+}
+.soup-composer {
+  display: grid;
+  gap: 6px;
+}
+.soup-askers {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.soup-asker {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px 0 6px;
+  border-radius: 17px;
+  border: 1px solid var(--panel-line);
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.soup-asker .portrait {
+  border-radius: 50%;
+}
+.soup-asker[aria-checked='true'] {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.soup-quick {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.soup-quick small {
+  grid-column: 1 / -1;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.soup-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+}
+.soup-input .text-input {
+  min-width: 0;
+  font-size: 16px;
+}
+.soup-host-chip {
+  max-width: 44vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+  .game.soup {
+    max-width: 760px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plate-bowl i::before,
+  .plate-bowl i::after {
+    animation: none;
+  }
+}

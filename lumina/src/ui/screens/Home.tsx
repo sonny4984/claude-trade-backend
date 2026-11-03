@@ -103,6 +103,13 @@ export function Home() {
             <i />
           </span>
         </button>
+        <button type="button" className="plate-btn plate-soup" onClick={() => store.go('soup-setup')}>
+          <span className="plate-label">{t('soup.title')}</span>
+          <span className="plate-sub">{t('soup.sub')}</span>
+          <span className="plate-bowl" aria-hidden="true">
+            <i />
+          </span>
+        </button>
         <button type="button" className="plate-btn plate-online" onClick={() => store.go('online')}>
           <span className="plate-label">{t('online.title')}</span>
           <span className="plate-sub">{room ? t('online.resumeInfo', { code: room.code.toUpperCase(), role: t(`online.${room.role}`) }) : t('online.sub')}</span>

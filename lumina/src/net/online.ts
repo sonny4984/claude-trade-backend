@@ -72,6 +72,7 @@ interface OnlineStore {
   setLevel: (i: number, level: AiLevel) => void;
   setJokers: (on: boolean) => void;
   setPenalty: (p: 'choose' | 'drawn') => void;
+  setSoup: (p: { soupHost?: 'ai' | 'human'; soupSpice?: 'mild' | 'all' }) => void;
   replaceWithAi: (i: number) => void;
   start: () => void;
   clearError: () => void;
@@ -767,6 +768,14 @@ export const useOnline = create<OnlineStore>((set, get) => {
       const t = get().table;
       if (!t || get().role !== 'host' || t.status !== 'lobby') return;
       const nt: TableDoc = { ...t, jokers: on, at: Date.now() };
+      set({ table: nt });
+      write(nt);
+    },
+
+    setSoup: (p) => {
+      const t = get().table;
+      if (!t || get().role !== 'host' || t.status !== 'lobby') return;
+      const nt: TableDoc = { ...t, ...p, at: Date.now() };
       set({ table: nt });
       write(nt);
     },
