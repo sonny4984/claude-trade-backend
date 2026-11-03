@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PUZZLES, puzzleById } from '../puzzles';
 import { candidates, guessers, newSoup, pending, pickPuzzle, pointsFor, soupReduce, tally, validSoup, type SoupState } from '../engine';
 import { askPrompt, guessPrompt, readAnswer, readKeys, readVerdict } from '../host';
+import { CALL_OVERHEAD, SOUP_DAILY_TOKENS, claudeLocked, claudeUsed, resetClaudeUsage, spendClaude, tokensOf } from '../../mafia/budget';
 
 const players = [
   { name: '나', character: 'moka' as const },
@@ -154,8 +155,8 @@ describe('핵심 진척도', () => {
   it('프롬프트가 핵심 번호를 묻는다', () => {
     const p = puzzleById('elevator');
     if (!p) throw new Error('no puzzle');
-    expect(askPrompt(p, '?', [])).toContain('"k":[]');
-    expect(askPrompt(p, '?', [])).toContain('1) ' + p.keys[0]);
+    expect(askPrompt(p, '?')).toContain('"k":[]');
+    expect(askPrompt(p, '?')).toContain('1) ' + p.keys[0]);
     expect(guessPrompt(p, '?')).toContain('"k":[]');
   });
 });
@@ -194,17 +195,20 @@ describe('soupReduce — 사람 진행자', () => {
 describe('AI 진행자 프롬프트와 답 읽기', () => {
   const p = puzzleById('elevator');
   if (!p) throw new Error('no puzzle');
-  it('질문 프롬프트에는 전말·핵심·최근 질문·이번 질문이 들어 있다', () => {
-    const s = ok(newSoup({ players, host: 'ai', puzzle: 'elevator', filter: { spice: 'mild', level: 0 } }), { type: 'ask', by: 0, text: '키가 작나요?' });
-    const log = ok(s, { type: 'reply', n: 1, reply: 'yes' }).log;
-    const prompt = askPrompt(p, '우산이 중요한가요?', log);
+  it('질문 프롬프트에는 문제·전말·핵심·이번 질문만 짧게 들어 있다', () => {
+    const prompt = askPrompt(p, '우산이 중요한가요?');
     expect(prompt).toContain(p.story);
     expect(prompt).toContain(p.answer);
     expect(prompt).toContain(p.keys[0] ?? '');
-    expect(prompt).toContain('Q: 키가 작나요? → 예');
-    expect(prompt).toContain('[이번 질문] 우산이 중요한가요?');
+    expect(prompt).toContain('[질문] 우산이 중요한가요?');
     expect(prompt).toContain('"a":"yes|no","note":"","k":[]');
-    expect(prompt.length).toBeLessThan(1600);
+    expect(prompt.length).toBeLessThan(900);
+  });
+  it('질문 하나가 쓰는 Claude 양: 평균 800토큰 아래 → 스프 전용 하루 한도로 100개 넘게', () => {
+    const cost = PUZZLES.map((x) => CALL_OVERHEAD + tokensOf(askPrompt(x, '그 사람은 예전에 바다에서 조난을 당했나요?').length) + tokensOf(40));
+    const avg = cost.reduce((a, b) => a + b, 0) / cost.length;
+    expect(avg).toBeLessThan(800);
+    expect(SOUP_DAILY_TOKENS / avg).toBeGreaterThan(100);
   });
   it('채점 프롬프트에는 번호 매긴 핵심과 참가자 답이 들어 있다', () => {
     const prompt = guessPrompt(p, '키가 작아서');
@@ -226,5 +230,22 @@ describe('AI 진행자 프롬프트와 답 읽기', () => {
     expect(readVerdict({ v: 'correct', note: '전말은…' })).toEqual({ v: 'correct', note: '' });
     expect(readVerdict({ verdict: 'close', note: '왜 7층인지가 빠졌어요' })).toEqual({ v: 'close', note: '왜 7층인지가 빠졌어요' });
     expect(readVerdict({ v: 'maybe' }).v).toBe('wrong');
+  });
+});
+
+describe('스프 전용 Claude 한도', () => {
+  it('마피아와 따로 세고, 스프는 10만까지', () => {
+    resetClaudeUsage('mafia');
+    resetClaudeUsage('soup');
+    spendClaude(25000, 'mafia');
+    expect(claudeLocked('mafia')).toBe(true);
+    expect(claudeLocked('soup')).toBe(false);
+    spendClaude(99999, 'soup');
+    expect(claudeUsed('soup')).toBe(99999);
+    expect(claudeLocked('soup')).toBe(false);
+    spendClaude(1, 'soup');
+    expect(claudeLocked('soup')).toBe(true);
+    resetClaudeUsage('mafia');
+    resetClaudeUsage('soup');
   });
 });

@@ -796,7 +796,7 @@ export const ko = {
     hostHuman: '사람 진행자',
     hostAiSub: 'AI가 전말을 알고 질문에 예/아니요로 답하고, 정답도 채점해요. 모두 함께 맞히는 쪽이에요.',
     hostHumanSub: '한 사람이 진행자가 되어 전말을 몰래 보고 답해요. AI 없이도 할 수 있어요.',
-    claudeReady: 'Claude가 진행해요 · 오늘 사용량 {used}% (마피아와 같이 셈)',
+    claudeReady: 'Claude가 진행해요 · 스프 전용 하루 한도 {used}% 씀 (오늘 질문 약 {left}개 남음)',
     claudeLocked: '오늘 Claude 사용량을 다 썼어요. 내일 풀려요 — 지금은 사람 진행자로 하거나 공개 사이트에서 Gemini로 하세요.',
     noAi: 'AI 진행자를 쓰려면 Gemini 키를 연결하거나(공개 사이트) claude.ai 아티팩트에서 열어 주세요. 아니면 "사람 진행자"로 해요.',
     players: '함께 하는 사람',

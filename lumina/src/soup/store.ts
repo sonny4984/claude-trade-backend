@@ -210,7 +210,7 @@ async function pump(): Promise<void> {
       ctl = new AbortController();
       try {
         if (e.kind === 'ask') {
-          const r = await aiAnswer(p, e.text, s.state.log, ctl.signal);
+          const r = await aiAnswer(p, e.text, ctl.signal);
           if (my !== token || get().session?.id !== s.id) break;
           useSoup.setState({ who: r.who });
           apply({ type: 'reply', n: e.n, reply: r.a, keys: r.keys, ...(r.note ? { note: r.note } : {}) });

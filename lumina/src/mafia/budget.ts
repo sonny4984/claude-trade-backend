@@ -6,9 +6,18 @@
  */
 import { readJSON, writeJSON } from '../store/storage';
 
-const KEY = 'lumina.claude.usage.v1';
 /** 하루 한도: 절약 모드 대답 20번쯤 (한 판에 5~10번이면 2~4판) */
 export const DAILY_TOKENS = 20000;
+/** 바다거북 스프 전용 하루 한도 (마피아와 따로): 질문 100개쯤 */
+export const SOUP_DAILY_TOKENS = 100000;
+
+/** 따로 세는 사용량 묶음 */
+export type Pool = 'mafia' | 'soup';
+const POOLS: Record<Pool, { readonly key: string; readonly max: number }> = {
+  mafia: { key: 'lumina.claude.usage.v1', max: DAILY_TOKENS },
+  soup: { key: 'lumina.claude.soup.v1', max: SOUP_DAILY_TOKENS },
+};
+export const dailyMax = (pool: Pool = 'mafia'): number => POOLS[pool].max;
 /** 한 번 부를 때마다 더 드는 몫 (앞에 붙는 지시 등, 어림) */
 export const CALL_OVERHEAD = 300;
 
@@ -17,15 +26,15 @@ interface Usage {
   used: number;
 }
 
-let mem: Usage | null = null;
+const mem = new Map<Pool, Usage>();
 
 function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function load(): Usage {
-  const raw = mem ?? readJSON<Usage>(KEY);
+function load(pool: Pool): Usage {
+  const raw = mem.get(pool) ?? readJSON<Usage>(POOLS[pool].key);
   const day = today();
   const used = Number(raw?.used);
   return raw?.day === day && Number.isFinite(used) ? { day, used: Math.max(0, used) } : { day, used: 0 };
@@ -34,25 +43,25 @@ function load(): Usage {
 /** 한글·JSON이 섞인 글: 글자 1개 ≈ 0.9토큰으로 넉넉히 */
 export const tokensOf = (chars: number): number => Math.ceil(Math.max(0, chars) * 0.9);
 
-export function claudeUsed(): number {
-  return load().used;
+export function claudeUsed(pool: Pool = 'mafia'): number {
+  return load(pool).used;
 }
 
-export function claudeLocked(): boolean {
-  return claudeUsed() >= DAILY_TOKENS;
+export function claudeLocked(pool: Pool = 'mafia'): boolean {
+  return claudeUsed(pool) >= POOLS[pool].max;
 }
 
 /** 쓴 만큼 더한다 — 오늘 쓴 양을 돌려준다 */
-export function spendClaude(tokens: number): number {
-  const u = load();
+export function spendClaude(tokens: number, pool: Pool = 'mafia'): number {
+  const u = load(pool);
   u.used += Math.max(0, Math.round(tokens));
-  mem = u;
-  writeJSON(KEY, u);
+  mem.set(pool, u);
+  writeJSON(POOLS[pool].key, u);
   return u.used;
 }
 
 /** 시험용: 기억을 비운다 */
-export function resetClaudeUsage(): void {
-  mem = null;
-  writeJSON(KEY, null);
+export function resetClaudeUsage(pool: Pool = 'mafia'): void {
+  mem.delete(pool);
+  writeJSON(POOLS[pool].key, null);
 }

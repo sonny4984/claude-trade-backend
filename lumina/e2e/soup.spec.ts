@@ -119,7 +119,7 @@ test('바다거북 스프: AI 진행자 (Gemini 응답 흉내)', async ({ page }
   await page.locator('.soup-input .text-input').fill('이렇게 된 거예요');
   await page.locator('.soup-guess').click();
   await expect(page.locator('.soup-result h2')).toHaveText(/정답! \+3점/);
-  expect(prompts.some((p) => p.includes('[이번 질문] 날씨와 상관있나요?'))).toBe(true);
+  expect(prompts.some((p) => p.includes('[질문] 날씨와 상관있나요?'))).toBe(true);
   expect(prompts.some((p) => p.includes('[참가자의 정답] 이렇게 된 거예요'))).toBe(true);
   expect(errors).toEqual([]);
 });
@@ -210,8 +210,8 @@ test('바다거북 스프: Gemini가 답을 거절하면 이유를 알리고 다
     bodies.push(body);
     const prompt = body.contents?.[0]?.parts?.[0]?.text ?? '';
     // 첫 질문: 한 번 끊겼다가 다시 물으면 답한다
-    if (prompt.includes('[이번 질문] 끊김') && calls === 1) return r.fulfill({ status: 400, body: '{}' });
-    if (prompt.includes('[이번 질문] 끊김')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"a":"no","note":"","k":[]}' }] } }] }) });
+    if (prompt.includes('[질문] 끊김') && calls === 1) return r.fulfill({ status: 400, body: '{}' });
+    if (prompt.includes('[질문] 끊김')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"a":"no","note":"","k":[]}' }] } }] }) });
     // 그 다음: 안전 필터로 거절
     return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ finishReason: 'SAFETY' }] }) });
   });

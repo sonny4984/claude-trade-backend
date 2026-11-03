@@ -10,7 +10,7 @@ import { translateList, useLang, useT } from '../../i18n';
 import { useOnline } from '../../net/online';
 import { useMafia } from '../../mafia/store';
 import { GeminiCard } from '../../mafia/ui/MafiaSetup';
-import { DAILY_TOKENS } from '../../mafia/budget';
+import { claudeUsed, dailyMax } from '../../mafia/budget';
 import type { SoupFilter } from '../engine';
 import { loadSoupSetup, puzzleCount, savedSoup, useSoup, type SoupSetupConfig } from '../store';
 
@@ -42,9 +42,11 @@ export function SoupSetup() {
   const [cfg, setCfg] = useState<SoupSetupConfig>(() => loadSoupSetup() ?? defaults(lang === 'ko'));
   const claudeOk = useMafia((s) => s.claudeOk);
   const geminiModel = useMafia((s) => s.geminiModel);
-  const used = useMafia((s) => s.claudeUsed);
+  // 스프는 마피아와 따로 센다 (화면을 열 때 한 번 읽음)
+  const [used] = useState(() => claudeUsed('soup'));
+  const max = dailyMax('soup');
   useEffect(() => useMafia.getState().probe(), []);
-  const locked = used >= DAILY_TOKENS;
+  const locked = used >= max;
   const aiOk = (claudeOk && !locked) || !!geminiModel;
   const n = cfg.players.length;
   const count = puzzleCount(cfg.filter);
@@ -106,7 +108,7 @@ export function SoupSetup() {
           {!human &&
             (claudeOk ? (
               <p className="mf-sub mf-usage" data-locked={locked || undefined}>
-                {locked ? t('soup.claudeLocked') : t('soup.claudeReady', { used: Math.round((used / DAILY_TOKENS) * 100) })}
+                {locked ? t('soup.claudeLocked') : t('soup.claudeReady', { used: Math.round((used / max) * 100), left: Math.max(0, Math.floor((max - used) / 900)) })}
               </p>
             ) : (
               <GeminiCard />

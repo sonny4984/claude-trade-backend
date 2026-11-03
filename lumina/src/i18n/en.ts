@@ -798,7 +798,7 @@ export const en: Dict = {
     hostHuman: 'Human host',
     hostAiSub: 'The AI knows the story, answers yes/no and judges your answer. Everyone guesses together.',
     hostHumanSub: 'One player secretly reads the answer and replies. Works without AI.',
-    claudeReady: 'Claude hosts · {used}% of today’s budget used (shared with Mafia)',
+    claudeReady: 'Claude hosts · {used}% of the soup-only daily budget used (about {left} questions left today)',
     claudeLocked: 'Today’s Claude budget is used up. It resets tomorrow — use a human host, or Gemini on the public site.',
     noAi: 'For an AI host, connect a Gemini key (public site) or open this in the claude.ai artifact. Otherwise pick “Human host”.',
     players: 'Players',

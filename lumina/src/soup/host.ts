@@ -4,7 +4,7 @@
  * 프롬프트는 짧게: 문제 + 전말 + 핵심 + 최근 질문 몇 개 + 이번 질문.
  */
 import type { SoupPuzzle } from './puzzles';
-import { ANSWERS, VERDICTS, type SoupAnswer, type SoupEntry, type SoupVerdict } from './engine';
+import { ANSWERS, VERDICTS, type SoupAnswer, type SoupVerdict } from './engine';
 import { CALL_OVERHEAD, claudeLocked, spendClaude, tokensOf } from '../mafia/budget';
 import { FATAL, LIMITED, claudeSample } from '../mafia/claude';
 import { GeminiFail, geminiJson, loadGemini } from '../mafia/gemini';
@@ -20,7 +20,7 @@ export class HostError extends Error {
 
 /** 이 화면에서 쓸 수 있는 진행자 (Claude 먼저, 안 되면 Gemini) */
 export async function hostAvailable(): Promise<HostWho | null> {
-  if (!claudeLocked() && (await claudeSample())) return 'claude';
+  if (!claudeLocked('soup') && (await claudeSample())) return 'claude';
   if (loadGemini()?.model) return 'gemini';
   return null;
 }
@@ -29,12 +29,12 @@ export async function hostAvailable(): Promise<HostWho | null> {
 let claudeDead = false;
 
 async function callJson(prompt: string, signal: AbortSignal): Promise<{ out: unknown; who: HostWho }> {
-  const sample = !claudeDead && !claudeLocked() ? await claudeSample() : null;
+  const sample = !claudeDead && !claudeLocked('soup') ? await claudeSample() : null;
   if (sample) {
     try {
-      spendClaude(CALL_OVERHEAD + tokensOf(prompt.length));
+      spendClaude(CALL_OVERHEAD + tokensOf(prompt.length), 'soup');
       const out = await sample.json<unknown>(prompt, { modelTier: 'quick', cache: false, signal });
-      spendClaude(tokensOf(JSON.stringify(out ?? '').length));
+      spendClaude(tokensOf(JSON.stringify(out ?? '').length), 'soup');
       return { out, who: 'claude' };
     } catch (e) {
       if ((e as { name?: string } | null)?.name === 'AbortError') throw e;
@@ -45,7 +45,7 @@ async function callJson(prompt: string, signal: AbortSignal): Promise<{ out: unk
     }
   }
   const gem = loadGemini();
-  if (!gem?.model) throw new HostError(claudeLocked() ? 'locked' : 'none');
+  if (!gem?.model) throw new HostError(claudeLocked('soup') ? 'locked' : 'none');
   // 죽음이 나오는 고전 문제도 답하도록 안전 필터를 끄고, 잠깐 끊긴 거면 한 번 더 묻는다
   for (let attempt = 0; ; attempt++) {
     try {
@@ -58,47 +58,30 @@ async function callJson(prompt: string, signal: AbortSignal): Promise<{ out: unk
   }
 }
 
-const ANS_KO: Record<SoupAnswer, string> = { yes: '예', no: '아니요' };
-
-function recent(log: readonly SoupEntry[]): string {
-  return log
-    .filter((e) => e.kind === 'ask' && e.reply && e.text)
-    .slice(-6)
-    .map((e) => `Q: ${e.text} → ${ANS_KO[e.reply as SoupAnswer] ?? '-'}`)
-    .join('\n');
-}
-
-/** 질문에 답하게 하는 글 (테스트에서 내용을 확인한다) */
-export function askPrompt(p: SoupPuzzle, question: string, log: readonly SoupEntry[]): string {
-  const past = recent(log);
+/** 질문에 답하게 하는 글 (테스트에서 내용을 확인한다) — 짧게: 지난 질문은 보내지 않는다 (답은 전말만 보고 정하면 된다) */
+export function askPrompt(p: SoupPuzzle, question: string): string {
   return [
-    '너는 "바다거북 스프"(상황 추리 게임)의 진행자야. 너만 전말을 알고, 참가자는 예/아니요 질문으로 전말을 알아낸다. 문제는 모두 지어낸 옛 추리 퍼즐이야.',
+    '바다거북 스프(지어낸 옛 추리 퍼즐) 진행자. 전말은 절대 말하지 마.',
     `[문제] ${p.story}`,
-    `[전말 — 절대 말하지 마] ${p.answer}`,
+    `[전말] ${p.answer}`,
     `[핵심] ${p.keys.map((k, i) => `${i + 1}) ${k}`).join(' ')}`,
-    past ? `[지금까지]\n${past}` : '',
-    `[이번 질문] ${question}`,
-    '전말에 비추어 사실대로 둘 중 하나만 골라: yes(예) 또는 no(아니요). 질문이 대체로 맞으면 yes, 틀렸거나 전말에 없는 내용이면 no.',
-    '예/아니요로 답할 수 없는 질문(왜, 무엇 등)이면 no를 고르고 note에 "예/아니요로 답할 수 있게 물어봐 주세요"라고 써.',
-    'note는 비워 두거나, 핵심을 짚었을 때만 "좋은 질문이에요!" 같은 12자 이내 한마디. 전말·힌트·새 사실은 절대 넣지 마.',
-    'k: 답이 yes이고 질문이 핵심을 직접 짚었으면 그 핵심 번호들(예: [2]), 아니면 [].',
+    `[질문] ${question}`,
+    'a: 전말에 비추어 대체로 맞으면 yes, 틀렸거나 전말에 없으면 no. 예/아니요로 답할 수 없는 질문이면 no + note "예/아니요로 물어봐 주세요".',
+    'note: 보통 빈 글, 핵심을 짚었을 때만 12자 이내 칭찬. k: yes이고 핵심을 짚었으면 그 번호들, 아니면 [].',
     'JSON만: {"a":"yes|no","note":"","k":[]}',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  ].join('\n');
 }
 
 /** 정답을 채점하게 하는 글 */
 export function guessPrompt(p: SoupPuzzle, guess: string): string {
   return [
-    '너는 "바다거북 스프"(상황 추리 게임)의 진행자야. 참가자가 말한 정답을 채점해. 문제는 모두 지어낸 옛 추리 퍼즐이야.',
+    '바다거북 스프(지어낸 옛 추리 퍼즐) 진행자. 참가자의 정답을 채점해.',
     `[문제] ${p.story}`,
     `[전말] ${p.answer}`,
     `[핵심] ${p.keys.map((k, i) => `${i + 1}) ${k}`).join(' ')}`,
     `[참가자의 정답] ${guess}`,
-    '핵심이 모두(표현은 달라도 뜻이 같으면 인정) 들어 있으면 correct, 절반 이상이면 close, 아니면 wrong.',
-    'note: correct면 빈 글. close·wrong이면 "무엇에 대한 설명이 빠졌는지"만 25자 이내로 (예: "왜 그 장소였는지가 빠졌어요"). 전말의 내용은 쓰지 마.',
-    'k: 참가자의 정답에 들어 있는 핵심 번호들 (예: [1,3]).',
+    '핵심이 모두(뜻이 같으면 인정) 있으면 correct, 절반 이상 close, 아니면 wrong.',
+    'note: correct면 빈 글, 아니면 무엇이 빠졌는지만 25자 이내 (전말 내용은 쓰지 마). k: 정답에 든 핵심 번호들.',
     'JSON만: {"v":"correct|close|wrong","note":"","k":[]}',
   ].join('\n');
 }
@@ -127,8 +110,8 @@ export function readVerdict(out: unknown): { v: SoupVerdict; note: string } {
   return { v, note: v === 'correct' ? '' : clean(o.note) };
 }
 
-export async function aiAnswer(p: SoupPuzzle, question: string, log: readonly SoupEntry[], signal: AbortSignal): Promise<{ a: SoupAnswer; note: string; keys: number[]; who: HostWho }> {
-  const { out, who } = await callJson(askPrompt(p, question, log), signal);
+export async function aiAnswer(p: SoupPuzzle, question: string, signal: AbortSignal): Promise<{ a: SoupAnswer; note: string; keys: number[]; who: HostWho }> {
+  const { out, who } = await callJson(askPrompt(p, question), signal);
   return { ...readAnswer(out), keys: readKeys((out as { k?: unknown } | null)?.k, p.keys.length), who };
 }
 
