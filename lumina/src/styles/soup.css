@@ -193,6 +193,49 @@
   font-size: 13px;
 }
 
+/* 진척도: AI가 짚어 준 핵심 수 */
+.soup-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.soup-progress b {
+  color: var(--text);
+}
+.soup-progress-dots {
+  display: flex;
+  gap: 4px;
+}
+.soup-progress-dots i {
+  width: 18px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  border: 1px solid var(--panel-line);
+  transition: background 0.4s var(--ease);
+}
+.soup-progress-dots i[data-on] {
+  background: var(--yes);
+  border-color: transparent;
+}
+.soup-keys li[data-found] {
+  color: var(--yes);
+  font-weight: 700;
+}
+.soup-keys li[data-found]::marker {
+  content: '✓ ';
+}
+.soup-hit-tag {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--yes);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 /* 기록 */
 .soup-log {
   display: grid;

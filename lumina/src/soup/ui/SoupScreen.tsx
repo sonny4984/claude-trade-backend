@@ -27,6 +27,7 @@ function Story({ s, p }: { s: SoupSession; p: SoupPuzzle }) {
   const st = s.state;
   const host = canSeeAnswer(s);
   const showAnswer = st.phase === 'over' || (host && peek);
+  const found = new Set(st.found ?? []);
   return (
     <section className="card soup-story" aria-label={t('soup.storyLabel')}>
       <header className="soup-story-head">
@@ -39,6 +40,19 @@ function Story({ s, p }: { s: SoupSession; p: SoupPuzzle }) {
         </span>
       </header>
       <p className="soup-story-text">{p.story}</p>
+      {st.host === 'ai' && (
+        <div className="soup-progress" role="img" aria-label={t('soup.progress', { n: found.size, total: p.keys.length })}>
+          <span>{t('soup.progressLabel')}</span>
+          <span className="soup-progress-dots" aria-hidden="true">
+            {p.keys.map((_, i) => (
+              <i key={i} data-on={found.has(i) || undefined} />
+            ))}
+          </span>
+          <b>
+            {found.size}/{p.keys.length}
+          </b>
+        </div>
+      )}
       {st.hints > 0 && (
         <ol className="soup-hints" aria-label={t('soup.hintsLabel')}>
           {p.hints.slice(0, st.hints).map((h, i) => (
@@ -69,7 +83,9 @@ function Story({ s, p }: { s: SoupSession; p: SoupPuzzle }) {
           <p>{p.answer}</p>
           <ul className="soup-keys">
             {p.keys.map((k, i) => (
-              <li key={i}>{k}</li>
+              <li key={i} data-found={found.has(i) || undefined}>
+                {k}
+              </li>
             ))}
           </ul>
         </div>
@@ -95,6 +111,7 @@ function Entry({ s, e }: { s: SoupSession; e: SoupEntry }) {
         {p && <Face id={p.character} size={22} />}
         <b>{p?.name ?? '?'}</b>
         {e.kind === 'guess' && <span className="soup-guess-tag">{t('soup.guessTag')}</span>}
+        {e.hit?.length ? <span className="soup-hit-tag">{t('soup.hit')}</span> : null}
       </span>
       <p className="soup-q">{e.text || t('soup.spoken')}</p>
       {e.reply ? (

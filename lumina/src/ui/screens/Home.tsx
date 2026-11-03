@@ -110,6 +110,15 @@ export function Home() {
             <i />
           </span>
         </button>
+        <button type="button" className="plate-btn plate-star" onClick={() => store.go('star-setup')}>
+          <span className="plate-label">{t('star.title')}</span>
+          <span className="plate-sub">{t('star.sub')}</span>
+          <span className="plate-stars" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+        </button>
         <button type="button" className="plate-btn plate-online" onClick={() => store.go('online')}>
           <span className="plate-label">{t('online.title')}</span>
           <span className="plate-sub">{room ? t('online.resumeInfo', { code: room.code.toUpperCase(), role: t(`online.${room.role}`) }) : t('online.sub')}</span>

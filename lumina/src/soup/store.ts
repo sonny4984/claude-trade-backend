@@ -211,12 +211,12 @@ async function pump(): Promise<void> {
           const r = await aiAnswer(p, e.text, s.state.log, ctl.signal);
           if (my !== token || get().session?.id !== s.id) break;
           useSoup.setState({ who: r.who });
-          apply({ type: 'reply', n: e.n, reply: r.a, ...(r.note ? { note: r.note } : {}) });
+          apply({ type: 'reply', n: e.n, reply: r.a, keys: r.keys, ...(r.note ? { note: r.note } : {}) });
         } else {
           const r = await aiJudge(p, e.text, ctl.signal);
           if (my !== token || get().session?.id !== s.id) break;
           useSoup.setState({ who: r.who });
-          apply({ type: 'reply', n: e.n, reply: r.v, ...(r.note ? { note: r.note } : {}) });
+          apply({ type: 'reply', n: e.n, reply: r.v, keys: r.keys, ...(r.note ? { note: r.note } : {}) });
         }
       } catch (err) {
         if ((err as { name?: string } | null)?.name === 'AbortError') break;

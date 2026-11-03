@@ -1,0 +1,244 @@
+/*
+ * 별판 점프 — 위 자리 줄, 가운데 별판(가능한 크게), 아래 안내 줄.
+ */
+.plate-stars {
+  position: absolute;
+  right: 42px;
+  top: 50%;
+  display: flex;
+  gap: 3px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.plate-stars i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ec6a8c;
+  animation: star-hop 1.8s ease-in-out infinite;
+}
+.plate-stars i:nth-child(2) {
+  background: #4f95e0;
+  animation-delay: 0.3s;
+}
+.plate-stars i:nth-child(3) {
+  background: #f0b43a;
+  animation-delay: 0.6s;
+}
+@keyframes star-hop {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-7px);
+  }
+}
+
+.star-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  vertical-align: -2px;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+}
+.star-players .star-dot {
+  width: 10px;
+  height: 10px;
+  vertical-align: 0;
+}
+
+.game.star {
+  gap: 6px;
+}
+.star-players {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+.star-player {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 14px;
+  border: 2px solid transparent;
+  background: var(--panel);
+  transition: border-color 0.3s var(--ease), transform 0.3s var(--ease);
+}
+.star-player[data-current] {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.star-player[data-won] {
+  border-color: var(--valid, #e2c27f);
+}
+.star-player-face {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 3px solid;
+  overflow: hidden;
+  background: var(--panel-solid);
+}
+.star-player-face .portrait {
+  width: 34px;
+  height: 34px;
+}
+.star-player[data-thinking] .star-player-face {
+  animation: star-think 1s ease-in-out infinite;
+}
+@keyframes star-think {
+  50% {
+    transform: scale(1.08);
+  }
+}
+.star-player-text {
+  min-width: 0;
+  display: grid;
+  line-height: 1.2;
+}
+.star-player-text b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+.star-player-text small {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.star-wrap {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+.star-board {
+  width: 100%;
+  height: 100%;
+  max-width: 760px;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.star-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+.star-hole {
+  fill: var(--rack-well, rgba(0, 0, 0, 0.25));
+  fill-opacity: 0.55;
+  stroke: rgba(0, 0, 0, 0.12);
+  stroke-width: 0.06;
+}
+.star-piece {
+  stroke: rgba(0, 0, 0, 0.28);
+  stroke-width: 0.06;
+  pointer-events: none;
+  filter: drop-shadow(0 0.12px 0.1px rgba(0, 0, 0, 0.35));
+}
+.star-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 0.14;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.star-cell[data-movable] .star-ring {
+  animation: star-pulse 1.4s ease-in-out infinite;
+}
+.star-cell[data-selected] .star-ring {
+  opacity: 1;
+  stroke-width: 0.2;
+}
+@keyframes star-pulse {
+  50% {
+    opacity: 0.15;
+  }
+}
+.star-dot-target {
+  fill: var(--accent);
+  stroke: #fff;
+  stroke-width: 0.12;
+  pointer-events: none;
+  animation: star-pulse 1s ease-in-out infinite;
+}
+.star-trail {
+  fill: none;
+  stroke-width: 0.16;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 0.3 0.3;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.star-ghost {
+  pointer-events: none;
+}
+
+.star-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.star-status {
+  flex: 1;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border-left: 5px solid;
+  background: var(--panel);
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.star-undo {
+  flex: none;
+  min-height: 40px;
+}
+.star-rank {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+.star-rank li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.star-rank li span {
+  flex: 1;
+}
+.star-rank li small {
+  color: var(--text-dim);
+}
+.star-rank li[data-won] {
+  font-weight: 800;
+}
+.star-rank .portrait {
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plate-stars i,
+  .star-cell[data-movable] .star-ring,
+  .star-dot-target,
+  .star-player[data-thinking] .star-player-face {
+    animation: none;
+  }
+}

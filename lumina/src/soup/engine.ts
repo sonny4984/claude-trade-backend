@@ -30,6 +30,8 @@ export interface SoupEntry {
   readonly reply: SoupReply | null;
   /** AI 진행자의 짧은 한마디 (전말은 말하지 않는다) */
   readonly note?: string;
+  /** 이 기록으로 새로 찾은 핵심 (puzzle.keys 번호) */
+  readonly hit?: readonly number[];
 }
 
 export interface SoupPlayer {
@@ -63,6 +65,8 @@ export interface SoupState {
   /** 지금까지 나온 문제 (지금 문제 포함) */
   readonly played: readonly string[];
   readonly filter: SoupFilter;
+  /** 지금까지 찾은 핵심 (puzzle.keys 번호) — 진척도. 예전 저장본엔 없다 */
+  readonly found?: readonly number[];
   /** 다음에 물을 차례 (진행자는 빼고 돌아간다 — 정해진 규칙은 아니고 화면이 기본으로 고른다) */
   readonly turn: number;
 }
@@ -70,7 +74,7 @@ export interface SoupState {
 export type SoupAction =
   | { readonly type: 'ask'; readonly by: number; readonly text: string }
   | { readonly type: 'guess'; readonly by: number; readonly text: string }
-  | { readonly type: 'reply'; readonly n: number; readonly reply: SoupReply; readonly note?: string }
+  | { readonly type: 'reply'; readonly n: number; readonly reply: SoupReply; readonly note?: string; readonly keys?: readonly number[] }
   /** 사람 진행자: 말로 들은 질문에 바로 답 (기록만 남긴다) */
   | { readonly type: 'quick'; readonly by: number; readonly reply: SoupAnswer }
   | { readonly type: 'hint' }
@@ -128,6 +132,7 @@ export function newSoup(o: { players: readonly SoupPlayer[]; host: 'ai' | 'human
     scores: o.players.map(() => 0),
     round: 1,
     played: [o.puzzle],
+    found: [],
     filter: o.filter,
     turn: 0,
   };
@@ -168,8 +173,13 @@ export function soupReduce(s: SoupState, a: SoupAction): SoupResult {
       const okReply = e.kind === 'ask' ? ANSWERS.includes(a.reply as SoupAnswer) : VERDICTS.includes(a.reply as SoupVerdict);
       if (!okReply) return { ok: false, error: 'reply' };
       const note = typeof a.note === 'string' && a.note.trim() ? a.note.trim().slice(0, 80) : undefined;
-      const log = s.log.map((x) => (x.n === a.n ? { ...x, reply: a.reply, ...(note ? { note } : {}) } : x));
-      let st: SoupState = { ...s, log };
+      // 핵심은 "예"나 정답 쪽 판정일 때만 인정 (아니요로 핵심을 찾을 수는 없다)
+      const nKeys = puzzleById(s.puzzle)?.keys.length ?? 0;
+      const had = new Set(s.found ?? []);
+      const keyOk = a.reply === 'yes' || a.reply === 'close' || a.reply === 'correct';
+      const hit = keyOk && Array.isArray(a.keys) ? [...new Set(a.keys)].filter((k) => Number.isInteger(k) && k >= 0 && k < nKeys && !had.has(k)).sort((x, y) => x - y) : [];
+      const log = s.log.map((x) => (x.n === a.n ? { ...x, reply: a.reply, ...(note ? { note } : {}), ...(hit.length ? { hit } : {}) } : x));
+      let st: SoupState = { ...s, log, ...(hit.length ? { found: [...had, ...hit].sort((x, y) => x - y) } : {}) };
       if (e.kind === 'guess' && a.reply === 'correct') {
         st = { ...st, phase: 'over', solvedBy: e.by, scores: st.scores.map((v, i) => (i === e.by ? v + pointsFor(s.hints) : v)) };
       }
@@ -187,7 +197,7 @@ export function soupReduce(s: SoupState, a: SoupAction): SoupResult {
     case 'next': {
       if (s.phase !== 'over') return { ok: false, error: 'phase' };
       if (!puzzleById(a.puzzle)) return { ok: false, error: 'puzzle' };
-      const st: SoupState = { ...s, puzzle: a.puzzle, log: [], hints: 0, phase: 'play', solvedBy: null, round: s.round + 1, played: [...s.played.filter((x) => x !== a.puzzle), a.puzzle] };
+      const st: SoupState = { ...s, puzzle: a.puzzle, log: [], found: [], hints: 0, phase: 'play', solvedBy: null, round: s.round + 1, played: [...s.played.filter((x) => x !== a.puzzle), a.puzzle] };
       return { ok: true, state: st };
     }
     default:

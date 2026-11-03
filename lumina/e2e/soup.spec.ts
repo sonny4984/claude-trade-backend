@@ -41,6 +41,7 @@ test('바다거북 스프: 사람 진행자와 한 폰으로', async ({ page }) 
   await expect(page.locator('.soup-story-text')).not.toBeEmpty();
 
   // 진행자만: 꾹 누르는 동안만 전말이 보인다
+  await expect(page.locator('.soup-progress')).toHaveCount(0);
   await expect(page.locator('.soup-answer')).toHaveCount(0);
   const peek = page.locator('.soup-peek');
   const box = await peek.boundingBox();
@@ -97,7 +98,7 @@ test('바다거북 스프: AI 진행자 (Gemini 응답 흉내)', async ({ page }
     const body = (r.request().postDataJSON() ?? {}) as { contents?: { parts?: { text?: string }[] }[] };
     const prompt = body.contents?.[0]?.parts?.[0]?.text ?? '';
     prompts.push(prompt);
-    const out = prompt.includes('[참가자의 정답]') ? { v: 'correct', note: '' } : { a: 'yes', note: '좋은 질문이에요!' };
+    const out = prompt.includes('[참가자의 정답]') ? { v: 'correct', note: '' } : { a: 'yes', note: '좋은 질문이에요!', k: [1] };
     await r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] }) });
   });
   const errors = await open(page, { 'lumina.gemini.v1': { key: 'e2e-not-a-key', model: 'gemini-e2e', models: ['gemini-e2e'] } });
@@ -111,6 +112,9 @@ test('바다거북 스프: AI 진행자 (Gemini 응답 흉내)', async ({ page }
   await expect(page.locator('.soup-entry').first().locator('.soup-reply')).toContainText('예');
   await expect(page.locator('.soup-entry').first().locator('.soup-reply small')).toHaveText('좋은 질문이에요!');
   await expect(page.locator('.soup-host-chip')).toHaveText('AI 진행 · Gemini');
+  // 진척도: 짚은 핵심 하나가 켜지고 기록에 '핵심!'
+  await expect(page.locator('.soup-progress b')).toHaveText(/^1\/\d$/);
+  await expect(page.locator('.soup-hit-tag')).toHaveText('핵심!');
 
   await page.locator('.soup-input .text-input').fill('이렇게 된 거예요');
   await page.locator('.soup-guess').click();

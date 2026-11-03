@@ -19,7 +19,7 @@ import { CommsButton } from '../online/Comms';
 import { sfx } from '../../audio/sfx';
 
 const LEVELS: AiLevel[] = ['beginner', 'casual', 'advanced', 'expert'];
-const GAMES: OnlineGame[] = ['lumina', 'coda', 'gomoku', 'fireice', 'mafia', 'soup'];
+const GAMES: OnlineGame[] = ['lumina', 'coda', 'gomoku', 'fireice', 'mafia', 'soup', 'star'];
 
 function Face({ id, ex = 'idle', size = 56 }: { id: CharacterId; ex?: Expression; size?: number }) {
   const src = usePortrait(id, ex, 128);
@@ -378,7 +378,7 @@ function Lobby() {
 }
 
 /** 지금 온라인 판이 도는 게임 화면 */
-function screenOf(game: OnlineGame): 'game' | 'coda' | 'gomoku' | 'fireice' | 'mafia' | 'soup' {
+function screenOf(game: OnlineGame): 'game' | 'coda' | 'gomoku' | 'fireice' | 'mafia' | 'soup' | 'star' {
   return game === 'lumina' ? 'game' : game;
 }
 

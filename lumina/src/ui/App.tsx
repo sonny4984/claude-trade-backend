@@ -22,6 +22,8 @@ import { MafiaSetup } from '../mafia/ui/MafiaSetup';
 import { MafiaScreen } from '../mafia/ui/MafiaScreen';
 import { SoupSetup } from '../soup/ui/SoupSetup';
 import { SoupScreen } from '../soup/ui/SoupScreen';
+import { StarSetup } from '../star/ui/StarSetup';
+import { StarScreen } from '../star/ui/StarScreen';
 import { claimGeminiLink, useMafia } from '../mafia/store';
 import { translate } from '../i18n';
 import { useOnline } from '../net/online';
@@ -99,8 +101,8 @@ function useAutoFullscreen(game: boolean): void {
 export function App() {
   useDocumentSettings();
   const screen = useGame((s) => s.screen);
-  useKeepAwake(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'mafia' || screen === 'soup' || screen === 'online');
-  useAutoFullscreen(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'mafia');
+  useKeepAwake(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'mafia' || screen === 'soup' || screen === 'star' || screen === 'online');
+  useAutoFullscreen(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'mafia' || screen === 'star');
   const show3d = useSettings((s) => s.show3d);
   useEffect(() => {
     if (!show3d) return;
@@ -158,6 +160,8 @@ export function App() {
       {screen === 'mafia' && <MafiaScreen />}
       {screen === 'soup-setup' && <SoupSetup />}
       {screen === 'soup' && <SoupScreen />}
+      {screen === 'star-setup' && <StarSetup />}
+      {screen === 'star' && <StarScreen />}
       <Toasts />
       <FullscreenHelp />
       <CommsLayer />

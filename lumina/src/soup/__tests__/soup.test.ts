@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PUZZLES, puzzleById } from '../puzzles';
 import { candidates, guessers, newSoup, pending, pickPuzzle, pointsFor, soupReduce, tally, validSoup, type SoupState } from '../engine';
-import { askPrompt, guessPrompt, readAnswer, readVerdict } from '../host';
+import { askPrompt, guessPrompt, readAnswer, readKeys, readVerdict } from '../host';
 
 const players = [
   { name: '나', character: 'moka' as const },
@@ -128,6 +128,38 @@ describe('soupReduce — AI 진행자', () => {
   });
 });
 
+describe('핵심 진척도', () => {
+  it('예·정답 쪽 답에 붙은 핵심만, 새로 찾은 것만 센다', () => {
+    let s = newSoup({ players, host: 'ai', puzzle: 'elevator', filter: { spice: 'mild', level: 0 } });
+    expect(s.found).toEqual([]);
+    s = ok(s, { type: 'ask', by: 0, text: '키가 작나요?' });
+    s = ok(s, { type: 'reply', n: 1, reply: 'yes', keys: [0, 0, 9, -1] });
+    expect(s.found).toEqual([0]);
+    expect(s.log[0]?.hit).toEqual([0]);
+    s = ok(s, { type: 'ask', by: 1, text: '우산이 없나요?' });
+    s = ok(s, { type: 'reply', n: 2, reply: 'no', keys: [2] });
+    expect(s.found).toEqual([0]);
+    expect(s.log[1]?.hit).toBeUndefined();
+    s = ok(s, { type: 'guess', by: 2, text: '키가 작고 버튼이 안 닿는다' });
+    s = ok(s, { type: 'reply', n: 3, reply: 'close', keys: [0, 1] });
+    expect(s.found).toEqual([0, 1]);
+    expect(s.log[2]?.hit).toEqual([1]);
+    s = ok(ok(s, { type: 'reveal' }), { type: 'next', puzzle: 'hiccup' });
+    expect(s.found).toEqual([]);
+  });
+  it('readKeys는 1부터 센 번호를 0부터로, 이상한 값은 버린다', () => {
+    expect(readKeys([1, '3', 3, 7, 0, 'x'], 3)).toEqual([0, 2]);
+    expect(readKeys('1', 3)).toEqual([]);
+  });
+  it('프롬프트가 핵심 번호를 묻는다', () => {
+    const p = puzzleById('elevator');
+    if (!p) throw new Error('no puzzle');
+    expect(askPrompt(p, '?', [])).toContain('"k":[]');
+    expect(askPrompt(p, '?', [])).toContain('1) ' + p.keys[0]);
+    expect(guessPrompt(p, '?')).toContain('"k":[]');
+  });
+});
+
 describe('soupReduce — 사람 진행자', () => {
   const start = (): SoupState => newSoup({ players, host: 'human', hostSeat: 1, puzzle: 'goldfish', filter: { spice: 'mild', level: 0 } });
   it('진행자는 묻지 못하고 차례에서 빠진다', () => {
@@ -171,14 +203,14 @@ describe('AI 진행자 프롬프트와 답 읽기', () => {
     expect(prompt).toContain(p.keys[0] ?? '');
     expect(prompt).toContain('Q: 키가 작나요? → 예');
     expect(prompt).toContain('[이번 질문] 우산이 중요한가요?');
-    expect(prompt).toContain('"a":"yes|no"');
+    expect(prompt).toContain('"a":"yes|no","note":"","k":[]');
     expect(prompt.length).toBeLessThan(1600);
   });
   it('채점 프롬프트에는 번호 매긴 핵심과 참가자 답이 들어 있다', () => {
     const prompt = guessPrompt(p, '키가 작아서');
     expect(prompt).toContain('1) ' + p.keys[0]);
     expect(prompt).toContain('[참가자의 정답] 키가 작아서');
-    expect(prompt).toContain('"v":"correct|close|wrong"');
+    expect(prompt).toContain('"v":"correct|close|wrong","note":"","k":[]');
   });
   it('readAnswer는 이상한 답을 너그럽게 읽는다', () => {
     expect(readAnswer({ a: 'yes', note: ' 좋은   질문 ' })).toEqual({ a: 'yes', note: '좋은 질문' });

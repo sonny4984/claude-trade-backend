@@ -2,7 +2,7 @@
  * 게임 저장소 ↔ 온라인 저장소 사이의 얇은 다리 (서로 import하지 않게).
  * 온라인 저장소가 함수를 끼워 넣고, 게임 저장소는 있으면 부른다.
  */
-export type OnlineGame = 'lumina' | 'coda' | 'gomoku' | 'fireice' | 'mafia' | 'soup';
+export type OnlineGame = 'lumina' | 'coda' | 'gomoku' | 'fireice' | 'mafia' | 'soup' | 'star';
 
 /** 게임마다 자리 수와 AI 허용 */
 export const GAME_SEATS: Readonly<Record<OnlineGame, { readonly min: number; readonly max: number; readonly ai: boolean }>> = {
@@ -14,10 +14,12 @@ export const GAME_SEATS: Readonly<Record<OnlineGame, { readonly min: number; rea
   mafia: { min: 2, max: 8, ai: true },
   // 바다거북 스프: 사람끼리 (진행은 AI 또는 방장)
   soup: { min: 2, max: 8, ai: false },
+  // 별판 점프: 2~3명, 빈자리는 AI
+  star: { min: 2, max: 3, ai: true },
 };
 
 export function isOnlineGame(x: unknown): x is OnlineGame {
-  return x === 'lumina' || x === 'coda' || x === 'gomoku' || x === 'fireice' || x === 'mafia' || x === 'soup';
+  return x === 'lumina' || x === 'coda' || x === 'gomoku' || x === 'fireice' || x === 'mafia' || x === 'soup' || x === 'star';
 }
 
 export interface OnlineInfo {
