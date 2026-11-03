@@ -151,7 +151,9 @@ function Log({ s }: { s: SoupSession }) {
   const n = s.state.log.length;
   const last = s.state.log[n - 1]?.reply;
   useEffect(() => {
-    ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: 'smooth' });
+    // 새 질문·답이 오면 맨 아래로 (스크롤은 판 가운데 영역이 한다)
+    const main = ref.current?.closest('.soup-main');
+    main?.scrollTo({ top: main.scrollHeight, behavior: 'smooth' });
   }, [n, last]);
   if (!n) return <p className="soup-empty">{t(s.state.host === 'ai' ? 'soup.emptyAi' : 'soup.emptyHuman')}</p>;
   return (
@@ -300,13 +302,12 @@ function FailBar() {
   return (
     <div className="soup-fail" role="alert">
       <span>{t(`soup.fail.${fail}`)}</span>
-      {fail === 'blocked' && canHost(useSoup.getState().session) ? (
-        <button type="button" className="btn btn-secondary soup-skip" onClick={() => useSoup.getState().skip()}>
+      <button type="button" className="btn btn-secondary" onClick={() => useSoup.getState().retry()}>
+        {t('soup.retry')}
+      </button>
+      {canHost(useSoup.getState().session) && (
+        <button type="button" className="btn btn-ghost soup-skip" onClick={() => useSoup.getState().skip()}>
           {t('soup.skip')}
-        </button>
-      ) : (
-        <button type="button" className="btn btn-secondary" onClick={() => useSoup.getState().retry()}>
-          {t('soup.retry')}
         </button>
       )}
     </div>
@@ -355,17 +356,51 @@ function Menu() {
   );
 }
 
+/**
+ * 폰 키보드가 열리면 화면을 보이는 영역(visualViewport)에 딱 맞춘다.
+ * 아이폰은 키보드가 열리면 페이지를 통째로 밀어 올려 문제·기록이 화면 밖으로 나가므로,
+ * 키보드가 열린 동안은 판을 보이는 영역에 고정하고 data-kb로 문제 카드를 위에 붙인다.
+ */
+function useKeyboardFit(ref: React.RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const fit = (): void => {
+      const el = ref.current;
+      if (!el) return;
+      const open = window.innerHeight - vv.height > 120;
+      if (open) {
+        el.dataset.kb = '1';
+        Object.assign(el.style, { position: 'fixed', left: '0', right: '0', top: `${vv.offsetTop}px`, height: `${vv.height}px`, maxWidth: 'none' });
+        const main = el.querySelector('.soup-main');
+        main?.scrollTo({ top: main.scrollHeight });
+      } else if (el.dataset.kb) {
+        delete el.dataset.kb;
+        for (const k of ['position', 'left', 'right', 'top', 'height', 'maxWidth'] as const) el.style[k] = '';
+      }
+    };
+    vv.addEventListener('resize', fit);
+    vv.addEventListener('scroll', fit);
+    fit();
+    return () => {
+      vv.removeEventListener('resize', fit);
+      vv.removeEventListener('scroll', fit);
+    };
+  }, [ref]);
+}
+
 export function SoupScreen() {
+  const root = useRef<HTMLDivElement>(null);
+  useKeyboardFit(root);
   const t = useT();
   const s = useSoup((x) => x.session);
-  const who = useSoup((x) => x.who);
   if (!s) return null;
   const st = s.state;
   const p = puzzleById(st.puzzle);
   if (!p) return null;
   const hostName = st.host === 'human' && st.hostSeat !== null ? st.players[st.hostSeat]?.name ?? '' : '';
   return (
-    <div className="game soup" data-phase={st.phase}>
+    <div className="game soup" data-phase={st.phase} ref={root}>
       <header className="hud">
         <button type="button" className="icon-btn" aria-label={t('hud.menu')} onClick={() => useSoup.getState().openMenu()}>
           <Icon name="menu" />
@@ -375,7 +410,7 @@ export function SoupScreen() {
         </div>
         <div className="hud-right">
           <OnlineChip />
-          <span className="hud-chip soup-host-chip">{st.host === 'ai' ? t(who === 'gemini' ? 'soup.hostGemini' : 'soup.hostClaude') : t('soup.hostIs', { name: hostName })}</span>
+          <span className="hud-chip soup-host-chip">{st.host === 'ai' ? t('soup.hostClaude') : t('soup.hostIs', { name: hostName })}</span>
         </div>
       </header>
       <main className="soup-main">

@@ -528,6 +528,33 @@
   white-space: nowrap;
 }
 
+/* 폰 키보드가 열렸을 때: 위 바·도구는 숨기고, 문제 카드는 위에 붙여 두고(길면 그 안에서 스크롤), 아래로 최근 기록 */
+.game.soup[data-kb] {
+  z-index: 50;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  background: var(--room-0);
+}
+.game.soup[data-kb] .hud,
+.game.soup[data-kb] .soup-tools,
+.game.soup[data-kb] .soup-askers {
+  display: none;
+}
+.game.soup[data-kb] .soup-story {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--room-0);
+  box-shadow: 0 6px 12px -8px rgba(0, 0, 0, 0.35);
+  max-height: 46%;
+  overflow-y: auto;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.game.soup[data-kb] .soup-story-text {
+  font-size: 15px;
+}
+
 @media (min-width: 900px) {
   .game.soup {
     max-width: 760px;

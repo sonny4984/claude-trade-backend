@@ -3,7 +3,7 @@ import { startBroker, type TestBroker } from './broker';
 
 /**
  * 바다거북 스프 — 한 폰으로 돌아가며: 사람 진행자(전말 몰래 보기·답 단추·말로 한 질문),
- * AI 진행자(Gemini 응답을 가짜로 바꿔 질문 답·정답 채점), AI가 없을 때 시작 막기.
+ * AI 진행자(claude.ai의 Claude를 흉내 내 질문 답·정답 채점), AI가 없을 때 시작 막기.
  */
 
 async function open(page: Page, keep: Record<string, unknown> = {}, path = '/?seed=3', setup = true): Promise<string[]> {
@@ -31,6 +31,28 @@ async function open(page: Page, keep: Record<string, unknown> = {}, path = '/?se
   await expect(page.locator('.soup-setup')).toBeVisible();
   return errors;
 }
+
+/**
+ * claude.ai 아티팩트의 Claude 흉내 — window.claude.use('sample')를 가짜로 끼운다.
+ * mode: ok(질문엔 예·핵심 1, 정답엔 맞음) / flaky(첫 부름은 실패, 다시 부르면 아니요, "실패"라는 질문은 늘 실패)
+ */
+async function fakeClaude(page: Page, mode: 'ok' | 'flaky' = 'ok'): Promise<void> {
+  await page.addInitScript((m) => {
+    const w = window as unknown as { claude: unknown; __prompts: string[] };
+    w.__prompts = [];
+    let calls = 0;
+    const json = async (prompt: string): Promise<unknown> => {
+      w.__prompts.push(prompt);
+      calls++;
+      await new Promise((r) => setTimeout(r, 60));
+      if (m === 'flaky' && (calls === 1 || prompt.includes('[질문] 실패'))) throw Object.assign(new Error('x'), { code: 'internal' });
+      if (prompt.includes('[참가자의 정답]')) return { v: 'correct', note: '', k: [1] };
+      return m === 'flaky' ? { a: 'no', note: '', k: [] } : { a: 'yes', note: '좋은 질문이에요!', k: [1] };
+    };
+    w.claude = { use: async (name: string) => (name === 'sample' ? { json } : null) };
+  }, mode);
+}
+const prompts = (page: Page): Promise<string[]> => page.evaluate(() => (window as unknown as { __prompts: string[] }).__prompts);
 
 test('바다거북 스프: 사람 진행자와 한 폰으로', async ({ page }) => {
   const errors = await open(page);
@@ -92,16 +114,9 @@ test('바다거북 스프: 사람 진행자와 한 폰으로', async ({ page }) 
   expect(errors).toEqual([]);
 });
 
-test('바다거북 스프: AI 진행자 (Gemini 응답 흉내)', async ({ page }) => {
-  const prompts: string[] = [];
-  await page.route(/generativelanguage\.googleapis\.com/, async (r) => {
-    const body = (r.request().postDataJSON() ?? {}) as { contents?: { parts?: { text?: string }[] }[] };
-    const prompt = body.contents?.[0]?.parts?.[0]?.text ?? '';
-    prompts.push(prompt);
-    const out = prompt.includes('[참가자의 정답]') ? { v: 'correct', note: '' } : { a: 'yes', note: '좋은 질문이에요!', k: [1] };
-    await r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] }) });
-  });
-  const errors = await open(page, { 'lumina.gemini.v1': { key: 'e2e-not-a-key', model: 'gemini-e2e', models: ['gemini-e2e'] } });
+test('바다거북 스프: AI 진행자 (Claude 흉내)', async ({ page }) => {
+  await fakeClaude(page);
+  const errors = await open(page);
   await expect(page.locator('.soup-start')).toBeEnabled();
   await page.locator('.soup-start').click();
   await expect(page.locator('.soup-host-chip')).toHaveText(/AI 진행/);
@@ -111,7 +126,7 @@ test('바다거북 스프: AI 진행자 (Gemini 응답 흉내)', async ({ page }
   await page.locator('.soup-ask').click();
   await expect(page.locator('.soup-entry').first().locator('.soup-reply')).toContainText('예');
   await expect(page.locator('.soup-entry').first().locator('.soup-reply small')).toHaveText('좋은 질문이에요!');
-  await expect(page.locator('.soup-host-chip')).toHaveText('AI 진행 · Gemini');
+  await expect(page.locator('.soup-host-chip')).toHaveText('AI 진행 · Claude');
   // 진척도: 짚은 핵심 하나가 켜지고 기록에 '핵심!'
   await expect(page.locator('.soup-progress b')).toHaveText(/^1\/\d$/);
   await expect(page.locator('.soup-hit-tag')).toHaveText('핵심!');
@@ -119,8 +134,11 @@ test('바다거북 스프: AI 진행자 (Gemini 응답 흉내)', async ({ page }
   await page.locator('.soup-input .text-input').fill('이렇게 된 거예요');
   await page.locator('.soup-guess').click();
   await expect(page.locator('.soup-result h2')).toHaveText(/정답! \+3점/);
-  expect(prompts.some((p) => p.includes('[질문] 날씨와 상관있나요?'))).toBe(true);
-  expect(prompts.some((p) => p.includes('[참가자의 정답] 이렇게 된 거예요'))).toBe(true);
+  const sent = await prompts(page);
+  expect(sent.some((p) => p.includes('[질문] 날씨와 상관있나요?'))).toBe(true);
+  expect(sent.some((p) => p.includes('[참가자의 정답] 이렇게 된 거예요'))).toBe(true);
+  // Claude 사용량은 스프 전용 한도로 센다
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('lumina.claude.soup.v1') ?? '{}').used)).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
 
@@ -166,7 +184,7 @@ test.describe('온라인', () => {
     await guest.locator('.ol-name').fill('여자친구');
     await guest.locator('.ol-enter').click();
     await expect(host.locator('.ol-seat:not(.ol-seat-empty)')).toHaveCount(2);
-    await host.getByText('방장이 진행자').click();
+    await expect(host.getByText('온라인 방에서는 방장이 진행자예요')).toBeVisible();
     await host.getByRole('button', { name: '시작하기' }).click();
 
     for (const p of [host, guest]) await expect(p.locator('.game.soup')).toBeVisible();
@@ -201,44 +219,27 @@ test.describe('온라인', () => {
   });
 });
 
-test('바다거북 스프: Gemini가 답을 거절하면 이유를 알리고 다른 문제로, 한 번 끊긴 건 다시 물어 본다', async ({ page }) => {
-  const bodies: { safetySettings?: { threshold: string }[] }[] = [];
-  let calls = 0;
-  await page.route(/generativelanguage\.googleapis\.com/, async (r) => {
-    calls++;
-    const body = (r.request().postDataJSON() ?? {}) as { safetySettings?: { threshold: string }[]; contents?: { parts?: { text?: string }[] }[] };
-    bodies.push(body);
-    const prompt = body.contents?.[0]?.parts?.[0]?.text ?? '';
-    // 첫 질문: 한 번 끊겼다가 다시 물으면 답한다
-    if (prompt.includes('[질문] 끊김') && calls === 1) return r.fulfill({ status: 400, body: '{}' });
-    if (prompt.includes('[질문] 끊김')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"a":"no","note":"","k":[]}' }] } }] }) });
-    // 그 다음: 안전 필터로 거절
-    return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ finishReason: 'SAFETY' }] }) });
-  });
-  const errors = await open(page, { 'lumina.gemini.v1': { key: 'e2e-not-a-key', model: 'gemini-e2e', models: ['gemini-e2e'] } });
+test('바다거북 스프: 한 번 끊긴 건 다시 묻고, 계속 안 되면 다시 묻기·다른 문제', async ({ page }) => {
+  await fakeClaude(page, 'flaky');
+  const errors = await open(page);
   await page.locator('.soup-start').click();
-  await page.locator('.soup-input .text-input').fill('끊김');
+  await page.locator('.soup-input .text-input').fill('끊김?');
   await page.locator('.soup-ask').click();
   await expect(page.locator('.soup-entry').first().locator('.soup-reply')).toHaveText('아니요');
-  expect(bodies[0]?.safetySettings?.every((x) => x.threshold === 'BLOCK_NONE')).toBe(true);
 
-  await page.locator('.soup-input .text-input').fill('거절');
+  await page.locator('.soup-input .text-input').fill('실패');
   await page.locator('.soup-ask').click();
-  await expect(page.locator('.soup-fail')).toContainText('답을 하지 않아요');
+  await expect(page.locator('.soup-fail')).toContainText('답을 받지 못했어요');
   await page.locator('.soup-skip').click();
   await expect(page.locator('.hud-turn-text')).toHaveText('2번째 문제');
   await expect(page.locator('.soup-fail')).toHaveCount(0);
   await expect(page.locator('.soup-entry')).toHaveCount(0);
-  expect(errors.filter((e) => !/400/.test(e))).toEqual([]);
+  expect(errors).toEqual([]);
 });
 
 test('바다거북 스프: 혼자서 AI와 — 끝낸 문제는 기록되고, 목록에서 골라 시작', async ({ page }) => {
-  await page.route(/generativelanguage\.googleapis\.com/, async (r) => {
-    const prompt = ((r.request().postDataJSON() ?? {}) as { contents?: { parts?: { text?: string }[] }[] }).contents?.[0]?.parts?.[0]?.text ?? '';
-    const out = prompt.includes('[참가자의 정답]') ? { v: 'correct', note: '', k: [1] } : { a: 'yes', note: '', k: [] };
-    await r.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] }) });
-  });
-  const errors = await open(page, { 'lumina.gemini.v1': { key: 'e2e-not-a-key', model: 'gemini-e2e', models: ['gemini-e2e'] } });
+  await fakeClaude(page);
+  const errors = await open(page);
   // 혼자: 나머지 둘을 뺀다
   for (let k = 0; k < 2; k++) await page.locator('.soup-player').last().getByRole('button', { name: '빼기' }).click();
   await expect(page.locator('.soup-player')).toHaveCount(1);

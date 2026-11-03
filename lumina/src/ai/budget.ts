@@ -1,7 +1,6 @@
 /**
  * Claude 하루 사용량 잠금 — 부를 때마다 글자 수로 토큰을 넉넉히 어림해 쌓고,
  * 하루 한도를 넘으면 그날은 Claude를 부르지 않는다 (다음 날 풀림). 이 기기에서만 센다.
- * claude.ai 아티팩트는 인터넷이 막혀 있어 거기서 Gemini를 부를 수는 없다 — Gemini는 공개 사이트에서.
  */
 import { readJSON, writeJSON } from '../store/storage';
 

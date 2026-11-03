@@ -339,13 +339,7 @@ function Lobby() {
       )}
       {host && status === 'lobby' && table.game === 'soup' && (
         <section className="card">
-          <label className="toggle-row">
-            <span>
-              {t('soup.olHuman')}
-              <small className="toggle-sub">{t('soup.olHumanSub')}</small>
-            </span>
-            <input type="checkbox" className="switch" checked={table.soupHost === 'human'} onChange={(e) => store.setSoup({ soupHost: e.target.checked ? 'human' : 'ai' })} />
-          </label>
+          <p className="ol-note">{t('soup.olHostNote')}</p>
           <label className="toggle-row">
             <span>
               {t('soup.spicy')}
@@ -353,7 +347,6 @@ function Lobby() {
             </span>
             <input type="checkbox" className="switch" checked={table.soupSpice === 'all'} onChange={(e) => store.setSoup({ soupSpice: e.target.checked ? 'all' : 'mild' })} />
           </label>
-          {table.soupHost !== 'human' && <p className="ol-note">{t('soup.olAiNote')}</p>}
         </section>
       )}
       {!host && status === 'lobby' && (

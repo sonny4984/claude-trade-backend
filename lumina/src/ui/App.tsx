@@ -22,8 +22,7 @@ import { SoupSetup } from '../soup/ui/SoupSetup';
 import { SoupScreen } from '../soup/ui/SoupScreen';
 import { StarSetup } from '../star/ui/StarSetup';
 import { StarScreen } from '../star/ui/StarScreen';
-import { claimGeminiLink } from '../ai/store';
-import { translate } from '../i18n';
+import { forgetOldGemini } from '../ai/store';
 import { useOnline } from '../net/online';
 import { CommsLayer } from './online/Comms';
 import { readInvite } from '../net/site';
@@ -108,14 +107,8 @@ export function App() {
     const id = window.setTimeout(() => void loadPortrait3d(), 60);
     return () => window.clearTimeout(id);
   }, [show3d]);
-  // Gemini 키 링크(#gemini=키)로 열렸으면 키를 넣고 바다거북 스프 준비 화면으로
-  useEffect(() => {
-    void claimGeminiLink().then((ok) => {
-      if (ok === null) return;
-      useGame.getState().go('soup-setup');
-      useGame.getState().toastMsg(translate(useSettings.getState().lang, ok ? 'ai.geminiLinked' : 'ai.geminiLinkFail'), ok ? 'good' : 'bad');
-    });
-  }, []);
+  // 예전에 넣어 둔 Gemini 키는 지운다 (Gemini는 더 이상 쓰지 않음)
+  useEffect(() => forgetOldGemini(), []);
   // 초대 링크(?room=코드)로 열렸으면 바로 입장 화면으로
   useEffect(() => {
     const inv = readInvite();

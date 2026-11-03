@@ -9,7 +9,6 @@ import { Icon } from '../../ui/components/Icon';
 import { translateList, useLang, useT } from '../../i18n';
 import { useOnline } from '../../net/online';
 import { useAi } from '../../ai/store';
-import { GeminiCard } from '../../ai/GeminiCard';
 import { claudeUsed, dailyMax } from '../../ai/budget';
 import { candidates, type SoupFilter } from '../engine';
 import { loadDone, loadSoupSetup, puzzleCount, resetDone, savedSoup, useSoup, type SoupSetupConfig } from '../store';
@@ -41,13 +40,12 @@ export function SoupSetup() {
   const saved = useMemo(() => savedSoup(), []);
   const [cfg, setCfg] = useState<SoupSetupConfig>(() => loadSoupSetup() ?? defaults(lang === 'ko'));
   const claudeOk = useAi((s) => s.claudeOk);
-  const geminiModel = useAi((s) => s.geminiModel);
   // 스프 전용 하루 한도 (화면을 열 때 한 번 읽음)
   const [used] = useState(() => claudeUsed('soup'));
   const max = dailyMax('soup');
   useEffect(() => useAi.getState().probe(), []);
   const locked = used >= max;
-  const aiOk = (claudeOk && !locked) || !!geminiModel;
+  const aiOk = claudeOk && !locked;
   const n = cfg.players.length;
   const count = puzzleCount(cfg.filter);
   const human = cfg.host === 'human';
@@ -111,14 +109,11 @@ export function SoupSetup() {
             </button>
           </div>
           <p className="ai-sub">{t(human ? 'soup.hostHumanSub' : 'soup.hostAiSub')}</p>
-          {!human &&
-            (claudeOk ? (
-              <p className="ai-sub ai-usage" data-locked={locked || undefined}>
-                {locked ? t('soup.claudeLocked') : t('soup.claudeReady', { used: Math.round((used / max) * 100), left: Math.max(0, Math.floor((max - used) / 900)) })}
-              </p>
-            ) : (
-              <GeminiCard />
-            ))}
+          {!human && claudeOk && (
+            <p className="ai-sub ai-usage" data-locked={locked || undefined}>
+              {locked ? t('soup.claudeLocked') : t('soup.claudeReady', { used: Math.round((used / max) * 100), left: Math.max(0, Math.floor((max - used) / 900)) })}
+            </p>
+          )}
           {!human && !aiOk && <p className="ai-sub soup-warn">{t('soup.noAi')}</p>}
         </section>
         <section className="card">

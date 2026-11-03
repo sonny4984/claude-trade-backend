@@ -1,13 +1,13 @@
 /**
  * 바다거북 스프 진행 — 규칙(engine)과 화면 사이의 다리.
- *  · AI 진행자: 질문·정답이 들어오면 차례로 Claude/Gemini에게 물어 답을 넣는다 (방장 기기만).
+ *  · AI 진행자: 질문·정답이 들어오면 차례로 Claude에게 물어 답을 넣는다 (claude.ai 아티팩트에서 한 기기로).
  *  · 사람 진행자: 진행자가 전말을 몰래 보고 답 단추를 누른다.
  *  · 온라인: 방장 기기가 판을 들고 있고, 참가자는 질문·정답·힌트만 보낸다.
  */
 import { create } from 'zustand';
 import { candidates, newSoup, pending, pickPuzzle, soupReduce, validSoup, type SoupAction, type SoupAnswer, type SoupFilter, type SoupPlayer, type SoupReply, type SoupState } from './engine';
 import { puzzleById } from './puzzles';
-import { HostError, aiAnswer, aiJudge, hostAvailable, type HostFail, type HostWho } from './host';
+import { HostError, aiAnswer, aiJudge, type HostFail } from './host';
 import { useGame } from '../store/game';
 import { useSettings } from '../store/settings';
 import { readJSON, removeKey, throttledWriter, writeJSON } from '../store/storage';
@@ -42,7 +42,6 @@ interface SoupStore {
   thinking: number | null;
   /** AI 진행자를 부르지 못한 이유 (다시 묻기 단추를 보인다) */
   fail: HostFail | null;
-  who: HostWho | null;
   /** 사람 진행자가 전말을 보는 중 */
   peek: boolean;
   overlay: null | 'menu';
@@ -240,12 +239,10 @@ async function pump(): Promise<void> {
         if (e.kind === 'ask') {
           const r = await aiAnswer(p, e.text, ctl.signal);
           if (my !== token || get().session?.id !== s.id) break;
-          useSoup.setState({ who: r.who });
           apply({ type: 'reply', n: e.n, reply: r.a, keys: r.keys, ...(r.note ? { note: r.note } : {}) });
         } else {
           const r = await aiJudge(p, e.text, ctl.signal);
           if (my !== token || get().session?.id !== s.id) break;
-          useSoup.setState({ who: r.who });
           apply({ type: 'reply', n: e.n, reply: r.v, keys: r.keys, ...(r.note ? { note: r.note } : {}) });
         }
       } catch (err) {
@@ -276,7 +273,6 @@ function begin(session: SoupSession): void {
   if (useGame.getState().screen !== 'soup') useGame.getState().go('soup');
   sfx('shuffle');
   if (session.online?.role === 'host') bridge.publish?.('soup', payloadOf(session), []);
-  void hostAvailable().then((who) => useSoup.setState({ who }));
   void pump();
 }
 
@@ -298,7 +294,6 @@ export const useSoup = create<SoupStore>((set) => ({
   asker: 0,
   thinking: null,
   fail: null,
-  who: null,
   peek: false,
   overlay: null,
   waiting: false,
@@ -398,7 +393,6 @@ export const useSoup = create<SoupStore>((set) => ({
 
   retry() {
     set({ fail: null });
-    void hostAvailable().then((who) => set({ who }));
     void pump();
   },
 
@@ -413,7 +407,8 @@ export const useSoup = create<SoupStore>((set) => ({
   startOnline(table, info) {
     const players: SoupPlayer[] = table.seats.map((x, i) => ({ name: x.name || `P${i + 1}`, character: x.character }));
     const filter: SoupFilter = { spice: table.soupSpice === 'all' ? 'all' : 'mild', level: 0 };
-    const host = table.soupHost === 'human' && players.length >= 2 ? 'human' : 'ai';
+    // 온라인 방은 공개 사이트에서만 열린다 (아티팩트 안은 인터넷이 막힘) → Claude를 못 부르니 늘 방장이 진행
+    const host = 'human';
     const p = pickFresh(filter, [], rnd(1));
     if (!p) return;
     const state = newSoup({ players, host, hostSeat: info.mySeat, puzzle: p.id, filter });

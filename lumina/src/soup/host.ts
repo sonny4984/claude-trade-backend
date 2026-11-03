@@ -1,16 +1,14 @@
 /**
  * AI 진행자 — 전말을 아는 쪽에서 질문에 예/아니요로 답하고, 정답을 채점한다.
- * claude.ai 아티팩트의 Claude, 공개 사이트에서는 내 Gemini 키. Claude는 스프 전용 하루 한도로 센다.
+ * claude.ai 아티팩트에서 열었을 때 Claude가 진행한다 (스프 전용 하루 한도로 센다). 공개 사이트에서는 사람 진행자로.
  * 프롬프트는 짧게: 문제 + 전말 + 핵심 + 최근 질문 몇 개 + 이번 질문.
  */
 import type { SoupPuzzle } from './puzzles';
 import { ANSWERS, VERDICTS, type SoupAnswer, type SoupVerdict } from './engine';
 import { CALL_OVERHEAD, claudeLocked, spendClaude, tokensOf } from '../ai/budget';
 import { FATAL, LIMITED, claudeSample } from '../ai/claude';
-import { GeminiFail, geminiJson, loadGemini } from '../ai/gemini';
 
-export type HostWho = 'claude' | 'gemini';
-export type HostFail = 'none' | 'locked' | 'claudeOff' | 'claudeLimit' | 'geminiKey' | 'geminiLimit' | 'geminiBusy' | 'blocked' | 'net';
+export type HostFail = 'none' | 'locked' | 'claudeOff' | 'claudeLimit' | 'net';
 
 export class HostError extends Error {
   constructor(readonly code: HostFail) {
@@ -18,42 +16,36 @@ export class HostError extends Error {
   }
 }
 
-/** 이 화면에서 쓸 수 있는 진행자 (Claude 먼저, 안 되면 Gemini) */
-export async function hostAvailable(): Promise<HostWho | null> {
-  if (!claudeLocked('soup') && (await claudeSample())) return 'claude';
-  if (loadGemini()?.model) return 'gemini';
-  return null;
+/** 이 화면에서 AI 진행자(Claude)를 부를 수 있나 */
+export async function hostAvailable(): Promise<boolean> {
+  return !claudeLocked('soup') && !!(await claudeSample());
 }
 
 /** 한 번 막힌 Claude는 이 화면에서 다시 부르지 않는다 */
 let claudeDead = false;
 
-async function callJson(prompt: string, signal: AbortSignal): Promise<{ out: unknown; who: HostWho }> {
-  const sample = !claudeDead && !claudeLocked('soup') ? await claudeSample() : null;
-  if (sample) {
+async function callJson(prompt: string, signal: AbortSignal): Promise<unknown> {
+  if (claudeLocked('soup')) throw new HostError('locked');
+  const sample = claudeDead ? null : await claudeSample();
+  if (!sample) throw new HostError(claudeDead ? 'claudeOff' : 'none');
+  // 잠깐 끊긴 거면 한 번 더 묻는다
+  for (let attempt = 0; ; attempt++) {
     try {
       spendClaude(CALL_OVERHEAD + tokensOf(prompt.length), 'soup');
       const out = await sample.json<unknown>(prompt, { modelTier: 'quick', cache: false, signal });
       spendClaude(tokensOf(JSON.stringify(out ?? '').length), 'soup');
-      return { out, who: 'claude' };
+      return out;
     } catch (e) {
       if ((e as { name?: string } | null)?.name === 'AbortError') throw e;
       const code = String((e as { code?: unknown } | null)?.code ?? '');
-      if (FATAL.has(code)) claudeDead = true;
-      // Gemini가 있으면 그쪽으로 넘어간다
-      if (!loadGemini()?.model) throw new HostError(FATAL.has(code) ? 'claudeOff' : LIMITED.has(code) ? 'claudeLimit' : 'net');
-    }
-  }
-  const gem = loadGemini();
-  if (!gem?.model) throw new HostError(claudeLocked('soup') ? 'locked' : 'none');
-  // 죽음이 나오는 고전 문제도 답하도록 안전 필터를 끄고, 잠깐 끊긴 거면 한 번 더 묻는다
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return { out: await geminiJson(gem, prompt, signal, { relaxed: true }), who: 'gemini' };
-    } catch (e) {
-      if (!(e instanceof GeminiFail)) throw e;
-      if (e.code === 'net' && attempt === 0) continue;
-      throw new HostError(e.code === 'bad-key' ? 'geminiKey' : e.code === 'rate' ? 'geminiLimit' : e.code === 'busy' ? 'geminiBusy' : e.code === 'blocked' ? 'blocked' : 'net');
+      if (code === 'cancelled') throw e;
+      if (FATAL.has(code)) {
+        claudeDead = true;
+        throw new HostError('claudeOff');
+      }
+      if (LIMITED.has(code)) throw new HostError('claudeLimit');
+      if (attempt === 0) continue;
+      throw new HostError('net');
     }
   }
 }
@@ -110,12 +102,12 @@ export function readVerdict(out: unknown): { v: SoupVerdict; note: string } {
   return { v, note: v === 'correct' ? '' : clean(o.note) };
 }
 
-export async function aiAnswer(p: SoupPuzzle, question: string, signal: AbortSignal): Promise<{ a: SoupAnswer; note: string; keys: number[]; who: HostWho }> {
-  const { out, who } = await callJson(askPrompt(p, question), signal);
-  return { ...readAnswer(out), keys: readKeys((out as { k?: unknown } | null)?.k, p.keys.length), who };
+export async function aiAnswer(p: SoupPuzzle, question: string, signal: AbortSignal): Promise<{ a: SoupAnswer; note: string; keys: number[] }> {
+  const out = await callJson(askPrompt(p, question), signal);
+  return { ...readAnswer(out), keys: readKeys((out as { k?: unknown } | null)?.k, p.keys.length) };
 }
 
-export async function aiJudge(p: SoupPuzzle, guess: string, signal: AbortSignal): Promise<{ v: SoupVerdict; note: string; keys: number[]; who: HostWho }> {
-  const { out, who } = await callJson(guessPrompt(p, guess), signal);
-  return { ...readVerdict(out), keys: readKeys((out as { k?: unknown } | null)?.k, p.keys.length), who };
+export async function aiJudge(p: SoupPuzzle, guess: string, signal: AbortSignal): Promise<{ v: SoupVerdict; note: string; keys: number[] }> {
+  const out = await callJson(guessPrompt(p, guess), signal);
+  return { ...readVerdict(out), keys: readKeys((out as { k?: unknown } | null)?.k, p.keys.length) };
 }
