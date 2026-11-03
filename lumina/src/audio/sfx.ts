@@ -78,7 +78,7 @@ export function unlockAudio(): void {
 
 /**
  * 아이폰 무음(진동) 모드에서도 들리게 오디오 세션을 '재생'으로 (Safari 16.4+; 안 되는 기기는 그대로).
- * 마피아 목소리를 켰을 때만 — 다른 게임 효과음은 원래처럼 무음 모드를 따른다.
+ * (지금은 쓰는 게임이 없다 — 효과음은 무음 모드를 따른다.)
  */
 export function loudAudio(on: boolean): void {
   try {

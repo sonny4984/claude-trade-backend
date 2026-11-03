@@ -1,13 +1,13 @@
 /**
  * AI 진행자 — 전말을 아는 쪽에서 질문에 예/아니요로 답하고, 정답을 채점한다.
- * 마피아의 연결(claude.ai 아티팩트의 Claude, 공개 사이트의 Gemini 키)을 같이 쓰고, Claude 하루 한도도 같이 센다.
+ * claude.ai 아티팩트의 Claude, 공개 사이트에서는 내 Gemini 키. Claude는 스프 전용 하루 한도로 센다.
  * 프롬프트는 짧게: 문제 + 전말 + 핵심 + 최근 질문 몇 개 + 이번 질문.
  */
 import type { SoupPuzzle } from './puzzles';
 import { ANSWERS, VERDICTS, type SoupAnswer, type SoupVerdict } from './engine';
-import { CALL_OVERHEAD, claudeLocked, spendClaude, tokensOf } from '../mafia/budget';
-import { FATAL, LIMITED, claudeSample } from '../mafia/claude';
-import { GeminiFail, geminiJson, loadGemini } from '../mafia/gemini';
+import { CALL_OVERHEAD, claudeLocked, spendClaude, tokensOf } from '../ai/budget';
+import { FATAL, LIMITED, claudeSample } from '../ai/claude';
+import { GeminiFail, geminiJson, loadGemini } from '../ai/gemini';
 
 export type HostWho = 'claude' | 'gemini';
 export type HostFail = 'none' | 'locked' | 'claudeOff' | 'claudeLimit' | 'geminiKey' | 'geminiLimit' | 'geminiBusy' | 'blocked' | 'net';

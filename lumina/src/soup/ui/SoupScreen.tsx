@@ -134,7 +134,7 @@ function Entry({ s, e }: { s: SoupSession; e: SoupEntry }) {
       ) : (
         <span className="soup-reply" data-reply="wait">
           {thinking || st.host === 'ai' ? t('soup.thinking') : t('soup.waitHost')}
-          <span className="mf-dots" aria-hidden="true">
+          <span className="ai-dots" aria-hidden="true">
             <i />
             <i />
             <i />
@@ -269,7 +269,7 @@ function Result({ s }: { s: SoupSession }) {
   return (
     <section className="card soup-result" aria-live="polite">
       <h2>{solver ? t('soup.solved', { name: solver.name, pts: pointsFor(st.hints) }) : t('soup.revealed')}</h2>
-      <p className="mf-sub">{t('soup.stats', { asks: n.asks, yes: n.yes, hints: st.hints })}</p>
+      <p className="ai-sub">{t('soup.stats', { asks: n.asks, yes: n.yes, hints: st.hints })}</p>
       <ol className="soup-scores">
         {order.map(({ p, i, score }) => (
           <li key={i} data-host={(st.host === 'human' && st.hostSeat === i) || undefined}>
@@ -284,7 +284,7 @@ function Result({ s }: { s: SoupSession }) {
           {t('soup.next')}
         </button>
       ) : (
-        <p className="mf-sub">{t('soup.waitNext')}</p>
+        <p className="ai-sub">{t('soup.waitNext')}</p>
       )}
     </section>
   );

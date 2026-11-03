@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PUZZLES, puzzleById } from '../puzzles';
 import { candidates, guessers, newSoup, pending, pickPuzzle, pointsFor, soupReduce, tally, validSoup, type SoupState } from '../engine';
 import { askPrompt, guessPrompt, readAnswer, readKeys, readVerdict } from '../host';
-import { CALL_OVERHEAD, SOUP_DAILY_TOKENS, claudeLocked, claudeUsed, resetClaudeUsage, spendClaude, tokensOf } from '../../mafia/budget';
+import { CALL_OVERHEAD, SOUP_DAILY_TOKENS, claudeLocked, claudeUsed, resetClaudeUsage, spendClaude, tokensOf } from '../../ai/budget';
 
 const players = [
   { name: '나', character: 'moka' as const },
@@ -234,18 +234,13 @@ describe('AI 진행자 프롬프트와 답 읽기', () => {
 });
 
 describe('스프 전용 Claude 한도', () => {
-  it('마피아와 따로 세고, 스프는 10만까지', () => {
-    resetClaudeUsage('mafia');
+  it('스프는 하루 10만까지', () => {
     resetClaudeUsage('soup');
-    spendClaude(25000, 'mafia');
-    expect(claudeLocked('mafia')).toBe(true);
-    expect(claudeLocked('soup')).toBe(false);
     spendClaude(99999, 'soup');
     expect(claudeUsed('soup')).toBe(99999);
     expect(claudeLocked('soup')).toBe(false);
     spendClaude(1, 'soup');
     expect(claudeLocked('soup')).toBe(true);
-    resetClaudeUsage('mafia');
     resetClaudeUsage('soup');
   });
 });

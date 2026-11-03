@@ -95,7 +95,7 @@
   color: var(--part, #e2b443);
   font-weight: 600;
 }
-.soup-setup .seg + .mf-sub,
+.soup-setup .seg + .ai-sub,
 .soup-setup .toggle-row + .seg {
   margin-top: 8px;
 }

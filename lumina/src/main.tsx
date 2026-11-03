@@ -11,7 +11,7 @@ import './styles/picnic.css';
 import './styles/online.css';
 import './styles/gomoku.css';
 import './styles/fireice.css';
-import './styles/mafia.css';
+import './styles/ai.css';
 import './styles/soup.css';
 import './styles/star.css';
 import { App } from './ui/App';

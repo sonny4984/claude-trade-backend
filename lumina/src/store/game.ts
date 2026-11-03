@@ -55,7 +55,7 @@ import { commitIssueText, subj, tileLabel, translate } from '../i18n';
 import { LESSONS } from '../lessons/lessons';
 import { bridge, type OnlineInfo, type TableDoc } from '../net/bridge';
 
-export type Screen = 'home' | 'setup-solo' | 'setup-local' | 'game' | 'settings' | 'stats' | 'rules' | 'lessons' | 'coda-setup' | 'coda' | 'online' | 'gomoku-setup' | 'gomoku' | 'fireice-setup' | 'fireice' | 'mafia-setup' | 'mafia' | 'soup-setup' | 'soup' | 'star-setup' | 'star';
+export type Screen = 'home' | 'setup-solo' | 'setup-local' | 'game' | 'settings' | 'stats' | 'rules' | 'lessons' | 'coda-setup' | 'coda' | 'online' | 'gomoku-setup' | 'gomoku' | 'fireice-setup' | 'fireice' | 'soup-setup' | 'soup' | 'star-setup' | 'star';
 export type Overlay = null | 'menu' | 'gameover' | 'hint' | 'share' | 'confirm-draw' | 'confirm-quit' | 'lesson-done';
 
 export interface SeatMeta {

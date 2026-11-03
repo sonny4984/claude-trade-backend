@@ -129,7 +129,7 @@ test('바다거북 스프: AI가 없으면 AI 진행은 시작할 수 없다', a
   await expect(page.locator('.soup-warn')).toBeVisible();
   await expect(page.locator('.soup-start')).toBeDisabled();
   // 순한맛 기본, 매운맛을 켜면 문제가 늘어난다
-  const count = page.locator('.soup-setup .mf-sub').filter({ hasText: '고를 수 있는 문제' });
+  const count = page.locator('.soup-setup .ai-sub').filter({ hasText: '고를 수 있는 문제' });
   const before = await count.textContent();
   await page.getByText('매운맛 문제 포함').click();
   await expect(count).not.toHaveText(before ?? '');

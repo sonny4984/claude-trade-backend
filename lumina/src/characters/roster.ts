@@ -3,7 +3,7 @@
  * 휘기·기니니·뽀니는 사용자가 좋아하는 kkuichyu 작가님의 캐릭터에서 출발한 개인 감상용 해석이고(지금은 실제 품종 털옷을 입혔다),
  * 모카는 4인 게임을 위한 같은 화풍의 오리지널 캐릭터다. (공개 배포·판매 시 원작자 허락 필요)
  */
-/** 두부·콩이·보리·누리는 마피아 게임 인원을 채우려고 만든 같은 화풍의 오리지널 친구들 (마피아에서만 나온다) */
+/** 두부·콩이·보리·누리는 자리가 많은 게임(바다거북 스프 등)을 위해 만든 같은 화풍의 오리지널 친구들 */
 export type CharacterId = 'hwigi' | 'ginini' | 'pponi' | 'moka' | 'dubu' | 'kongi' | 'bori' | 'nuri';
 
 type V3 = readonly [number, number, number];
@@ -260,7 +260,7 @@ export const CHARACTERS: Readonly<Record<CharacterId, CharacterSpec>> = {
 };
 
 export const CHARACTER_ORDER: readonly CharacterId[] = ['hwigi', 'ginini', 'pponi', 'moka'];
-/** 마피아처럼 자리가 많은 게임에서 AI 자리를 채울 때 (앞의 넷 다음에 마피아 전용 친구들) */
+/** 자리가 많은 게임에서 고를 수 있는 모든 친구 (앞의 넷 다음에 추가 친구들) */
 export const ALL_CHARACTERS: readonly CharacterId[] = [...CHARACTER_ORDER, 'dubu', 'kongi', 'bori', 'nuri'];
 
 export function isCharacterId(x: unknown): x is CharacterId {

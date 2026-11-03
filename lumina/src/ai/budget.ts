@@ -1,23 +1,19 @@
 /**
- * Claude 하루 사용량 잠금 — 대사를 받을 때마다 글자 수로 토큰을 넉넉히 어림해 쌓고,
+ * Claude 하루 사용량 잠금 — 부를 때마다 글자 수로 토큰을 넉넉히 어림해 쌓고,
  * 하루 한도를 넘으면 그날은 Claude를 부르지 않는다 (다음 날 풀림). 이 기기에서만 센다.
- * claude.ai 아티팩트는 인터넷이 막혀 있어 거기서 Gemini를 부를 수는 없다 — 잠기면 기본 대사로 하고,
- * Gemini는 공개 사이트에서 쓰라고 알려 준다.
+ * claude.ai 아티팩트는 인터넷이 막혀 있어 거기서 Gemini를 부를 수는 없다 — Gemini는 공개 사이트에서.
  */
 import { readJSON, writeJSON } from '../store/storage';
 
-/** 하루 한도: 절약 모드 대답 20번쯤 (한 판에 5~10번이면 2~4판) */
-export const DAILY_TOKENS = 20000;
-/** 바다거북 스프 전용 하루 한도 (마피아와 따로): 질문 100개쯤 */
+/** 바다거북 스프 하루 한도: 질문 120개 남짓 */
 export const SOUP_DAILY_TOKENS = 100000;
 
-/** 따로 세는 사용량 묶음 */
-export type Pool = 'mafia' | 'soup';
+/** 따로 세는 사용량 묶음 (지금은 스프 하나) */
+export type Pool = 'soup';
 const POOLS: Record<Pool, { readonly key: string; readonly max: number }> = {
-  mafia: { key: 'lumina.claude.usage.v1', max: DAILY_TOKENS },
   soup: { key: 'lumina.claude.soup.v1', max: SOUP_DAILY_TOKENS },
 };
-export const dailyMax = (pool: Pool = 'mafia'): number => POOLS[pool].max;
+export const dailyMax = (pool: Pool = 'soup'): number => POOLS[pool].max;
 /** 한 번 부를 때마다 더 드는 몫 (앞에 붙는 지시 등, 어림) */
 export const CALL_OVERHEAD = 300;
 
@@ -43,16 +39,16 @@ function load(pool: Pool): Usage {
 /** 한글·JSON이 섞인 글: 글자 1개 ≈ 0.9토큰으로 넉넉히 */
 export const tokensOf = (chars: number): number => Math.ceil(Math.max(0, chars) * 0.9);
 
-export function claudeUsed(pool: Pool = 'mafia'): number {
+export function claudeUsed(pool: Pool = 'soup'): number {
   return load(pool).used;
 }
 
-export function claudeLocked(pool: Pool = 'mafia'): boolean {
+export function claudeLocked(pool: Pool = 'soup'): boolean {
   return claudeUsed(pool) >= POOLS[pool].max;
 }
 
 /** 쓴 만큼 더한다 — 오늘 쓴 양을 돌려준다 */
-export function spendClaude(tokens: number, pool: Pool = 'mafia'): number {
+export function spendClaude(tokens: number, pool: Pool = 'soup'): number {
   const u = load(pool);
   u.used += Math.max(0, Math.round(tokens));
   mem.set(pool, u);
@@ -61,7 +57,7 @@ export function spendClaude(tokens: number, pool: Pool = 'mafia'): number {
 }
 
 /** 시험용: 기억을 비운다 */
-export function resetClaudeUsage(pool: Pool = 'mafia'): void {
+export function resetClaudeUsage(pool: Pool = 'soup'): void {
   mem.delete(pool);
   writeJSON(POOLS[pool].key, null);
 }

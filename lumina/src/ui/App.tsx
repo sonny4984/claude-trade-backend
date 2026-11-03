@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useGame } from '../store/game';
 import { useSettings } from '../store/settings';
-import { loudAudio, unlockAudio } from '../audio/sfx';
+import { unlockAudio } from '../audio/sfx';
 import { loadPortrait3d } from '../characters/portrait3d';
 import { GameScreen } from './game/GameScreen';
 import { Toasts } from './game/Overlays';
@@ -18,13 +18,11 @@ import { GomokuSetup } from '../gomoku/ui/GomokuSetup';
 import { GomokuScreen } from '../gomoku/ui/GomokuScreen';
 import { FireIceSetup } from '../fireice/ui/FireIceSetup';
 import { FireIceScreen } from '../fireice/ui/FireIceScreen';
-import { MafiaSetup } from '../mafia/ui/MafiaSetup';
-import { MafiaScreen } from '../mafia/ui/MafiaScreen';
 import { SoupSetup } from '../soup/ui/SoupSetup';
 import { SoupScreen } from '../soup/ui/SoupScreen';
 import { StarSetup } from '../star/ui/StarSetup';
 import { StarScreen } from '../star/ui/StarScreen';
-import { claimGeminiLink, useMafia } from '../mafia/store';
+import { claimGeminiLink } from '../ai/store';
 import { translate } from '../i18n';
 import { useOnline } from '../net/online';
 import { CommsLayer } from './online/Comms';
@@ -101,8 +99,8 @@ function useAutoFullscreen(game: boolean): void {
 export function App() {
   useDocumentSettings();
   const screen = useGame((s) => s.screen);
-  useKeepAwake(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'mafia' || screen === 'soup' || screen === 'star' || screen === 'online');
-  useAutoFullscreen(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'mafia' || screen === 'star');
+  useKeepAwake(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'soup' || screen === 'star' || screen === 'online');
+  useAutoFullscreen(screen === 'game' || screen === 'coda' || screen === 'gomoku' || screen === 'fireice' || screen === 'star');
   const show3d = useSettings((s) => s.show3d);
   useEffect(() => {
     if (!show3d) return;
@@ -110,12 +108,12 @@ export function App() {
     const id = window.setTimeout(() => void loadPortrait3d(), 60);
     return () => window.clearTimeout(id);
   }, [show3d]);
-  // Gemini 키 링크(#gemini=키)로 열렸으면 키를 넣고 마피아 준비 화면으로
+  // Gemini 키 링크(#gemini=키)로 열렸으면 키를 넣고 바다거북 스프 준비 화면으로
   useEffect(() => {
     void claimGeminiLink().then((ok) => {
       if (ok === null) return;
-      useGame.getState().go('mafia-setup');
-      useGame.getState().toastMsg(translate(useSettings.getState().lang, ok ? 'mafia.geminiLinked' : 'mafia.geminiLinkFail'), ok ? 'good' : 'bad');
+      useGame.getState().go('soup-setup');
+      useGame.getState().toastMsg(translate(useSettings.getState().lang, ok ? 'ai.geminiLinked' : 'ai.geminiLinkFail'), ok ? 'good' : 'bad');
     });
   }, []);
   // 초대 링크(?room=코드)로 열렸으면 바로 입장 화면으로
@@ -134,11 +132,6 @@ export function App() {
       for (const k of kinds) window.removeEventListener(k, unlock);
     };
   }, []);
-  // 마피아 목소리는 아이폰 무음 모드에서도 들리게 (목소리를 끄거나 나가면 원래대로)
-  const mafiaVoice = useMafia((s) => s.cfg.voice);
-  useEffect(() => {
-    loudAudio((screen === 'mafia' || screen === 'mafia-setup') && mafiaVoice !== 'off');
-  }, [screen, mafiaVoice]);
   return (
     <div className="app">
       <div className="room" aria-hidden="true" />
@@ -156,8 +149,6 @@ export function App() {
       {screen === 'gomoku' && <GomokuScreen />}
       {screen === 'fireice-setup' && <FireIceSetup />}
       {screen === 'fireice' && <FireIceScreen />}
-      {screen === 'mafia-setup' && <MafiaSetup />}
-      {screen === 'mafia' && <MafiaScreen />}
       {screen === 'soup-setup' && <SoupSetup />}
       {screen === 'soup' && <SoupScreen />}
       {screen === 'star-setup' && <StarSetup />}

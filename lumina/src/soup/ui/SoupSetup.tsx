@@ -8,9 +8,9 @@ import { usePortrait } from '../../characters/portrait3d';
 import { Icon } from '../../ui/components/Icon';
 import { translateList, useLang, useT } from '../../i18n';
 import { useOnline } from '../../net/online';
-import { useMafia } from '../../mafia/store';
-import { GeminiCard } from '../../mafia/ui/MafiaSetup';
-import { claudeUsed, dailyMax } from '../../mafia/budget';
+import { useAi } from '../../ai/store';
+import { GeminiCard } from '../../ai/GeminiCard';
+import { claudeUsed, dailyMax } from '../../ai/budget';
 import type { SoupFilter } from '../engine';
 import { loadSoupSetup, puzzleCount, savedSoup, useSoup, type SoupSetupConfig } from '../store';
 
@@ -40,12 +40,12 @@ export function SoupSetup() {
   const go = useGame.getState().go;
   const saved = useMemo(() => savedSoup(), []);
   const [cfg, setCfg] = useState<SoupSetupConfig>(() => loadSoupSetup() ?? defaults(lang === 'ko'));
-  const claudeOk = useMafia((s) => s.claudeOk);
-  const geminiModel = useMafia((s) => s.geminiModel);
-  // 스프는 마피아와 따로 센다 (화면을 열 때 한 번 읽음)
+  const claudeOk = useAi((s) => s.claudeOk);
+  const geminiModel = useAi((s) => s.geminiModel);
+  // 스프 전용 하루 한도 (화면을 열 때 한 번 읽음)
   const [used] = useState(() => claudeUsed('soup'));
   const max = dailyMax('soup');
-  useEffect(() => useMafia.getState().probe(), []);
+  useEffect(() => useAi.getState().probe(), []);
   const locked = used >= max;
   const aiOk = (claudeOk && !locked) || !!geminiModel;
   const n = cfg.players.length;
@@ -104,16 +104,16 @@ export function SoupSetup() {
               {t('soup.hostHuman')}
             </button>
           </div>
-          <p className="mf-sub">{t(human ? 'soup.hostHumanSub' : 'soup.hostAiSub')}</p>
+          <p className="ai-sub">{t(human ? 'soup.hostHumanSub' : 'soup.hostAiSub')}</p>
           {!human &&
             (claudeOk ? (
-              <p className="mf-sub mf-usage" data-locked={locked || undefined}>
+              <p className="ai-sub ai-usage" data-locked={locked || undefined}>
                 {locked ? t('soup.claudeLocked') : t('soup.claudeReady', { used: Math.round((used / max) * 100), left: Math.max(0, Math.floor((max - used) / 900)) })}
               </p>
             ) : (
               <GeminiCard />
             ))}
-          {!human && !aiOk && <p className="mf-sub soup-warn">{t('soup.noAi')}</p>}
+          {!human && !aiOk && <p className="ai-sub soup-warn">{t('soup.noAi')}</p>}
         </section>
         <section className="card">
           <h2 className="card-title">{t('soup.players')}</h2>
@@ -142,7 +142,7 @@ export function SoupSetup() {
               <Icon name="plus" size={18} /> {t('setup.addSeat')}
             </button>
           )}
-          <p className="mf-sub">{t(human ? 'soup.playersHumanSub' : 'soup.playersSub')}</p>
+          <p className="ai-sub">{t(human ? 'soup.playersHumanSub' : 'soup.playersSub')}</p>
         </section>
         <section className="card">
           <h2 className="card-title">{t('soup.puzzles')}</h2>
@@ -160,7 +160,7 @@ export function SoupSetup() {
               </button>
             ))}
           </div>
-          <p className="mf-sub">{t('soup.count', { n: count })}</p>
+          <p className="ai-sub">{t('soup.count', { n: count })}</p>
         </section>
         <section className="card">
           <h2 className="card-title">{t('soup.howTitle')}</h2>
