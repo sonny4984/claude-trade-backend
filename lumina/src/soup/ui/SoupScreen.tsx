@@ -111,7 +111,7 @@ function Entry({ s, e }: { s: SoupSession; e: SoupEntry }) {
           ))}
         </span>
       ) : st.phase === 'over' ? (
-        <span className="soup-reply" data-reply="irrelevant">
+        <span className="soup-reply" data-reply="none">
           —
         </span>
       ) : (

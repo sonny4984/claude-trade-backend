@@ -54,13 +54,13 @@ async function callJson(prompt: string, signal: AbortSignal): Promise<{ out: unk
   }
 }
 
-const ANS_KO: Record<SoupAnswer, string> = { yes: '예', no: '아니요', irrelevant: '상관없어요' };
+const ANS_KO: Record<SoupAnswer, string> = { yes: '예', no: '아니요' };
 
 function recent(log: readonly SoupEntry[]): string {
   return log
     .filter((e) => e.kind === 'ask' && e.reply && e.text)
     .slice(-6)
-    .map((e) => `Q: ${e.text} → ${ANS_KO[e.reply as SoupAnswer] ?? '상관없어요'}`)
+    .map((e) => `Q: ${e.text} → ${ANS_KO[e.reply as SoupAnswer] ?? '-'}`)
     .join('\n');
 }
 
@@ -74,10 +74,10 @@ export function askPrompt(p: SoupPuzzle, question: string, log: readonly SoupEnt
     `[핵심] ${p.keys.join(' / ')}`,
     past ? `[지금까지]\n${past}` : '',
     `[이번 질문] ${question}`,
-    '전말에 비추어 사실대로 하나만 골라: yes(예), no(아니요), irrelevant(전말과 상관없거나 정해지지 않은 것). 질문이 대체로 맞으면 yes, 핵심이 틀렸으면 no.',
-    '예/아니요로 답할 수 없는 질문(왜, 무엇 등)이면 irrelevant를 고르고 note에 "예/아니요로 답할 수 있게 물어봐 주세요"라고 써.',
+    '전말에 비추어 사실대로 둘 중 하나만 골라: yes(예) 또는 no(아니요). 질문이 대체로 맞으면 yes, 틀렸거나 전말에 없는 내용이면 no.',
+    '예/아니요로 답할 수 없는 질문(왜, 무엇 등)이면 no를 고르고 note에 "예/아니요로 답할 수 있게 물어봐 주세요"라고 써.',
     'note는 비워 두거나, 핵심을 짚었을 때만 "좋은 질문이에요!" 같은 12자 이내 한마디. 전말·힌트·새 사실은 절대 넣지 마.',
-    'JSON만: {"a":"yes|no|irrelevant","note":""}',
+    'JSON만: {"a":"yes|no","note":""}',
   ]
     .filter(Boolean)
     .join('\n');
@@ -100,11 +100,11 @@ export function guessPrompt(p: SoupPuzzle, guess: string): string {
 const NOTE_MAX = 60;
 const clean = (x: unknown): string => (typeof x === 'string' ? x.replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX) : '');
 
-/** 답을 고른다 — 이상한 답이면 상관없어요로 */
+/** 답을 고른다 — 예로 읽을 수 없으면 아니요로 */
 export function readAnswer(out: unknown): { a: SoupAnswer; note: string } {
   const o = (out ?? {}) as { a?: unknown; answer?: unknown; note?: unknown };
   const raw = String(o.a ?? o.answer ?? '').toLowerCase().trim();
-  const a = (ANSWERS as readonly string[]).includes(raw) ? (raw as SoupAnswer) : raw.startsWith('y') || raw === '예' ? 'yes' : raw.startsWith('n') || raw === '아니요' ? 'no' : 'irrelevant';
+  const a = (ANSWERS as readonly string[]).includes(raw) ? (raw as SoupAnswer) : raw.startsWith('y') || raw === '예' ? 'yes' : 'no';
   return { a, note: clean(o.note) };
 }
 

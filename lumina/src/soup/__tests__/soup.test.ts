@@ -140,8 +140,8 @@ describe('soupReduce — 사람 진행자', () => {
   });
   it('말로 한 질문은 quick으로 답만 남긴다', () => {
     let s = start();
-    s = ok(s, { type: 'quick', by: 2, reply: 'irrelevant' });
-    expect(s.log[0]).toMatchObject({ by: 2, kind: 'ask', text: '', reply: 'irrelevant' });
+    s = ok(s, { type: 'quick', by: 2, reply: 'no' });
+    expect(s.log[0]).toMatchObject({ by: 2, kind: 'ask', text: '', reply: 'no' });
     expect(s.turn).toBe(0);
     expect(soupReduce(s, { type: 'quick', by: 1, reply: 'yes' })).toEqual({ ok: false, error: 'who' });
   });
@@ -171,7 +171,7 @@ describe('AI 진행자 프롬프트와 답 읽기', () => {
     expect(prompt).toContain(p.keys[0] ?? '');
     expect(prompt).toContain('Q: 키가 작나요? → 예');
     expect(prompt).toContain('[이번 질문] 우산이 중요한가요?');
-    expect(prompt).toContain('"a":"yes|no|irrelevant"');
+    expect(prompt).toContain('"a":"yes|no"');
     expect(prompt.length).toBeLessThan(1600);
   });
   it('채점 프롬프트에는 번호 매긴 핵심과 참가자 답이 들어 있다', () => {
@@ -184,10 +184,10 @@ describe('AI 진행자 프롬프트와 답 읽기', () => {
     expect(readAnswer({ a: 'yes', note: ' 좋은   질문 ' })).toEqual({ a: 'yes', note: '좋은 질문' });
     expect(readAnswer({ answer: 'No.' }).a).toBe('no');
     expect(readAnswer({ a: '예' }).a).toBe('yes');
-    expect(readAnswer({ a: 'PARTLY' }).a).toBe('irrelevant');
+    expect(readAnswer({ a: 'PARTLY' }).a).toBe('no');
     expect(soupReduce(newSoup({ players, host: 'human', hostSeat: 0, puzzle: 'elevator', filter: { spice: 'mild', level: 0 } }), { type: 'quick', by: 1, reply: 'partly' as never })).toEqual({ ok: false, error: 'reply' });
-    expect(readAnswer({ a: '???' }).a).toBe('irrelevant');
-    expect(readAnswer(null).a).toBe('irrelevant');
+    expect(readAnswer({ a: '???' }).a).toBe('no');
+    expect(readAnswer(null).a).toBe('no');
     expect(readAnswer({ a: 'yes', note: 'x'.repeat(200) }).note).toHaveLength(60);
   });
   it('readVerdict는 모르면 wrong, 맞으면 한마디를 지운다', () => {

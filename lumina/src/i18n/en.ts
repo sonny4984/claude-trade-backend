@@ -779,7 +779,7 @@ export const en: Dict = {
     howTitle: 'How to play',
     how: [
       'The host shows a strange situation. Only the host knows the full story.',
-      'Everyone else asks yes/no questions. Answers: yes · no · doesn’t matter.',
+      'Everyone else asks yes/no questions. The host answers only yes or no.',
       'When you think you know, give your answer. If it covers every key point, you win (3 points without hints, one less per hint).',
       'Stuck? Open a hint (up to 3), or give up to see the story.',
     ],
