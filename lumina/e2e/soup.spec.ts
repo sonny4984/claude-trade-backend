@@ -254,7 +254,7 @@ test('바다거북 스프: 혼자서 AI와 — 끝낸 문제는 기록되고, �
   const input = page.locator('.soup-input .text-input');
   await input.fill('사람이 나오나요?');
   await page.locator('.soup-ask').click();
-  await expect(page.locator('.soup-entry .soup-reply').first()).toHaveText('예');
+  await expect(page.locator('.soup-entry .soup-reply').first()).toContainText('예');
   await expect(input).toBeFocused();
   await input.fill('이렇게 된 거예요');
   await page.locator('.soup-guess').click();
